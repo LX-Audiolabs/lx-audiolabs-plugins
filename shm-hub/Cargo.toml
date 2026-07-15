@@ -1,0 +1,10 @@
+[package]
+name = "shm-hub"
+version = "0.1.0"
+edition = "2024"
+description = "Cross-plugin shared-memory hub with seqlock-protected slots, heartbeat liveness, and CAS-based slot claiming"
+license = "GPL-3.0-or-later"
+authors = ["LX Audiolabs"]
+
+[dependencies]
+shared_memory = "0.12"

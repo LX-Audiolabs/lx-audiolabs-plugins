@@ -1,0 +1,29 @@
+[workspace]
+members = ["plugins/aether-slint", "plugins/meridian-slint", "shared-ui-slint"]
+resolver = "3"
+
+[workspace.dependencies]
+truce           = { path = "../truce-dev/crates/truce", default-features = false }
+truce-core      = { path = "../truce-dev/crates/truce-core" }
+truce-params    = { path = "../truce-dev/crates/truce-params" }
+truce-clap      = { path = "../truce-dev/crates/truce-clap" }
+truce-vst3      = { path = "../truce-dev/crates/truce-vst3" }
+truce-lv2       = { path = "../truce-dev/crates/truce-lv2" }
+truce-loader    = { path = "../truce-dev/crates/truce-loader" }
+truce-test      = { path = "../truce-dev/crates/truce-test" }
+truce-slint     = { path = "../truce-dev/crates/truce-slint" }
+truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
+clap-sys        = "0.5"
+slint           = { version = "=1.15.1", default-features = false, features = ["compat-1-2", "renderer-software", "std"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dbg]
+inherits = "release"
+strip = false
+debug = "full"

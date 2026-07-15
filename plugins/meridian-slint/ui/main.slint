@@ -1,0 +1,262 @@
+import { Knob, Meter, ParamSlider, Toggle } from "@truce";
+import { TabWidget, Palette } from "std-widgets.slint";
+import { LxSpectrum, LxGoniometer, LxMeterBar } from "../../shared-ui-slint/ui/lx.slint";
+
+export component MeridianUi inherits Window {
+    // --- float params (normalized) + formatted text ---
+    in-out property <float> hpf_freq: 0.5; in property <string> hpf_freq_text: "";
+    callback hpf_freq_changed(float);
+    in-out property <float> lpf_freq: 0.5; in property <string> lpf_freq_text: "";
+    callback lpf_freq_changed(float);
+
+    in-out property <float> bass_gain: 0.5; in property <string> bass_gain_text: "";
+    callback bass_gain_changed(float);
+    in-out property <float> lo_mid_gain: 0.5; in property <string> lo_mid_gain_text: "";
+    callback lo_mid_gain_changed(float);
+    in-out property <float> mid_gain: 0.5; in property <string> mid_gain_text: "";
+    callback mid_gain_changed(float);
+    in-out property <float> high_gain: 0.5; in property <string> high_gain_text: "";
+    callback high_gain_changed(float);
+    in-out property <float> excite_gain: 0.5; in property <string> excite_gain_text: "";
+    callback excite_gain_changed(float);
+
+    in-out property <float> eq_freq_1: 0.5; in property <string> eq_freq_1_text: "";
+    callback eq_freq_1_changed(float);
+    in-out property <float> eq_freq_2: 0.5; in property <string> eq_freq_2_text: "";
+    callback eq_freq_2_changed(float);
+    in-out property <float> eq_freq_3: 0.5; in property <string> eq_freq_3_text: "";
+    callback eq_freq_3_changed(float);
+    in-out property <float> eq_freq_4: 0.5; in property <string> eq_freq_4_text: "";
+    callback eq_freq_4_changed(float);
+    in-out property <float> eq_freq_5: 0.5; in property <string> eq_freq_5_text: "";
+    callback eq_freq_5_changed(float);
+
+    in-out property <float> tilt_gain: 0.5; in property <string> tilt_gain_text: "";
+    callback tilt_gain_changed(float);
+
+    in-out property <float> warmth_drive: 0.0; in property <string> warmth_drive_text: "";
+    callback warmth_drive_changed(float);
+    in-out property <float> warmth_mix: 0.0; in property <string> warmth_mix_text: "";
+    callback warmth_mix_changed(float);
+
+    in-out property <float> excite_amount: 0.0; in property <string> excite_amount_text: "";
+    callback excite_amount_changed(float);
+    in-out property <float> excite_blend: 0.0; in property <string> excite_blend_text: "";
+    callback excite_blend_changed(float);
+    in-out property <float> excite_freq: 0.5; in property <string> excite_freq_text: "";
+    callback excite_freq_changed(float);
+
+    in-out property <float> comp_threshold: 0.5; in property <string> comp_threshold_text: "";
+    callback comp_threshold_changed(float);
+    in-out property <float> comp_mix: 0.0; in property <string> comp_mix_text: "";
+    callback comp_mix_changed(float);
+    in-out property <float> comp_attack: 0.5; in property <string> comp_attack_text: "";
+    callback comp_attack_changed(float);
+    in-out property <float> comp_release: 0.5; in property <string> comp_release_text: "";
+    callback comp_release_changed(float);
+    in-out property <float> comp_character: 0.5; in property <string> comp_character_text: "";
+    callback comp_character_changed(float);
+    in-out property <float> comp_makeup: 0.0; in property <string> comp_makeup_text: "";
+    callback comp_makeup_changed(float);
+
+    in-out property <float> inflate_effect: 0.0; in property <string> inflate_effect_text: "";
+    callback inflate_effect_changed(float);
+    in-out property <float> inflate_curve: 0.5; in property <string> inflate_curve_text: "";
+    callback inflate_curve_changed(float);
+
+    in-out property <float> stereo_width: 0.5; in property <string> stereo_width_text: "";
+    callback stereo_width_changed(float);
+    in-out property <float> pan: 0.5; in property <string> pan_text: "";
+    callback pan_changed(float);
+    in-out property <float> output_gain: 0.5; in property <string> output_gain_text: "";
+    callback output_gain_changed(float);
+
+    // --- int params (slope selectors) ---
+    in-out property <float> cut_slope: 0.0; callback cut_slope_changed(float);
+    in-out property <float> bass_slope: 1.0; callback bass_slope_changed(float);
+    in-out property <float> lo_mid_slope: 1.0; callback lo_mid_slope_changed(float);
+    in-out property <float> mid_slope: 1.0; callback mid_slope_changed(float);
+    in-out property <float> high_slope: 1.0; callback high_slope_changed(float);
+    in-out property <float> excite_slope: 1.0; callback excite_slope_changed(float);
+
+    // --- bool params ---
+    in-out property <bool> mono_active: false; callback mono_active_changed(bool);
+    in-out property <bool> delta_active: false; callback delta_active_changed(bool);
+    in-out property <bool> bypass_active: false; callback bypass_active_changed(bool);
+    in-out property <bool> inflate_band_split: false; callback inflate_band_split_changed(bool);
+    in-out property <bool> inflate_clip: false; callback inflate_clip_changed(bool);
+
+    // --- visualization ---
+    in property <string> spectrum_path: "";
+    in property <string> gonio_path: "";
+    in property <float> meter_l: 0.0;
+    in property <float> meter_r: 0.0;
+    in property <float> peak_hold_l: 0.0;
+    in property <float> peak_hold_r: 0.0;
+    in property <float> gr: 0.0;
+    in property <string> corr_text: "";
+    in property <string> balance_text: "";
+
+    init => { Palette.color-scheme = ColorScheme.dark; }
+
+    background: #0d0d0f;
+    preferred-width: 1080px;
+    preferred-height: 720px;
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+
+        // Header
+        Rectangle {
+            height: 28px;
+            background: #14141a;
+            Text {
+                x: 10px;
+                y: (parent.height - self.preferred-height) / 2;
+                text: "Meridian (Slint)";
+                font-size: 14px;
+                font-weight: 700;
+                color: #bfbfc8;
+            }
+        }
+
+        // Visualizer row
+        HorizontalLayout {
+            spacing: 12px;
+            height: 240px;
+
+            // Spectrum
+            LxSpectrum {
+                width: 58%;
+                height: parent.height;
+                commands: root.spectrum_path;
+            }
+
+            // Goniometer
+            LxGoniometer {
+                width: 26%;
+                height: parent.height;
+                commands: root.gonio_path;
+            }
+
+            // Meters
+            VerticalLayout {
+                width: 14%;
+                spacing: 6px;
+                alignment: start;
+                Meter { height: 160px; level-left: root.meter_l; level-right: root.meter_r; }
+                Text { text: root.corr_text; font-size: 10px; color: #8c8c99; }
+                Text { text: root.balance_text; font-size: 10px; color: #8c8c99; }
+                Text { text: "GR"; font-size: 10px; color: #8c8c99; }
+                LxMeterBar { height: 12px; level: root.gr; bar-color: #e04545; }
+            }
+        }
+
+        // Controls
+        TabWidget {
+            height: 400px;
+            Tab {
+                title: "EQ";
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 12px;
+                    Text { text: "5-Band EQ"; font-size: 11px; color: #bfbfc8; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            Knob { label: "LO Gain"; value <=> root.bass_gain; value-text: root.bass_gain_text; changed(v) => { root.bass_gain_changed(v); } }
+                            Knob { label: "LO Freq"; value <=> root.eq_freq_1; value-text: root.eq_freq_1_text; changed(v) => { root.eq_freq_1_changed(v); } }
+                            Knob { label: "LO Slope"; minimum: 0; maximum: 2; value <=> root.bass_slope; changed(v) => { root.bass_slope_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            Knob { label: "LM Gain"; value <=> root.lo_mid_gain; value-text: root.lo_mid_gain_text; changed(v) => { root.lo_mid_gain_changed(v); } }
+                            Knob { label: "LM Freq"; value <=> root.eq_freq_2; value-text: root.eq_freq_2_text; changed(v) => { root.eq_freq_2_changed(v); } }
+                            Knob { label: "LM Slope"; minimum: 0; maximum: 2; value <=> root.lo_mid_slope; changed(v) => { root.lo_mid_slope_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            Knob { label: "MID Gain"; value <=> root.mid_gain; value-text: root.mid_gain_text; changed(v) => { root.mid_gain_changed(v); } }
+                            Knob { label: "MID Freq"; value <=> root.eq_freq_3; value-text: root.eq_freq_3_text; changed(v) => { root.eq_freq_3_changed(v); } }
+                            Knob { label: "MID Slope"; minimum: 0; maximum: 2; value <=> root.mid_slope; changed(v) => { root.mid_slope_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            Knob { label: "HM Gain"; value <=> root.high_gain; value-text: root.high_gain_text; changed(v) => { root.high_gain_changed(v); } }
+                            Knob { label: "HM Freq"; value <=> root.eq_freq_4; value-text: root.eq_freq_4_text; changed(v) => { root.eq_freq_4_changed(v); } }
+                            Knob { label: "HM Slope"; minimum: 0; maximum: 2; value <=> root.high_slope; changed(v) => { root.high_slope_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            Knob { label: "HI Gain"; value <=> root.excite_gain; value-text: root.excite_gain_text; changed(v) => { root.excite_gain_changed(v); } }
+                            Knob { label: "HI Freq"; value <=> root.eq_freq_5; value-text: root.eq_freq_5_text; changed(v) => { root.eq_freq_5_changed(v); } }
+                            Knob { label: "HI Slope"; minimum: 0; maximum: 2; value <=> root.excite_slope; changed(v) => { root.excite_slope_changed(v); } }
+                        }
+                    }
+                }
+            }
+            Tab {
+                title: "Filter";
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Knob { label: "HPF"; value <=> root.hpf_freq; value-text: root.hpf_freq_text; changed(v) => { root.hpf_freq_changed(v); } }
+                        Knob { label: "LPF"; value <=> root.lpf_freq; value-text: root.lpf_freq_text; changed(v) => { root.lpf_freq_changed(v); } }
+                        Knob { label: "Cut Slope"; minimum: 0; maximum: 1; value <=> root.cut_slope; changed(v) => { root.cut_slope_changed(v); } }
+                        Knob { label: "Tilt"; value <=> root.tilt_gain; value-text: root.tilt_gain_text; changed(v) => { root.tilt_gain_changed(v); } }
+                    }
+                }
+            }
+            Tab {
+                title: "Dynamics";
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 12px;
+                    Text { text: "Compressor"; font-size: 11px; color: #bfbfc8; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Knob { label: "Thresh"; value <=> root.comp_threshold; value-text: root.comp_threshold_text; changed(v) => { root.comp_threshold_changed(v); } }
+                        Knob { label: "Mix"; value <=> root.comp_mix; value-text: root.comp_mix_text; changed(v) => { root.comp_mix_changed(v); } }
+                        Knob { label: "Attack"; value <=> root.comp_attack; value-text: root.comp_attack_text; changed(v) => { root.comp_attack_changed(v); } }
+                        Knob { label: "Release"; value <=> root.comp_release; value-text: root.comp_release_text; changed(v) => { root.comp_release_changed(v); } }
+                        Knob { label: "Ratio"; value <=> root.comp_character; value-text: root.comp_character_text; changed(v) => { root.comp_character_changed(v); } }
+                        Knob { label: "Makeup"; value <=> root.comp_makeup; value-text: root.comp_makeup_text; changed(v) => { root.comp_makeup_changed(v); } }
+                    }
+                    Text { text: "Exciter / Warmth / Inflate"; font-size: 11px; color: #bfbfc8; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Knob { label: "Warmth Drv"; value <=> root.warmth_drive; value-text: root.warmth_drive_text; changed(v) => { root.warmth_drive_changed(v); } }
+                        Knob { label: "Warmth Mix"; value <=> root.warmth_mix; value-text: root.warmth_mix_text; changed(v) => { root.warmth_mix_changed(v); } }
+                        Knob { label: "Excite Amt"; value <=> root.excite_amount; value-text: root.excite_amount_text; changed(v) => { root.excite_amount_changed(v); } }
+                        Knob { label: "Excite Blnd"; value <=> root.excite_blend; value-text: root.excite_blend_text; changed(v) => { root.excite_blend_changed(v); } }
+                        Knob { label: "Excite Freq"; value <=> root.excite_freq; value-text: root.excite_freq_text; changed(v) => { root.excite_freq_changed(v); } }
+                        Knob { label: "Inflate"; value <=> root.inflate_effect; value-text: root.inflate_effect_text; changed(v) => { root.inflate_effect_changed(v); } }
+                        Knob { label: "Infl Curve"; value <=> root.inflate_curve; value-text: root.inflate_curve_text; changed(v) => { root.inflate_curve_changed(v); } }
+                        Toggle { label: "Split"; checked <=> root.inflate_band_split; toggled(v) => { root.inflate_band_split_changed(v); } }
+                        Toggle { label: "Clip"; checked <=> root.inflate_clip; toggled(v) => { root.inflate_clip_changed(v); } }
+                    }
+                }
+            }
+            Tab {
+                title: "Output";
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Knob { label: "Width"; value <=> root.stereo_width; value-text: root.stereo_width_text; changed(v) => { root.stereo_width_changed(v); } }
+                        Knob { label: "Pan"; value <=> root.pan; value-text: root.pan_text; changed(v) => { root.pan_changed(v); } }
+                        Knob { label: "Gain"; value <=> root.output_gain; value-text: root.output_gain_text; changed(v) => { root.output_gain_changed(v); } }
+                        Toggle { label: "MONO"; checked <=> root.mono_active; toggled(v) => { root.mono_active_changed(v); } }
+                        Toggle { label: "DELTA"; checked <=> root.delta_active; toggled(v) => { root.delta_active_changed(v); } }
+                        Toggle { label: "BYPASS"; checked <=> root.bypass_active; toggled(v) => { root.bypass_active_changed(v); } }
+                    }
+                }
+            }
+        }
+    }
+}

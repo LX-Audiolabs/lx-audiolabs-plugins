@@ -1,0 +1,73 @@
+// LX-branded reusable Slint components.
+// Import from a plugin with:
+//   import { LxPanel, LxSpectrum, LxEqCurve, LxGoniometer, LxMeterBar } from "../../shared-ui-slint/ui/lx.slint";
+
+export component LxPanel inherits Rectangle {
+    background: #14141a;
+    border-radius: 4px;
+}
+
+export component LxSpectrum inherits LxPanel {
+    in property <string> commands: "";
+    in property <color> fill: #4d99f24d;
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        commands: root.commands;
+        fill: root.fill;
+        stroke: transparent;
+    }
+}
+
+export component LxEqCurve inherits LxPanel {
+    in property <string> commands: "";
+    in property <color> stroke-color: #ff8c0a;
+    in property <length> stroke-width: 2px;
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        commands: root.commands;
+        stroke: root.stroke-color;
+        stroke-width: root.stroke-width;
+        fill: transparent;
+    }
+}
+
+export component LxGoniometer inherits LxPanel {
+    in property <string> commands: "";
+    in property <color> stroke-color: #e6e600;
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        commands: root.commands;
+        stroke: root.stroke-color;
+        stroke-width: 1px;
+        fill: transparent;
+    }
+}
+
+export component LxMeterBar inherits Rectangle {
+    in property <float> level: 0.0;
+    in property <color> bar-color: #4d99f2;
+    in property <color> clip-color: #e04545;
+
+    background: #2a2a30;
+    border-radius: 2px;
+    clip: true;
+
+    property <float> lv: clamp(root.level, 0, 1);
+
+    Rectangle {
+        y: parent.height * (1.0 - lv);
+        height: parent.height * lv;
+        width: parent.width;
+        background: lv > 0.95 ? root.clip-color : root.bar-color;
+        border-radius: 2px;
+    }
+}

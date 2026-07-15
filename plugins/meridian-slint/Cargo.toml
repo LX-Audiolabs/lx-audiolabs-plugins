@@ -1,0 +1,41 @@
+[package]
+name = "meridian-slint"
+version = "1.9.7"
+edition = "2024"
+description = "LX Audiolabs — Meridian (Slint UI test)"
+license = "GPL-3.0-or-later"
+authors = ["LX Audiolabs"]
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = ["clap"]
+clap = ["dep:truce-clap", "dep:clap-sys"]
+vst3 = ["dep:truce-vst3"]
+lv2  = ["dep:truce-lv2"]
+shell = ["truce/shell", "clap"]
+
+[dependencies]
+truce        = { workspace = true }
+truce-core   = { workspace = true }
+truce-params = { workspace = true }
+truce-clap   = { workspace = true, optional = true }
+truce-vst3   = { workspace = true, optional = true }
+truce-lv2    = { workspace = true, optional = true }
+truce-loader = { workspace = true }
+truce-slint  = { workspace = true }
+slint        = { workspace = true }
+clap-sys     = { workspace = true, optional = true }
+
+shared-dsp      = { path = "../../shared-dsp" }
+shared-analysis = { path = "../../shared-analysis" }
+realfft         = "3"
+tracing         = "0.1"
+
+[build-dependencies]
+truce-slint-build = { workspace = true }
+
+[dev-dependencies]
+truce-test = { workspace = true }

@@ -1,0 +1,23 @@
+[vendor]
+name = "LX Audiolabs"
+id = "be.lxndr"
+url = "https://lx-audiolabs.github.io"
+au_manufacturer = "LxAL"
+
+[[plugin]]
+name = "Aether (Slint)"
+bundle_id = "aether-slint"
+crate = "aether-slint"
+category = "effect"
+fourcc = "Aslt"
+vst3_subcategory = "Equalizer"
+description = "Aether test port with Slint UI — Harman 5-band EQ + crossfeed"
+
+[[plugin]]
+name = "Meridian (Slint)"
+bundle_id = "meridian-slint"
+crate = "meridian-slint"
+category = "effect"
+fourcc = "Mslt"
+vst3_subcategory = "Analyzer|Dynamics"
+description = "Meridian test port with Slint UI — EQ, compressor, saturation, meters"

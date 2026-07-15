@@ -1,0 +1,384 @@
+import { Knob, ParamSlider, Toggle, Dropdown } from "@truce";
+import "JetBrainsMono-Regular.ttf";
+
+component BandColumn {
+    in-out property <string> name;
+
+    in-out property <[string]> type_choices;
+    in-out property <int> type_index;
+    in-out property <float> freq;
+    in-out property <float> gain;
+    in-out property <float> q;
+
+    in-out property <string> freq_text;
+    in-out property <string> gain_text;
+    in-out property <string> q_text;
+
+    callback type_changed(int);
+    callback freq_changed(float);
+    callback gain_changed(float);
+    callback q_changed(float);
+
+    Rectangle {
+        background: #1a1a22;
+        border-radius: 4px;
+
+        VerticalLayout {
+            padding: 8px;
+            spacing: 6px;
+            alignment: start;
+
+            Text { text: root.name; font-size: 11px; color: #ff8c1a; horizontal-alignment: center; }
+
+            Dropdown {
+                label: "Type";
+                options: root.type_choices;
+                index <=> root.type_index;
+                changed(v) => { root.type_changed(v); }
+            }
+
+            ParamSlider {
+                label: "Freq";
+                value <=> root.freq;
+                value-text <=> root.freq_text;
+                changed(v) => { root.freq_changed(v); }
+            }
+
+            ParamSlider {
+                label: "Gain";
+                value <=> root.gain;
+                value-text <=> root.gain_text;
+                changed(v) => { root.gain_changed(v); }
+            }
+
+            ParamSlider {
+                label: "Q";
+                value <=> root.q;
+                value-text <=> root.q_text;
+                changed(v) => { root.q_changed(v); }
+            }
+        }
+    }
+}
+
+export component AetherUi inherits Window {
+    // Parameter properties (normalised floats)
+    in-out property <float> eq1_freq: 0.5;
+    in-out property <float> eq1_gain: 0.5;
+    in-out property <float> eq1_q: 0.5;
+    in-out property <float> eq2_freq: 0.5;
+    in-out property <float> eq2_gain: 0.5;
+    in-out property <float> eq2_q: 0.5;
+    in-out property <float> eq3_freq: 0.5;
+    in-out property <float> eq3_gain: 0.5;
+    in-out property <float> eq3_q: 0.5;
+    in-out property <float> eq4_freq: 0.5;
+    in-out property <float> eq4_gain: 0.5;
+    in-out property <float> eq4_q: 0.5;
+    in-out property <float> eq5_freq: 0.5;
+    in-out property <float> eq5_gain: 0.5;
+    in-out property <float> eq5_q: 0.5;
+
+    in-out property <float> blend: 1.0;
+    in-out property <float> cf_angle: 0.5;
+    in-out property <float> cf_amount: 0.0;
+    in-out property <float> gain: 0.5;
+
+    in-out property <int> eq1_type: 1;
+    in-out property <int> eq2_type: 2;
+    in-out property <int> eq3_type: 2;
+    in-out property <int> eq4_type: 2;
+    in-out property <int> eq5_type: 3;
+    in-out property <int> cf_realism: 0;
+
+    in-out property <bool> bypass: false;
+
+    in-out property <string> eq1_freq_text: "";
+    in-out property <string> eq1_gain_text: "";
+    in-out property <string> eq1_q_text: "";
+    in-out property <string> eq2_freq_text: "";
+    in-out property <string> eq2_gain_text: "";
+    in-out property <string> eq2_q_text: "";
+    in-out property <string> eq3_freq_text: "";
+    in-out property <string> eq3_gain_text: "";
+    in-out property <string> eq3_q_text: "";
+    in-out property <string> eq4_freq_text: "";
+    in-out property <string> eq4_gain_text: "";
+    in-out property <string> eq4_q_text: "";
+    in-out property <string> eq5_freq_text: "";
+    in-out property <string> eq5_gain_text: "";
+    in-out property <string> eq5_q_text: "";
+    in-out property <string> blend_text: "";
+    in-out property <string> cf_angle_text: "";
+    in-out property <string> cf_amount_text: "";
+    in-out property <string> gain_text: "";
+
+    in-out property <string> curve_cmds: "";
+    in-out property <string> input_db_text: "-inf dB";
+
+    callback eq1_freq_changed(float);
+    callback eq1_gain_changed(float);
+    callback eq1_q_changed(float);
+    callback eq2_freq_changed(float);
+    callback eq2_gain_changed(float);
+    callback eq2_q_changed(float);
+    callback eq3_freq_changed(float);
+    callback eq3_gain_changed(float);
+    callback eq3_q_changed(float);
+    callback eq4_freq_changed(float);
+    callback eq4_gain_changed(float);
+    callback eq4_q_changed(float);
+    callback eq5_freq_changed(float);
+    callback eq5_gain_changed(float);
+    callback eq5_q_changed(float);
+
+    callback blend_changed(float);
+    callback cf_angle_changed(float);
+    callback cf_amount_changed(float);
+    callback gain_changed(float);
+
+    callback eq1_type_changed(int);
+    callback eq2_type_changed(int);
+    callback eq3_type_changed(int);
+    callback eq4_type_changed(int);
+    callback eq5_type_changed(int);
+    callback cf_realism_changed(int);
+
+    callback bypass_changed(bool);
+
+    title: "Aether (Slint)";
+    preferred-width: 760px;
+    preferred-height: 580px;
+    background: #14141a;
+    default-font-family: "JetBrains Mono";
+
+    VerticalLayout {
+        spacing: 0px;
+
+        // Header
+        Rectangle {
+            height: 40px;
+            vertical-stretch: 0;
+            background: #0c0c10;
+
+            HorizontalLayout {
+                padding: 10px;
+                spacing: 10px;
+                alignment: space-between;
+
+                Text {
+                    text: "LX AUDIOLABS — AETHER (SLINT)";
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: #ff8c1a;
+                }
+
+                Text {
+                    text: root.input_db_text;
+                    font-size: 12px;
+                    color: #bfbfc8;
+                }
+            }
+        }
+
+        // EQ curve
+        Rectangle {
+            height: 180px;
+            vertical-stretch: 0;
+            background: #0f0f14;
+
+            // Grid labels
+            Text { x: 6px; y: 4px; text: "+12 dB"; font-size: 9px; color: #ffffff40; }
+            Text { x: 6px; y: 78px; text: "0 dB"; font-size: 9px; color: #ffffff60; }
+            Text { x: 6px; y: 158px; text: "-12 dB"; font-size: 9px; color: #ffffff40; }
+            Text { x: 8px; y: 164px; text: "20 Hz"; font-size: 9px; color: #ffffff50; }
+            Text { x: 350px; y: 164px; text: "1 kHz"; font-size: 9px; color: #ffffff50; }
+            Text { x: 700px; y: 164px; text: "20 kHz"; font-size: 9px; color: #ffffff50; }
+
+            // 0 dB line
+            Rectangle { y: 90px; height: 1px; background: #ffffff20; }
+
+            Path {
+                commands: root.curve_cmds;
+                stroke: #ff8c1a;
+                stroke-width: 2px;
+                fill: transparent;
+            }
+        }
+
+        // 5-band EQ columns
+        HorizontalLayout {
+            vertical-stretch: 0;
+            height: 220px;
+            padding: 10px;
+            spacing: 6px;
+
+            BandColumn {
+                name: "Sub";
+                type_choices: ["OFF", "LSC", "PK", "HSC"];
+                type_index <=> root.eq1_type;
+                freq <=> root.eq1_freq;
+                gain <=> root.eq1_gain;
+                q <=> root.eq1_q;
+                freq_text <=> root.eq1_freq_text;
+                gain_text <=> root.eq1_gain_text;
+                q_text <=> root.eq1_q_text;
+                type_changed(v) => { root.eq1_type_changed(v); }
+                freq_changed(v) => { root.eq1_freq_changed(v); }
+                gain_changed(v) => { root.eq1_gain_changed(v); }
+                q_changed(v) => { root.eq1_q_changed(v); }
+            }
+
+            BandColumn {
+                name: "Bass";
+                type_choices: ["OFF", "LSC", "PK", "HSC"];
+                type_index <=> root.eq2_type;
+                freq <=> root.eq2_freq;
+                gain <=> root.eq2_gain;
+                q <=> root.eq2_q;
+                freq_text <=> root.eq2_freq_text;
+                gain_text <=> root.eq2_gain_text;
+                q_text <=> root.eq2_q_text;
+                type_changed(v) => { root.eq2_type_changed(v); }
+                freq_changed(v) => { root.eq2_freq_changed(v); }
+                gain_changed(v) => { root.eq2_gain_changed(v); }
+                q_changed(v) => { root.eq2_q_changed(v); }
+            }
+
+            BandColumn {
+                name: "Mid";
+                type_choices: ["OFF", "LSC", "PK", "HSC"];
+                type_index <=> root.eq3_type;
+                freq <=> root.eq3_freq;
+                gain <=> root.eq3_gain;
+                q <=> root.eq3_q;
+                freq_text <=> root.eq3_freq_text;
+                gain_text <=> root.eq3_gain_text;
+                q_text <=> root.eq3_q_text;
+                type_changed(v) => { root.eq3_type_changed(v); }
+                freq_changed(v) => { root.eq3_freq_changed(v); }
+                gain_changed(v) => { root.eq3_gain_changed(v); }
+                q_changed(v) => { root.eq3_q_changed(v); }
+            }
+
+            BandColumn {
+                name: "Pres";
+                type_choices: ["OFF", "LSC", "PK", "HSC"];
+                type_index <=> root.eq4_type;
+                freq <=> root.eq4_freq;
+                gain <=> root.eq4_gain;
+                q <=> root.eq4_q;
+                freq_text <=> root.eq4_freq_text;
+                gain_text <=> root.eq4_gain_text;
+                q_text <=> root.eq4_q_text;
+                type_changed(v) => { root.eq4_type_changed(v); }
+                freq_changed(v) => { root.eq4_freq_changed(v); }
+                gain_changed(v) => { root.eq4_gain_changed(v); }
+                q_changed(v) => { root.eq4_q_changed(v); }
+            }
+
+            BandColumn {
+                name: "Air";
+                type_choices: ["OFF", "LSC", "PK", "HSC"];
+                type_index <=> root.eq5_type;
+                freq <=> root.eq5_freq;
+                gain <=> root.eq5_gain;
+                q <=> root.eq5_q;
+                freq_text <=> root.eq5_freq_text;
+                gain_text <=> root.eq5_gain_text;
+                q_text <=> root.eq5_q_text;
+                type_changed(v) => { root.eq5_type_changed(v); }
+                freq_changed(v) => { root.eq5_freq_changed(v); }
+                gain_changed(v) => { root.eq5_gain_changed(v); }
+                q_changed(v) => { root.eq5_q_changed(v); }
+            }
+        }
+
+        // Crossfeed + Output
+        HorizontalLayout {
+            vertical-stretch: 0;
+            height: 110px;
+            padding: 10px;
+            spacing: 10px;
+
+            Rectangle {
+                horizontal-stretch: 1;
+                background: #1a1a22;
+                border-radius: 4px;
+
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 6px;
+                    alignment: start;
+
+                    Text { text: "CROSSFEED"; font-size: 11px; color: #ff8c1a; }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+
+                        Knob {
+                            label: "Angle";
+                            value <=> root.cf_angle;
+                            value-text <=> root.cf_angle_text;
+                            changed(v) => { root.cf_angle_changed(v); }
+                        }
+
+                        Knob {
+                            label: "Amount";
+                            value <=> root.cf_amount;
+                            value-text <=> root.cf_amount_text;
+                            changed(v) => { root.cf_amount_changed(v); }
+                        }
+
+                        Dropdown {
+                            label: "Realism";
+                            options: ["STD", "LIFE", "HYPER"];
+                            index <=> root.cf_realism;
+                            changed(v) => { root.cf_realism_changed(v); }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+                background: #1a1a22;
+                border-radius: 4px;
+
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 6px;
+                    alignment: start;
+
+                    Text { text: "OUTPUT"; font-size: 11px; color: #ff8c1a; }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+
+                        Knob {
+                            label: "Blend";
+                            value <=> root.blend;
+                            value-text <=> root.blend_text;
+                            changed(v) => { root.blend_changed(v); }
+                        }
+
+                        Knob {
+                            label: "Gain";
+                            value <=> root.gain;
+                            value-text <=> root.gain_text;
+                            changed(v) => { root.gain_changed(v); }
+                        }
+
+                        Toggle {
+                            label: "Bypass";
+                            checked <=> root.bypass;
+                            toggled(v) => { root.bypass_changed(v); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
