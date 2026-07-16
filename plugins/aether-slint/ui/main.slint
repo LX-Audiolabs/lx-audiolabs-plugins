@@ -1,7 +1,8 @@
 import {
-    Lx, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn, LxDangerBtn,
-    LxLineEdit, LxEqCurve, LxVaultSetupPopup,
+    Lx, LxShellHeader, LxShellBody, LxShellMain, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn, LxDangerBtn,
+    LxLineEdit, LxEqCurve,
 } from "../../../shared-ui-slint/ui/lx.slint";
+import { LxVaultSetupPopup } from "../../../shared-ui-slint/ui/lx-dialogs.slint";
 
 // Aether window matches original Vizia UI: 720 × 395.
 export component AetherUi inherits Window {
@@ -104,147 +105,90 @@ export component AetherUi inherits Window {
         // ═══════════════════════════════════════════════════════════════════
         // HEADER — brand | AETHER vX | preset | SAVE SETUP BYPASS
         // ═══════════════════════════════════════════════════════════════════
-        Rectangle {
-            height: 50px;
-            vertical-stretch: 0;
-            background: #141414;
+        LxShellHeader {
+            plugin-name: "AETHER";
+            version: root.version;
 
-            // stretch fills 50px; nested rows use alignment:center so controls
-            // sit mid-header (not top-stuck like a bare start-aligned row).
             HorizontalLayout {
-                padding-left: 10px;
-                padding-right: 10px;
                 spacing: 4px;
-                alignment: stretch;
+                alignment: center;
 
-                // Brand + plugin
-                HorizontalLayout {
-                    spacing: 6px;
-                    alignment: center;
+                // Preset dropdown trigger — light style, matches original Aether
+                preset_dd := Rectangle {
+                    width: 130px;
+                    height: Lx.button-h-lg;
+                    vertical-stretch: 0;
                     horizontal-stretch: 0;
+                    background: #e6e6e6;
+                    border-radius: Lx.radius-sm;
+                    border-width: 1px;
+                    border-color: #8c8c8c;
 
-                    Text {
-                        text: "LX";
-                        font-size: 18px;
-                        font-weight: 700;
-                        color: Lx.amber;
-                        vertical-alignment: center;
-                    }
-                    Text {
-                        text: "AUDIOLABS";
-                        font-size: 18px;
-                        font-weight: 700;
-                        color: Lx.text;
-                        vertical-alignment: center;
-                    }
-
-                    Rectangle { width: 14px; background: transparent; }
-                    Rectangle { width: 1px; height: 28px; background: #2e3838; }
-                    Rectangle { width: 14px; background: transparent; }
-
-                    VerticalLayout {
-                        spacing: 0px;
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        spacing: 4px;
                         alignment: center;
-                        horizontal-stretch: 0;
+
                         Text {
-                            text: "AETHER";
-                            font-size: 13px;
-                            font-weight: 700;
-                            color: #ffa64d;
+                            text: root.preset_name == "" ? "Select preset" : root.preset_name;
+                            font-size: Lx.font-md;
+                            color: #282828;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
                         }
                         Text {
-                            text: "v" + root.version;
-                            font-size: 10px;
-                            color: #808080;
+                            text: "▼";
+                            font-size: 8px;
+                            color: #646464;
+                            vertical-alignment: center;
+                            horizontal-stretch: 0;
                         }
+                    }
+
+                    TouchArea {
+                        clicked => { preset_popup.show(); }
                     }
                 }
 
-                Rectangle { horizontal-stretch: 1; background: transparent; }
-
-                // Preset + actions — vertically centered as a group
-                HorizontalLayout {
-                    spacing: 4px;
-                    alignment: center;
+                LxLineEdit {
+                    text <=> root.preset_name;
+                    placeholder-text: "Preset name";
+                    light: true;
+                    field-width: 130px;
+                    height: Lx.button-h-lg;
+                    vertical-stretch: 0;
                     horizontal-stretch: 0;
+                }
 
-                    // Preset dropdown trigger (light) + name edit — matches original
-                    preset_dd := Rectangle {
-                        width: 130px;
-                        height: Lx.button-h-lg;
-                        vertical-stretch: 0;
-                        horizontal-stretch: 0;
-                        background: #e6e6e6;
-                        border-radius: Lx.radius-sm;
-                        border-width: 1px;
-                        border-color: #8c8c8c;
+                Rectangle { width: 6px; background: transparent; }
 
-                        HorizontalLayout {
-                            padding-left: 6px;
-                            padding-right: 6px;
-                            spacing: 4px;
-                            alignment: center;
+                LxButton {
+                    text: "SAVE";
+                    horizontal-stretch: 0;
+                    vertical-stretch: 0;
+                    height: Lx.button-h-lg;
+                    min-width: 56px;
+                    clicked => { root.save_clicked(); }
+                }
 
-                            Text {
-                                text: root.preset_name == "" ? "Select preset" : root.preset_name;
-                                font-size: Lx.font-md;
-                                color: #282828;
-                                vertical-alignment: center;
-                                horizontal-stretch: 1;
-                                overflow: elide;
-                            }
-                            Text {
-                                text: "▼";
-                                font-size: 8px;
-                                color: #646464;
-                                vertical-alignment: center;
-                                horizontal-stretch: 0;
-                            }
-                        }
+                LxButton {
+                    text: "SETUP";
+                    horizontal-stretch: 0;
+                    vertical-stretch: 0;
+                    height: Lx.button-h-lg;
+                    min-width: 56px;
+                    clicked => { setup_popup.show(); }
+                }
 
-                        TouchArea {
-                            clicked => { preset_popup.show(); }
-                        }
-                    }
-
-                    LxLineEdit {
-                        text <=> root.preset_name;
-                        placeholder-text: "Preset name";
-                        light: true;
-                        field-width: 130px;
-                        height: Lx.button-h-lg;
-                        vertical-stretch: 0;
-                        horizontal-stretch: 0;
-                    }
-
-                    Rectangle { width: 6px; background: transparent; }
-
-                    LxButton {
-                        text: "SAVE";
-                        horizontal-stretch: 0;
-                        vertical-stretch: 0;
-                        height: Lx.button-h-lg;
-                        min-width: 56px;
-                        clicked => { root.save_clicked(); }
-                    }
-
-                    LxButton {
-                        text: "SETUP";
-                        horizontal-stretch: 0;
-                        vertical-stretch: 0;
-                        height: Lx.button-h-lg;
-                        min-width: 56px;
-                        clicked => { setup_popup.show(); }
-                    }
-
-                    LxToggleBtn {
-                        label: "BYPASS";
-                        active <=> root.bypass;
-                        horizontal-stretch: 0;
-                        vertical-stretch: 0;
-                        height: Lx.button-h-lg;
-                        toggled(v) => { root.bypass_changed(v); }
-                    }
+                LxToggleBtn {
+                    label: "BYPASS";
+                    active <=> root.bypass;
+                    horizontal-stretch: 0;
+                    vertical-stretch: 0;
+                    height: Lx.button-h-lg;
+                    toggled(v) => { root.bypass_changed(v); }
                 }
             }
         }
@@ -252,12 +196,14 @@ export component AetherUi inherits Window {
         // ═══════════════════════════════════════════════════════════════════
         // MAIN — curve + controls
         // ═══════════════════════════════════════════════════════════════════
-        VerticalLayout {
-            padding: 12px;
-            spacing: 4px;
-            vertical-stretch: 1;
+        LxShellBody {
+            LxShellMain {
+                VerticalLayout {
+                    padding: 6px;
+                    spacing: 4px;
+                    vertical-stretch: 1;
 
-            LxEqCurve {
+                    LxEqCurve {
                 height: 90px;
                 vertical-stretch: 0;
                 commands: root.curve_cmds;
@@ -535,6 +481,8 @@ export component AetherUi inherits Window {
         }
     }
 
+    }
+
     // ── Preset list popup — anchored under the light dropdown trigger ──
     preset_popup := PopupWindow {
         width: max(146px, preset_dd.width);
@@ -581,6 +529,7 @@ export component AetherUi inherits Window {
                             }
                         }
                     }
+                }
                 }
             }
         }

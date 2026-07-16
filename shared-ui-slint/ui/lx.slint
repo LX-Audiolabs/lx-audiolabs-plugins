@@ -11,7 +11,7 @@ import {
     LxPanel, LxSection, LxHeader, LxMonitorStrip, LxToggleBtn, LxButton, LxDangerBtn,
 } from "lx-chrome.slint";
 import {
-    LxShell, LxShellHeader, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+    LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
 } from "lx-shell.slint";
 import {
     LxKnob, LxLineEdit, LxParamField, LxCycleBtn, LxSegmentedButton,
@@ -23,17 +23,14 @@ import {
 import {
     LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
 } from "lx-viz.slint";
-import { LxVaultSetupPopup } from "lx-dialogs.slint";
-
 export {
     Lx,
     LxPanel, LxSection, LxHeader, LxMonitorStrip, LxToggleBtn, LxButton, LxDangerBtn,
-    LxShell, LxShellHeader, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+    LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
     LxKnob, LxLineEdit, LxParamField, LxCycleBtn, LxSegmentedButton,
     LxSlider, LxEqBandColumn, LxBandColumn,
     LxMeterBar, LxGrMeter, LxCorrelation, LxStereoMeter, LxLevelPanel,
     LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
-    LxVaultSetupPopup,
 }
 
 // Compile anchor for shared-ui-slint crate.
@@ -49,12 +46,9 @@ export component LxGallery inherits Window {
         LxShellHeader {
             plugin-name: "GALLERY";
             version: "0.1";
-            show-monitor: true;
         }
 
-        HorizontalLayout {
-            vertical-stretch: 1;
-
+        LxShellBody {
             LxShellLeft {
                 title: "LEFT BAR";
                 Text {

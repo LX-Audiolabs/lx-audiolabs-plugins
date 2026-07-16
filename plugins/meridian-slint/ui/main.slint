@@ -1,10 +1,10 @@
 import { Palette } from "std-widgets.slint";
 import {
-    Lx, LxShell, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+    Lx, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
     LxKnob, LxSlider, LxEqBandColumn, LxSegmentedButton, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
     LxSpectrum, LxEqCurve, LxGoniometer, LxStereoMeter, LxGrMeter, LxCorrelation, LxCompDisplay,
-    LxVaultSetupPopup,
 } from "../../../shared-ui-slint/ui/lx.slint";
+import { LxVaultSetupPopup } from "../../../shared-ui-slint/ui/lx-dialogs.slint";
 
 export component MeridianUi inherits Window {
     // --- float params (normalized) + formatted text ---
@@ -150,18 +150,35 @@ export component MeridianUi inherits Window {
     VerticalLayout {
         spacing: 0;
 
-        // ── HEADER + BODY ────────────────────────────────────────────────
-        LxShell {
+        // ── HEADER ───────────────────────────────────────────────────────
+        LxShellHeader {
             plugin-name: "MERIDIAN";
             version: "1.9.7";
-            show-monitor: true;
-            mono <=> root.mono_active;
-            delta <=> root.delta_active;
-            bypass <=> root.bypass_active;
-            mono_changed(v) => { root.mono_active_changed(v); }
-            delta_changed(v) => { root.delta_active_changed(v); }
-            bypass_changed(v) => { root.bypass_active_changed(v); }
 
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: center;
+
+                LxToggleBtn {
+                    label: "MONO";
+                    active <=> root.mono_active;
+                    toggled(v) => { root.mono_active_changed(v); }
+                }
+                LxToggleBtn {
+                    label: "DELTA";
+                    active <=> root.delta_active;
+                    toggled(v) => { root.delta_active_changed(v); }
+                }
+                LxToggleBtn {
+                    label: "BYPASS";
+                    active <=> root.bypass_active;
+                    toggled(v) => { root.bypass_active_changed(v); }
+                }
+            }
+        }
+
+        // ── BODY ─────────────────────────────────────────────────────────
+        LxShellBody {
             // ── LEFT BAR: vault / presets ─────────────────────────────
             LxShellLeft {
                 title: "VAULT PRESETS";

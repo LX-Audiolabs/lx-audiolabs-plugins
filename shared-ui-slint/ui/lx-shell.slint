@@ -5,9 +5,15 @@
 //
 //   VerticalLayout {
 //       spacing: 0;
-//       LxShellHeader { plugin-name: "MERIDIAN"; mono <=> ...; }
-//       HorizontalLayout {
-//           vertical-stretch: 1;
+//       LxShellHeader {
+//           plugin-name: "MERIDIAN";
+//           HorizontalLayout {
+//               LxToggleBtn { label: "MONO"; ... }
+//               LxToggleBtn { label: "DELTA"; ... }
+//               LxToggleBtn { label: "BYPASS"; ... }
+//           }
+//       }
+//       LxShellBody {
 //           LxShellLeft  { title: "VAULT PRESETS"; /* ... */ }
 //           LxShellMain  { /* spectrum + EQ */ }
 //           LxShellRight { title: "OUTPUT LEVEL";  /* meters */ }
@@ -15,11 +21,10 @@
 //       LxShellFooter { /* compressor / pan / width / reset */ }
 //   }
 //
-// Sugar: LxShell wraps header + body row; put left/main/right as its children,
-// keep LxShellFooter as a sibling below.
+// LxShellHeader accepts caller-supplied children on the right side, which are
+// automatically vertically centered. LxShellBody is the horizontal body row.
 
 import { Lx } from "lx-theme.slint";
-import { LxToggleBtn } from "lx-chrome.slint";
 
 // ── Zones ────────────────────────────────────────────────────────────────────
 
@@ -115,7 +120,8 @@ export component LxShellFooter inherits Rectangle {
 
 // ── Header ───────────────────────────────────────────────────────────────────
 
-/// Brand + plugin name + version (left) + MONO/DELTA/BYPASS (right). Frozen 50px.
+/// Brand + plugin name + version (left). Custom actions are passed as children
+/// on the right and are automatically vertically centered. Frozen 50px.
 export component LxShellHeader inherits Rectangle {
     in property <string> brand-left: "LX";
     in property <string> brand-right: "AUDIOLABS";
@@ -123,22 +129,13 @@ export component LxShellHeader inherits Rectangle {
     in property <string> version: "";
     in property <string> status-text: "";
 
-    in-out property <bool> mono: false;
-    in-out property <bool> delta: false;
-    in-out property <bool> bypass: false;
-    in property <bool> show-monitor: true;
-
-    callback mono_changed(bool);
-    callback delta_changed(bool);
-    callback bypass_changed(bool);
-
     height: Lx.header-h;
     vertical-stretch: 0;
     background: #141414;
 
-    // stretch = fill 50px height so spacer expands horizontally (brand LEFT, buttons RIGHT).
+    // stretch = fill 50px height so spacer expands horizontally (brand LEFT, actions RIGHT).
     // Nested rows use alignment:center so content sits mid-header (not top-stuck).
-    // Do NOT use outer alignment:center — that packs brand+buttons into the middle.
+    // Do NOT use outer alignment:center — that packs brand+actions into the middle.
     HorizontalLayout {
         padding-left: 10px;
         padding-right: 10px;
@@ -207,93 +204,42 @@ export component LxShellHeader inherits Rectangle {
             }
         }
 
-        // ── Center: flex spacer pushes buttons to the right ──
+        // ── Center: flex spacer pushes actions to the right ──
         Rectangle {
             horizontal-stretch: 1;
             min-width: 0px;
             background: transparent;
         }
 
-        // ── Right: MONO / DELTA / BYPASS ──
-        if root.show-monitor: HorizontalLayout {
+        // ── Right: caller-supplied actions, vertically centered ──
+        HorizontalLayout {
             spacing: 4px;
             alignment: center;
             horizontal-stretch: 0;
             vertical-stretch: 0;
 
-            LxToggleBtn {
-                label: "MONO";
-                vertical-stretch: 0;
-                active <=> root.mono;
-                toggled(v) => { root.mono_changed(v); }
-            }
-            LxToggleBtn {
-                label: "DELTA";
-                vertical-stretch: 0;
-                active <=> root.delta;
-                toggled(v) => { root.delta_changed(v); }
-            }
-            LxToggleBtn {
-                label: "BYPASS";
-                vertical-stretch: 0;
-                active <=> root.bypass;
-                toggled(v) => { root.bypass_changed(v); }
-            }
+            @children
         }
     }
 }
 
-// ── Sugar: header + body row ─────────────────────────────────────────────────
+// ── Sugar: body row only ─────────────────────────────────────────────────────
 
-/// Header + horizontal body. Children = LxShellLeft / LxShellMain / LxShellRight.
-/// Pair with a sibling `LxShellFooter` under a VerticalLayout for the full table.
-export component LxShell inherits Rectangle {
-    in property <string> brand-left: "LX";
-    in property <string> brand-right: "AUDIOLABS";
-    in property <string> plugin-name: "";
-    in property <string> version: "";
-    in property <string> status-text: "";
-    in-out property <bool> mono: false;
-    in-out property <bool> delta: false;
-    in-out property <bool> bypass: false;
-    in property <bool> show-monitor: true;
-
-    callback mono_changed(bool);
-    callback delta_changed(bool);
-    callback bypass_changed(bool);
-
+/// Horizontal body row. Children = LxShellLeft / LxShellMain / LxShellRight.
+/// Pair with a sibling `LxShellHeader` above and `LxShellFooter` below inside a
+/// VerticalLayout for the full plugin table.
+export component LxShellBody inherits Rectangle {
     background: Lx.window;
     vertical-stretch: 1;
     horizontal-stretch: 1;
 
-    VerticalLayout {
+    HorizontalLayout {
+        vertical-stretch: 1;
+        horizontal-stretch: 1;
+        min-width: 0px;
         spacing: 0;
-        width: 100%;
-        height: 100%;
-
-        LxShellHeader {
-            brand-left: root.brand-left;
-            brand-right: root.brand-right;
-            plugin-name: root.plugin-name;
-            version: root.version;
-            status-text: root.status-text;
-            show-monitor: root.show-monitor;
-            mono <=> root.mono;
-            delta <=> root.delta;
-            bypass <=> root.bypass;
-            mono_changed(v) => { root.mono_changed(v); }
-            delta_changed(v) => { root.delta_changed(v); }
-            bypass_changed(v) => { root.bypass_changed(v); }
-        }
-
-        HorizontalLayout {
-            vertical-stretch: 1;
-            horizontal-stretch: 1;
-            min-width: 0px;
-            spacing: 0;
-            // Keep left | main | right in bounds — don't let main preferred-width overflow.
-            alignment: stretch;
-            @children
-        }
+        // Keep left | main | right in bounds — don't let main preferred-width overflow.
+        alignment: stretch;
+        @children
     }
 }
