@@ -1,7 +1,6 @@
-// Branded LX controls. LxKnob is a custom compact amber knob; sliders/toggles/dropdowns
-// still wrap @truce while we migrate piece by piece.
+// Branded LX controls — custom knob/slider/segmented; no @truce import
+// (LSP can't resolve @truce; cargo build injects it via truce-slint-build only).
 
-import { Toggle, Dropdown } from "@truce";
 import { Lx } from "lx-theme.slint";
 
 // ─── Compact amber knob ──────────────────────────────────────────────────────
@@ -318,45 +317,109 @@ export component LxCycleBtn inherits Rectangle {
 
 // ─── 3-state segmented button (A/B/C style) ──────────────────────────────────
 
-export component LxSegmentedButton inherits HorizontalLayout {
+// Segmented exclusive buttons. Horizontal by default; `vertical: true` stacks.
+export component LxSegmentedButton inherits Rectangle {
     in-out property <float> index: 0.0;
     in property <[string]> choices: ["A", "B", "C"];
+    // Compact = Meridian EQ A/B/C pills (tiny); default fits "12 dB"/"24 dB".
+    in property <bool> compact: false;
+    in property <bool> vertical: false;
 
     callback changed(float);
 
-    spacing: 2px;
-    height: Lx.button-h-sm;
+    background: transparent;
+    horizontal-stretch: root.compact ? 0 : 1;
+    vertical-stretch: 0;
+    // Compact ABC fixed width; vertical 12/24 needs a bit more.
+    min-width: root.compact ? 66px : (root.vertical ? 44px : 0px);
+    max-width: root.compact ? 66px : 9999px;
 
-    for choice[i] in root.choices: Rectangle {
-        property <bool> active: root.index == i;
+    property <length> seg-h: root.compact ? 16px : Lx.button-h-sm;
+    property <length> gap: root.compact ? 1px : 2px;
+    // Vertical stack height for 2–3 segments (Filter 12/24, etc.).
+    height: root.vertical
+        ? (root.choices.length >= 3 ? root.seg-h * 3 + root.gap * 2
+            : root.seg-h * 2 + root.gap)
+        : root.seg-h;
 
-        horizontal-stretch: 1;
-        height: Lx.button-h-sm;
-        background: active ? Lx.amber : Lx.control;
-        border-radius: Lx.radius-sm;
+    if !root.vertical: HorizontalLayout {
+        spacing: root.gap;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        alignment: center;
 
-        Text {
-            width: 100%;
+        for choice[i] in root.choices: Rectangle {
+            property <bool> active: root.index == i;
+            horizontal-stretch: 1;
+            min-width: root.compact ? 20px : 28px;
             height: 100%;
-            text: choice;
-            font-size: Lx.font-xs;
-            font-weight: 600;
-            color: active ? Lx.text : Lx.text-secondary;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
+            background: active ? Lx.amber : Lx.control;
+            border-radius: Lx.radius-sm;
 
-        ta := TouchArea {
-            clicked => {
-                root.index = i;
-                root.changed(i);
+            Text {
+                width: 100%;
+                height: 100%;
+                text: choice;
+                font-size: root.compact ? 8px : Lx.font-xs;
+                font-weight: 600;
+                color: active ? Lx.text : Lx.text-secondary;
+                horizontal-alignment: center;
+                vertical-alignment: center;
             }
-        }
 
-        states [
-            hover when ta.has-hover && !active: { background: Lx.control-hover; }
-            pressed when ta.pressed && !active: { background: Lx.control-active; }
-        ]
+            ta_h := TouchArea {
+                clicked => {
+                    root.index = i;
+                    root.changed(i);
+                }
+            }
+
+            states [
+                hover when ta_h.has-hover && !active: { background: Lx.control-hover; }
+                pressed when ta_h.pressed && !active: { background: Lx.control-active; }
+            ]
+        }
+    }
+
+    if root.vertical: VerticalLayout {
+        spacing: root.gap;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        alignment: center;
+
+        for choice[i] in root.choices: Rectangle {
+            property <bool> active: root.index == i;
+            horizontal-stretch: 1;
+            height: root.seg-h;
+            vertical-stretch: 0;
+            background: active ? Lx.amber : Lx.control;
+            border-radius: Lx.radius-sm;
+
+            Text {
+                width: 100%;
+                height: 100%;
+                text: choice;
+                font-size: root.compact ? 8px : Lx.font-xs;
+                font-weight: 600;
+                color: active ? Lx.text : Lx.text-secondary;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            ta_v := TouchArea {
+                clicked => {
+                    root.index = i;
+                    root.changed(i);
+                }
+            }
+
+            states [
+                hover when ta_v.has-hover && !active: { background: Lx.control-hover; }
+                pressed when ta_v.pressed && !active: { background: Lx.control-active; }
+            ]
+        }
     }
 }
 
@@ -371,28 +434,35 @@ export component LxSlider inherits VerticalLayout {
     in property <float> maximum: 1.0;
     in property <string> value-text: "";
     in property <float> default-value: 0.5; // right-click resets to this value
+    // Dense EQ-band columns (Meridian 5-across).
+    in property <bool> compact: false;
 
     callback changed(float);
 
-    spacing: Lx.knob-gap;
-    alignment: center;
+    spacing: root.compact ? 1px : Lx.knob-gap;
+    alignment: stretch;
+    // Only min-width (no width/max-width combo — Slint forbids it).
+    min-width: 0px;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
 
-    property <length> track-h: 4px;
-    property <length> thumb-d: 12px;
+    property <length> track-h: root.compact ? 3px : 4px;
+    property <length> thumb-d: root.compact ? 10px : 12px;
     property <float> norm: clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0, 1);
 
     // Label above the track.
     if root.label != "": Text {
         text: root.label;
-        font-size: Lx.font-xs;
+        font-size: root.compact ? 8px : Lx.font-xs;
         color: Lx.text-label;
         horizontal-alignment: center;
         vertical-stretch: 0;
+        overflow: elide;
     }
 
     // Track + thumb.
     Rectangle {
-        width: 100%;
+        horizontal-stretch: 1;
         height: root.thumb-d;
         background: transparent;
         vertical-stretch: 0;
@@ -468,21 +538,103 @@ export component LxSlider inherits VerticalLayout {
     // Formatted value below the track.
     if root.value-text != "": Text {
         text: root.value-text;
-        font-size: Lx.font-xs;
+        font-size: root.compact ? 8px : Lx.font-xs;
         color: Lx.text-secondary;
         horizontal-alignment: center;
         vertical-stretch: 0;
+        overflow: elide;
     }
 }
 
+// One Meridian 5-band EQ column. Five equal stretch columns in a HorizontalLayout.
+// preferred-width is a modest equal base so layout does not blow past the shell.
+export component LxEqBandColumn inherits Rectangle {
+    in property <string> title: "";
+    in property <string> subtitle: "";
+    in property <string> q-label: "Filter Q";
 
-export component LxToggle inherits Toggle {
-    label-color: Lx.text-label;
+    in-out property <float> gain: 0.5;
+    in property <string> gain-text: "";
+    in property <float> gain-default: 0.5;
+    callback gain_changed(float);
+
+    in-out property <float> freq: 0.5;
+    in property <string> freq-text: "";
+    in property <float> freq-default: 0.5;
+    callback freq_changed(float);
+
+    in-out property <float> slope: 1.0;
+    callback slope_changed(float);
+
+    horizontal-stretch: 1;
+    min-width: 70px;
+    preferred-height: 118px;
+    vertical-stretch: 0;
+    background: transparent;
+    clip: true;
+
+    // Absolute fill — size from parent stretch, not preferred-width blowout.
+    VerticalLayout {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        spacing: 1px;
+        alignment: stretch;
+        padding-left: 3px;
+        padding-right: 3px;
+
+        Text {
+            text: root.title;
+            font-size: Lx.font-xs;
+            font-weight: 700;
+            color: Lx.amber-hot;
+            horizontal-alignment: center;
+            overflow: elide;
+            vertical-stretch: 0;
+        }
+        Text {
+            text: root.subtitle;
+            font-size: 8px;
+            color: Lx.text-muted;
+            horizontal-alignment: center;
+            overflow: elide;
+            vertical-stretch: 0;
+        }
+        LxSlider {
+            compact: true;
+            value <=> root.gain;
+            value-text: root.gain-text;
+            default-value: root.gain-default;
+            changed(v) => { root.gain_changed(v); }
+        }
+        LxSlider {
+            compact: true;
+            value <=> root.freq;
+            value-text: root.freq-text;
+            default-value: root.freq-default;
+            changed(v) => { root.freq_changed(v); }
+        }
+        Text {
+            text: root.q-label;
+            font-size: 8px;
+            color: Lx.text-muted;
+            horizontal-alignment: center;
+            overflow: elide;
+            vertical-stretch: 0;
+        }
+        HorizontalLayout {
+            alignment: center;
+            vertical-stretch: 0;
+            LxSegmentedButton {
+                compact: true;
+                index <=> root.slope;
+                changed(v) => { root.slope_changed(v); }
+            }
+        }
+    }
 }
 
-export component LxDropdown inherits Dropdown {
-    label-color: Lx.text-label;
-}
 
 // EQ band column — Aether style: cycle type button + FREQ/GAIN/Q text fields.
 // Tab order follows field tree order (freq → gain → q → next band).

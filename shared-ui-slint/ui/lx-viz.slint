@@ -74,7 +74,6 @@ export component LxSpectrum inherits LxPanel {
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
         // Stretch path to widget (default contain letterboxes / can hide fill).
-        fit: fill;
         commands: root.commands;
         fill: root.fill-color;
         stroke: root.stroke-color;
@@ -167,7 +166,6 @@ export component LxEqCurve inherits LxPanel {
         viewbox-y: 0;
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
-        fit: fill;
         commands: root.commands;
         stroke: root.stroke-color;
         stroke-width: root.stroke-width;
@@ -286,7 +284,6 @@ export component LxGoniometer inherits LxPanel {
         viewbox-y: 0;
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
-        fit: fill;
         commands: root.commands;
         stroke: root.stroke-color;
         stroke-width: root.stroke-width;
@@ -295,51 +292,77 @@ export component LxGoniometer inherits LxPanel {
 
 }
 
-// Compressor mini-display: PK / GR readouts + horizontal GR meter bar.
+// Compressor mini-display — matches original Meridian footer:
+// 110×48 GR envelope graph + PK/GR readouts (PK = GR peak-hold dB).
 export component LxCompDisplay inherits Rectangle {
     in property <string> pk-text: "PK: 0.0";
     in property <string> gr-text: "GR: 0.0";
-    in property <float> gr: 0.0; // 0..1 (amount of reduction)
+    // SVG path in 110×48 viewBox (fill+stroke of GR history).
+    in property <string> envelope-cmds: "";
+    // Kept for callers; envelope path is authoritative.
+    in property <float> gr: 0.0;
 
-    width: 64px;
-    height: 100%;
+    width: 160px;
+    height: 48px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
     background: transparent;
 
-    VerticalLayout {
-        padding-top: 4px;
-        padding-bottom: 4px;
-        spacing: 2px;
+    HorizontalLayout {
+        spacing: 4px;
         alignment: center;
 
-        Text {
-            text: root.pk-text;
-            font-size: Lx.font-xs;
-            color: Lx.amber;
-            horizontal-alignment: center;
-            font-weight: 600;
-        }
-        Text {
-            text: root.gr-text;
-            font-size: Lx.font-xs;
-            color: Lx.amber;
-            horizontal-alignment: center;
-            font-weight: 600;
-        }
-
-        // Horizontal GR meter bar
+        // Envelope graph (vizia CompressorEnvelopeView size)
         Rectangle {
-            height: 3px;
-            width: 100%;
-            background: Lx.steel;
-            border-radius: 1px;
+            width: 110px;
+            height: 48px;
+            horizontal-stretch: 0;
+            vertical-stretch: 0;
+            background: #141414;
+            border-radius: Lx.radius-sm;
+            clip: true;
 
+            // Mid guide (~6 dB of 12)
             Rectangle {
-                x: 0;
-                y: 0;
-                width: root.gr * parent.width;
+                y: 24px;
+                height: 1px;
+                width: 100%;
+                background: #ffffff10;
+            }
+
+            Path {
+                x: 0; y: 0;
+                width: 100%;
                 height: 100%;
-                background: Lx.amber;
-                border-radius: 1px;
+                viewbox-x: 0;
+                viewbox-y: 0;
+                viewbox-width: 110;
+                viewbox-height: 48;
+                commands: root.envelope-cmds;
+                fill: #ff592d2e;
+                stroke: #ff6633;
+                stroke-width: 1.2px;
+            }
+        }
+
+        VerticalLayout {
+            spacing: 2px;
+            alignment: center;
+            horizontal-stretch: 0;
+
+            Text {
+                text: root.pk-text;
+                font-size: 9px;
+                color: #ff9933;
+                font-weight: 600;
+                horizontal-alignment: left;
+            }
+            Text {
+                text: root.gr-text;
+                font-size: 8px;
+                color: #ff4d4d;
+                font-weight: 600;
+                horizontal-alignment: left;
             }
         }
     }

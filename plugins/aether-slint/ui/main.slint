@@ -1,6 +1,6 @@
 import {
     Lx, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn, LxDangerBtn,
-    LxLineEdit, LxEqCurve,
+    LxLineEdit, LxEqCurve, LxVaultSetupPopup,
 } from "../../../shared-ui-slint/ui/lx.slint";
 
 // Aether window matches original Vizia UI: 720 × 395.
@@ -586,56 +586,14 @@ export component AetherUi inherits Window {
         }
     }
 
-    // ── SETUP popup (vault path) ──
-    // close-on-click closes on ANY click (incl. TextInput focus) — use outside only.
-    setup_popup := PopupWindow {
-        width: 420px;
-        height: 160px;
-        x: (root.width - self.width) / 2;
-        y: (root.height - self.height) / 2;
-        close-policy: close-on-click-outside;
-
-        Rectangle {
-            background: Lx.panel;
-            border-radius: Lx.radius-md;
-            border-width: 1px;
-            border-color: Lx.steel;
-
-            VerticalLayout {
-                padding: Lx.pad-md;
-                spacing: Lx.gap-md;
-
-                Text {
-                    text: "LX AUDIOLABS — SETUP";
-                    font-size: Lx.font-lg;
-                    font-weight: 700;
-                    color: Lx.text;
-                }
-                Text {
-                    text: "Configure your Vault path for Aether:";
-                    font-size: Lx.font-md;
-                    color: Lx.text-secondary;
-                }
-                LxLineEdit {
-                    placeholder-text: "Enter Vault absolute path...";
-                    text <=> root.vault_path;
-                    vertical-stretch: 0;
-                }
-                HorizontalLayout {
-                    spacing: Lx.gap-md;
-                    LxButton {
-                        text: "SAVE";
-                        clicked => {
-                            root.vault_path_changed(root.vault_path);
-                            setup_popup.close();
-                        }
-                    }
-                    LxButton {
-                        text: "CANCEL";
-                        clicked => { setup_popup.close(); }
-                    }
-                }
-            }
-        }
+    // Full-window dimmer keeps dialog above Path layers (spectrum/EQ).
+    setup_popup := LxVaultSetupPopup {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        path <=> root.vault_path;
+        plugin-label: "Aether";
+        saved(p) => { root.vault_path_changed(p); }
     }
 }

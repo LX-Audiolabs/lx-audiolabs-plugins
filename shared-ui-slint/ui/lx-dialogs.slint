@@ -1,0 +1,86 @@
+// Shared dialogs used by every plugin (vault path, etc.).
+
+import { Lx } from "lx-theme.slint";
+import { LxButton } from "lx-chrome.slint";
+import { LxLineEdit } from "lx-controls.slint";
+
+/// Full-window vault path dialog (Aether CI).
+/// Parent must size it to the window so the dimmer covers FFT/EQ Path layers:
+///
+///   setup_popup := LxVaultSetupPopup {
+///       width: root.width; height: root.height; x: 0; y: 0;
+///       path <=> root.vault_path;
+///       plugin-label: "Meridian";
+///       saved(p) => { root.vault_path_changed(p); }
+///   }
+///   // setup_popup.show();
+///
+/// Full-window + solid dimmer keeps the card above software-renderer Path draws.
+export component LxVaultSetupPopup inherits PopupWindow {
+    in-out property <string> path: "";
+    // Shown in subtitle: "Configure your Vault path for {plugin-label}:"
+    in property <string> plugin-label: "Plugin";
+
+    callback saved(string);
+
+    close-policy: close-on-click-outside;
+
+    // Dimmer fills the popup area (parent sets width/height = window).
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #000000b3;
+
+        // Centered card — Aether setup chrome
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 420px;
+            height: 160px;
+            background: Lx.panel;
+            border-radius: Lx.radius-md;
+            border-width: 1px;
+            border-color: Lx.steel;
+
+            VerticalLayout {
+                padding: Lx.pad-md;
+                spacing: Lx.gap-md;
+
+                Text {
+                    text: "LX AUDIOLABS — SETUP";
+                    font-size: Lx.font-lg;
+                    font-weight: 700;
+                    color: Lx.text;
+                    vertical-stretch: 0;
+                }
+                Text {
+                    text: "Configure your Vault path for " + root.plugin-label + ":";
+                    font-size: Lx.font-md;
+                    color: Lx.text-secondary;
+                    vertical-stretch: 0;
+                }
+                LxLineEdit {
+                    placeholder-text: "Enter Vault absolute path...";
+                    text <=> root.path;
+                    vertical-stretch: 0;
+                }
+                HorizontalLayout {
+                    spacing: Lx.gap-md;
+                    vertical-stretch: 0;
+
+                    LxButton {
+                        text: "SAVE";
+                        clicked => {
+                            root.saved(root.path);
+                            root.close();
+                        }
+                    }
+                    LxButton {
+                        text: "CANCEL";
+                        clicked => { root.close(); }
+                    }
+                }
+            }
+        }
+    }
+}

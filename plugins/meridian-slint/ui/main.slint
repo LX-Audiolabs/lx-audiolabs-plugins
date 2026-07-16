@@ -1,8 +1,9 @@
 import { Palette } from "std-widgets.slint";
 import {
     Lx, LxShell, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
-    LxKnob, LxSlider, LxSegmentedButton, LxToggle, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
+    LxKnob, LxSlider, LxEqBandColumn, LxSegmentedButton, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
     LxSpectrum, LxEqCurve, LxGoniometer, LxStereoMeter, LxGrMeter, LxCorrelation, LxCompDisplay,
+    LxVaultSetupPopup,
 } from "../../../shared-ui-slint/ui/lx.slint";
 
 export component MeridianUi inherits Window {
@@ -74,6 +75,10 @@ export component MeridianUi inherits Window {
     in-out property <float> output_gain: 0.5; in property <string> output_gain_text: ""; in property <float> output_gain_default: 0.5;
     callback output_gain_changed(float);
 
+    // Auto Loud (right bar) — measures ~5s then applies LUFS offset to out gain
+    in property <bool> auto_loud_measuring: false;
+    callback auto_loud_clicked;
+
     // --- int params (slope selectors) ---
     in-out property <float> cut_slope: 0.0; callback cut_slope_changed(float);
     in-out property <float> bass_slope: 1.0; callback bass_slope_changed(float);
@@ -100,6 +105,8 @@ export component MeridianUi inherits Window {
     in property <float> gr: 0.0;
     in property <string> comp_peak_text: "";
     in property <string> gr_text: "";
+    // Compressor envelope path (110×48 viewBox) for footer mini-display
+    in property <string> gr_envelope_cmds: "";
     in property <float> correlation: 0.0;
     in property <float> balance: 0.0;
     in property <string> corr_text: "";
@@ -261,13 +268,11 @@ export component MeridianUi inherits Window {
                                 spacing: 4px;
                                 alignment: center;
                                 LxKnob { small: true; label: "LOW CUT"; value <=> root.hpf_freq; value-text: root.hpf_freq_text; default-value: root.hpf_freq_default; changed(v) => { root.hpf_freq_changed(v); } }
-                                VerticalLayout {
-                                    alignment: center;
-                                    LxSegmentedButton {
-                                        choices: ["12 dB", "24 dB"];
-                                        index <=> root.cut_slope;
-                                        changed(v) => { root.cut_slope_changed(v); }
-                                    }
+                                LxSegmentedButton {
+                                    vertical: true;
+                                    choices: ["12 dB", "24 dB"];
+                                    index <=> root.cut_slope;
+                                    changed(v) => { root.cut_slope_changed(v); }
                                 }
                                 LxKnob { small: true; label: "HIGH CUT"; value <=> root.lpf_freq; value-text: root.lpf_freq_text; default-value: root.lpf_freq_default; changed(v) => { root.lpf_freq_changed(v); } }
                             }
@@ -359,17 +364,23 @@ export component MeridianUi inherits Window {
                         border-radius: Lx.radius-md;
                         clip: true;
 
+                        // Spectrum Y = −70…−18 dB (vizia SpectrumConfig default).
+                        // EQ curve Y = ±24 dB (separate overlay axis, labels-right).
                         LxSpectrum {
                             width: 100%;
                             height: 100%;
                             commands: root.spectrum_path;
                             path-w: 620;
                             path-h: 170;
-                            fill-color: Lx.spectrum-fill;
-                            stroke-color: Lx.spectrum;
-                            db-top: "0 dB";
-                            db-mid: "-45";
-                            db-bot: "-90";
+                            // Teal fill like original Meridian SpectrumCurve
+                            fill-color: #19e6802e;
+                            stroke-color: #19e6b3;
+                            db-top: "-18";
+                            db-mid: "-44";
+                            db-bot: "-70";
+                            freq-lo: "20 Hz";
+                            freq-mid: "1 kHz";
+                            freq-hi: "20 kHz";
                         }
 
                         // Transparent overlay — LxEqCurve defaults to opaque surface
@@ -384,66 +395,94 @@ export component MeridianUi inherits Window {
                             show-grid: false;
                             show-labels: true;
                             labels-right: true;
+                            db-top: "+24";
+                            db-mid: "0";
+                            db-bot: "-24";
                         }
                     }
 
-                    // ── Row 3: 5-band EQ (gain + freq + A/B/C Q) ───────
+                    // ── Row 3: 5 equal EQ columns
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: 4px;
                         alignment: stretch;
                         vertical-stretch: 0;
-                        padding-left: 2px;
-                        padding-right: 2px;
+                        min-width: 0px;
+                        horizontal-stretch: 1;
 
-                        // LO
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            horizontal-stretch: 1;
-                            Text { text: "LO"; font-size: Lx.font-xs; font-weight: 700; color: Lx.amber-hot; horizontal-alignment: center; }
-                            LxSlider { label: "GAIN"; value <=> root.bass_gain; value-text: root.bass_gain_text; default-value: root.bass_gain_default; changed(v) => { root.bass_gain_changed(v); } }
-                            LxSlider { label: "FREQ"; value <=> root.eq_freq_1; value-text: root.eq_freq_1_text; default-value: root.eq_freq_1_default; changed(v) => { root.eq_freq_1_changed(v); } }
-                            LxSegmentedButton { index <=> root.bass_slope; changed(v) => { root.bass_slope_changed(v); } }
+                        LxEqBandColumn {
+                            title: "Sub";
+                            subtitle: "LO SHELF";
+                            q-label: "Shelf Slope";
+                            gain <=> root.bass_gain;
+                            gain-text: root.bass_gain_text;
+                            gain-default: root.bass_gain_default;
+                            gain_changed(v) => { root.bass_gain_changed(v); }
+                            freq <=> root.eq_freq_1;
+                            freq-text: root.eq_freq_1_text;
+                            freq-default: root.eq_freq_1_default;
+                            freq_changed(v) => { root.eq_freq_1_changed(v); }
+                            slope <=> root.bass_slope;
+                            slope_changed(v) => { root.bass_slope_changed(v); }
                         }
-                        // LM
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            horizontal-stretch: 1;
-                            Text { text: "LM"; font-size: Lx.font-xs; font-weight: 700; color: Lx.amber-hot; horizontal-alignment: center; }
-                            LxSlider { label: "GAIN"; value <=> root.lo_mid_gain; value-text: root.lo_mid_gain_text; default-value: root.lo_mid_gain_default; changed(v) => { root.lo_mid_gain_changed(v); } }
-                            LxSlider { label: "FREQ"; value <=> root.eq_freq_2; value-text: root.eq_freq_2_text; default-value: root.eq_freq_2_default; changed(v) => { root.eq_freq_2_changed(v); } }
-                            LxSegmentedButton { index <=> root.lo_mid_slope; changed(v) => { root.lo_mid_slope_changed(v); } }
+                        LxEqBandColumn {
+                            title: "Bass";
+                            subtitle: "LO-MID";
+                            q-label: "Filter Q";
+                            gain <=> root.lo_mid_gain;
+                            gain-text: root.lo_mid_gain_text;
+                            gain-default: root.lo_mid_gain_default;
+                            gain_changed(v) => { root.lo_mid_gain_changed(v); }
+                            freq <=> root.eq_freq_2;
+                            freq-text: root.eq_freq_2_text;
+                            freq-default: root.eq_freq_2_default;
+                            freq_changed(v) => { root.eq_freq_2_changed(v); }
+                            slope <=> root.lo_mid_slope;
+                            slope_changed(v) => { root.lo_mid_slope_changed(v); }
                         }
-                        // MID
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            horizontal-stretch: 1;
-                            Text { text: "MID"; font-size: Lx.font-xs; font-weight: 700; color: Lx.amber-hot; horizontal-alignment: center; }
-                            LxSlider { label: "GAIN"; value <=> root.mid_gain; value-text: root.mid_gain_text; default-value: root.mid_gain_default; changed(v) => { root.mid_gain_changed(v); } }
-                            LxSlider { label: "FREQ"; value <=> root.eq_freq_3; value-text: root.eq_freq_3_text; default-value: root.eq_freq_3_default; changed(v) => { root.eq_freq_3_changed(v); } }
-                            LxSegmentedButton { index <=> root.mid_slope; changed(v) => { root.mid_slope_changed(v); } }
+                        LxEqBandColumn {
+                            title: "Mid";
+                            subtitle: "MID";
+                            q-label: "Filter Q";
+                            gain <=> root.mid_gain;
+                            gain-text: root.mid_gain_text;
+                            gain-default: root.mid_gain_default;
+                            gain_changed(v) => { root.mid_gain_changed(v); }
+                            freq <=> root.eq_freq_3;
+                            freq-text: root.eq_freq_3_text;
+                            freq-default: root.eq_freq_3_default;
+                            freq_changed(v) => { root.eq_freq_3_changed(v); }
+                            slope <=> root.mid_slope;
+                            slope_changed(v) => { root.mid_slope_changed(v); }
                         }
-                        // HM
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            horizontal-stretch: 1;
-                            Text { text: "HM"; font-size: Lx.font-xs; font-weight: 700; color: Lx.amber-hot; horizontal-alignment: center; }
-                            LxSlider { label: "GAIN"; value <=> root.high_gain; value-text: root.high_gain_text; default-value: root.high_gain_default; changed(v) => { root.high_gain_changed(v); } }
-                            LxSlider { label: "FREQ"; value <=> root.eq_freq_4; value-text: root.eq_freq_4_text; default-value: root.eq_freq_4_default; changed(v) => { root.eq_freq_4_changed(v); } }
-                            LxSegmentedButton { index <=> root.high_slope; changed(v) => { root.high_slope_changed(v); } }
+                        LxEqBandColumn {
+                            title: "Presence";
+                            subtitle: "HI-MID";
+                            q-label: "Filter Q";
+                            gain <=> root.high_gain;
+                            gain-text: root.high_gain_text;
+                            gain-default: root.high_gain_default;
+                            gain_changed(v) => { root.high_gain_changed(v); }
+                            freq <=> root.eq_freq_4;
+                            freq-text: root.eq_freq_4_text;
+                            freq-default: root.eq_freq_4_default;
+                            freq_changed(v) => { root.eq_freq_4_changed(v); }
+                            slope <=> root.high_slope;
+                            slope_changed(v) => { root.high_slope_changed(v); }
                         }
-                        // HI
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            horizontal-stretch: 1;
-                            Text { text: "HI"; font-size: Lx.font-xs; font-weight: 700; color: Lx.amber-hot; horizontal-alignment: center; }
-                            LxSlider { label: "GAIN"; value <=> root.excite_gain; value-text: root.excite_gain_text; default-value: root.excite_gain_default; changed(v) => { root.excite_gain_changed(v); } }
-                            LxSlider { label: "FREQ"; value <=> root.eq_freq_5; value-text: root.eq_freq_5_text; default-value: root.eq_freq_5_default; changed(v) => { root.eq_freq_5_changed(v); } }
-                            LxSegmentedButton { index <=> root.excite_slope; changed(v) => { root.excite_slope_changed(v); } }
+                        LxEqBandColumn {
+                            title: "Air";
+                            subtitle: "HI SHELF";
+                            q-label: "Shelf Slope";
+                            gain <=> root.excite_gain;
+                            gain-text: root.excite_gain_text;
+                            gain-default: root.excite_gain_default;
+                            gain_changed(v) => { root.excite_gain_changed(v); }
+                            freq <=> root.eq_freq_5;
+                            freq-text: root.eq_freq_5_text;
+                            freq-default: root.eq_freq_5_default;
+                            freq_changed(v) => { root.eq_freq_5_changed(v); }
+                            slope <=> root.excite_slope;
+                            slope_changed(v) => { root.excite_slope_changed(v); }
                         }
                     }
                 }
@@ -453,12 +492,29 @@ export component MeridianUi inherits Window {
             LxShellRight {
                 title: "OUTPUT LEVEL";
 
-                LxKnob {
-                    label: "OUT GAIN";
-                    value <=> root.output_gain;
-                    value-text: root.output_gain_text; default-value: root.output_gain_default;
-                    changed(v) => { root.output_gain_changed(v); }
+                // Knob like all others: label above, dB value below; AUTO LOUD beside
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: center;
                     vertical-stretch: 0;
+
+                    LxKnob {
+                        label: "OUT GAIN";
+                        value <=> root.output_gain;
+                        value-text: root.output_gain_text;
+                        default-value: root.output_gain_default;
+                        changed(v) => { root.output_gain_changed(v); }
+                        horizontal-stretch: 0;
+                    }
+
+                    LxButton {
+                        text: root.auto_loud_measuring ? "MEAS…" : "AUTO LOUD";
+                        primary: root.auto_loud_measuring;
+                        min-width: 72px;
+                        horizontal-stretch: 0;
+                        vertical-stretch: 0;
+                        clicked => { root.auto_loud_clicked(); }
+                    }
                 }
 
                 Text {
@@ -560,6 +616,7 @@ export component MeridianUi inherits Window {
                         pk-text: root.comp_peak_text;
                         gr-text: root.gr_text;
                         gr: root.gr;
+                        envelope-cmds: root.gr_envelope_cmds;
                     }
                 }
             }
@@ -584,17 +641,22 @@ export component MeridianUi inherits Window {
                     alignment: center;
                     LxKnob { label: "EFFECT"; small: true; value <=> root.inflate_effect; value-text: root.inflate_effect_text; default-value: root.inflate_effect_default; changed(v) => { root.inflate_effect_changed(v); } }
                     LxKnob { label: "CURVE"; small: true; value <=> root.inflate_curve; value-text: root.inflate_curve_text; default-value: root.inflate_curve_default; changed(v) => { root.inflate_curve_changed(v); } }
-                    LxToggleBtn {
-                        label: "SPLIT";
-                        small: true;
-                        active <=> root.inflate_band_split;
-                        toggled(v) => { root.inflate_band_split_changed(v); }
-                    }
-                    LxToggleBtn {
-                        label: "CLIP";
-                        small: true;
-                        active <=> root.inflate_clip;
-                        toggled(v) => { root.inflate_clip_changed(v); }
+                    VerticalLayout {
+                        spacing: 2px;
+                        alignment: center;
+                        horizontal-stretch: 0;
+                        LxToggleBtn {
+                            label: "SPLIT";
+                            small: true;
+                            active <=> root.inflate_band_split;
+                            toggled(v) => { root.inflate_band_split_changed(v); }
+                        }
+                        LxToggleBtn {
+                            label: "CLIP";
+                            small: true;
+                            active <=> root.inflate_clip;
+                            toggled(v) => { root.inflate_clip_changed(v); }
+                        }
                     }
                 }
             }
@@ -647,55 +709,14 @@ export component MeridianUi inherits Window {
         }
     }
 
-    // ── VAULT SETUP POPUP ───────────────────────────────────────────────────
-    // close-on-click kills TextInput focus — only dismiss on outside click / OK / CANCEL.
-    vault_setup_popup := PopupWindow {
-        width: 420px;
-        height: 150px;
-        x: (root.width - self.width) / 2;
-        y: (root.height - self.height) / 2;
-        close-policy: close-on-click-outside;
-
-        Rectangle {
-            background: Lx.panel;
-            border-radius: Lx.radius-md;
-            border-width: 1px;
-            border-color: Lx.steel;
-
-            VerticalLayout {
-                padding: Lx.pad-md;
-                spacing: Lx.gap-md;
-
-                Text {
-                    text: "VAULT PATH";
-                    font-size: Lx.font-md;
-                    font-weight: 700;
-                    color: Lx.amber-hot;
-                }
-
-                LxLineEdit {
-                    placeholder-text: "/path/to/vault";
-                    text <=> root.vault_path;
-                    vertical-stretch: 0;
-                }
-
-                HorizontalLayout {
-                    spacing: Lx.gap-md;
-
-                    LxButton {
-                        text: "OK";
-                        clicked => {
-                            root.vault_path_changed(root.vault_path);
-                            vault_setup_popup.close();
-                        }
-                    }
-
-                    LxButton {
-                        text: "CANCEL";
-                        clicked => { vault_setup_popup.close(); }
-                    }
-                }
-            }
-        }
+    // Full-window dimmer keeps dialog above Path layers (spectrum/EQ).
+    vault_setup_popup := LxVaultSetupPopup {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        path <=> root.vault_path;
+        plugin-label: "Meridian";
+        saved(p) => { root.vault_path_changed(p); }
     }
 }

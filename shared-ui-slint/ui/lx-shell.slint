@@ -28,6 +28,7 @@ export component LxShellLeft inherits Rectangle {
     in property <length> bar-width: Lx.left-bar-w;
     in property <string> title: "";
 
+    // Fixed width only — Slint forbids width + min/max-width together.
     width: root.bar-width;
     horizontal-stretch: 0;
     vertical-stretch: 1;
@@ -50,9 +51,12 @@ export component LxShellLeft inherits Rectangle {
 }
 
 /// Center main panel — fills remaining space.
+/// min-width:0 so left/right frozen bars are not shoved off-screen.
 export component LxShellMain inherits Rectangle {
     horizontal-stretch: 1;
     vertical-stretch: 1;
+    min-width: 0px;
+    clip: true;
     background: #0f0f10;
 
     VerticalLayout {
@@ -67,6 +71,7 @@ export component LxShellRight inherits Rectangle {
     in property <length> bar-width: Lx.right-bar-w;
     in property <string> title: "OUTPUT LEVEL";
 
+    // Fixed width only — no min/max alongside width.
     width: root.bar-width;
     horizontal-stretch: 0;
     vertical-stretch: 1;
@@ -131,6 +136,9 @@ export component LxShellHeader inherits Rectangle {
     vertical-stretch: 0;
     background: #141414;
 
+    // stretch = fill 50px height so spacer expands horizontally (brand LEFT, buttons RIGHT).
+    // Nested rows use alignment:center so content sits mid-header (not top-stuck).
+    // Do NOT use outer alignment:center — that packs brand+buttons into the middle.
     HorizontalLayout {
         padding-left: 10px;
         padding-right: 10px;
@@ -142,6 +150,7 @@ export component LxShellHeader inherits Rectangle {
             spacing: 6px;
             alignment: center;
             horizontal-stretch: 0;
+            vertical-stretch: 0;
 
             Text {
                 text: root.brand-left;
@@ -198,32 +207,36 @@ export component LxShellHeader inherits Rectangle {
             }
         }
 
-        // ── Center: spacer ──
+        // ── Center: flex spacer pushes buttons to the right ──
         Rectangle {
             horizontal-stretch: 1;
+            min-width: 0px;
             background: transparent;
         }
 
-        // ── Right: monitor buttons ──
+        // ── Right: MONO / DELTA / BYPASS ──
         if root.show-monitor: HorizontalLayout {
             spacing: 4px;
             alignment: center;
             horizontal-stretch: 0;
+            vertical-stretch: 0;
 
             LxToggleBtn {
                 label: "MONO";
+                vertical-stretch: 0;
                 active <=> root.mono;
                 toggled(v) => { root.mono_changed(v); }
             }
             LxToggleBtn {
                 label: "DELTA";
+                vertical-stretch: 0;
                 active <=> root.delta;
                 toggled(v) => { root.delta_changed(v); }
             }
             LxToggleBtn {
                 label: "BYPASS";
+                vertical-stretch: 0;
                 active <=> root.bypass;
-                danger: true;
                 toggled(v) => { root.bypass_changed(v); }
             }
         }
@@ -276,7 +289,10 @@ export component LxShell inherits Rectangle {
         HorizontalLayout {
             vertical-stretch: 1;
             horizontal-stretch: 1;
+            min-width: 0px;
             spacing: 0;
+            // Keep left | main | right in bounds — don't let main preferred-width overflow.
+            alignment: stretch;
             @children
         }
     }

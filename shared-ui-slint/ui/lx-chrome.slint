@@ -202,7 +202,7 @@ export component LxHeader inherits Rectangle {
 
         if root.show-monitor: HorizontalLayout {
             spacing: 4px;
-            alignment: end;
+            alignment: center;
             horizontal-stretch: 0;
 
             LxToggleBtn {
@@ -218,7 +218,6 @@ export component LxHeader inherits Rectangle {
             LxToggleBtn {
                 label: "BYPASS";
                 active <=> root.bypass;
-                danger: true;
                 toggled(v) => { root.bypass_changed(v); }
             }
         }
@@ -236,7 +235,7 @@ export component LxMonitorStrip inherits HorizontalLayout {
     callback bypass_changed(bool);
 
     spacing: 6px;
-    alignment: end;
+    alignment: center;
 
     LxToggleBtn {
         label: "MONO";
@@ -251,7 +250,6 @@ export component LxMonitorStrip inherits HorizontalLayout {
     LxToggleBtn {
         label: "BYPASS";
         active <=> root.bypass;
-        danger: true;
         toggled(v) => { root.bypass_changed(v); }
     }
 }
