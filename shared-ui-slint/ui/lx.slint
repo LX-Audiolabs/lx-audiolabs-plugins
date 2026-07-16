@@ -1,73 +1,98 @@
-// LX-branded reusable Slint components.
-// Import from a plugin with:
-//   import { LxPanel, LxSpectrum, LxEqCurve, LxGoniometer, LxMeterBar } from "../../shared-ui-slint/ui/lx.slint";
+// LX-branded reusable Slint components — CI barrel.
+//
+// Import from a plugin (path relative to plugin ui/main.slint):
+//   import {
+//       Lx, LxShell, LxShellHeader, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+//       LxKnob, LxSpectrum, LxGoniometer, LxStereoMeter, ...
+//   } from "../../../shared-ui-slint/ui/lx.slint";
 
-export component LxPanel inherits Rectangle {
-    background: #14141a;
-    border-radius: 4px;
+import { Lx } from "lx-theme.slint";
+import {
+    LxPanel, LxSection, LxHeader, LxMonitorStrip, LxToggleBtn, LxButton, LxDangerBtn,
+} from "lx-chrome.slint";
+import {
+    LxShell, LxShellHeader, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+} from "lx-shell.slint";
+import {
+    LxKnob, LxLineEdit, LxParamField, LxCycleBtn, LxSegmentedButton,
+    LxSlider, LxToggle, LxDropdown, LxBandColumn,
+} from "lx-controls.slint";
+import {
+    LxMeterBar, LxGrMeter, LxCorrelation, LxStereoMeter, LxLevelPanel,
+} from "lx-meters.slint";
+import {
+    LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
+} from "lx-viz.slint";
+
+export {
+    Lx,
+    LxPanel, LxSection, LxHeader, LxMonitorStrip, LxToggleBtn, LxButton, LxDangerBtn,
+    LxShell, LxShellHeader, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+    LxKnob, LxLineEdit, LxParamField, LxCycleBtn, LxSegmentedButton,
+    LxSlider, LxToggle, LxDropdown, LxBandColumn,
+    LxMeterBar, LxGrMeter, LxCorrelation, LxStereoMeter, LxLevelPanel,
+    LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
 }
 
-export component LxSpectrum inherits LxPanel {
-    in property <string> commands: "";
-    in property <color> fill: #4d99f24d;
+// Compile anchor for shared-ui-slint crate.
+export component LxGallery inherits Window {
+    title: "LX Shared UI";
+    preferred-width: Lx.window-w;
+    preferred-height: Lx.window-h;
+    background: Lx.window;
+    default-font-family: Lx.font-family;
 
-    Path {
-        x: 0; y: 0;
-        width: parent.width;
-        height: parent.height;
-        commands: root.commands;
-        fill: root.fill;
-        stroke: transparent;
-    }
-}
+    VerticalLayout {
+        spacing: 0;
 
-export component LxEqCurve inherits LxPanel {
-    in property <string> commands: "";
-    in property <color> stroke-color: #ff8c0a;
-    in property <length> stroke-width: 2px;
+        LxShellHeader {
+            plugin-name: "GALLERY";
+            version: "0.1";
+            show-monitor: true;
+        }
 
-    Path {
-        x: 0; y: 0;
-        width: parent.width;
-        height: parent.height;
-        commands: root.commands;
-        stroke: root.stroke-color;
-        stroke-width: root.stroke-width;
-        fill: transparent;
-    }
-}
+        HorizontalLayout {
+            vertical-stretch: 1;
 
-export component LxGoniometer inherits LxPanel {
-    in property <string> commands: "";
-    in property <color> stroke-color: #e6e600;
+            LxShellLeft {
+                title: "LEFT BAR";
+                Text {
+                    text: "presets / vault";
+                    font-size: Lx.font-sm;
+                    color: Lx.text-muted;
+                }
+            }
 
-    Path {
-        x: 0; y: 0;
-        width: parent.width;
-        height: parent.height;
-        commands: root.commands;
-        stroke: root.stroke-color;
-        stroke-width: 1px;
-        fill: transparent;
-    }
-}
+            LxShellMain {
+                Text {
+                    text: "MAIN PANEL";
+                    font-size: Lx.font-lg;
+                    color: Lx.amber-hot;
+                }
+                LxMeterBar {
+                    height: 12px;
+                    level: 0.65;
+                    bar-color: Lx.amber;
+                }
+            }
 
-export component LxMeterBar inherits Rectangle {
-    in property <float> level: 0.0;
-    in property <color> bar-color: #4d99f2;
-    in property <color> clip-color: #e04545;
+            LxShellRight {
+                title: "RIGHT BAR";
+                Text {
+                    text: "meters / gonio";
+                    font-size: Lx.font-sm;
+                    color: Lx.text-muted;
+                }
+            }
+        }
 
-    background: #2a2a30;
-    border-radius: 2px;
-    clip: true;
-
-    property <float> lv: clamp(root.level, 0, 1);
-
-    Rectangle {
-        y: parent.height * (1.0 - lv);
-        height: parent.height * lv;
-        width: parent.width;
-        background: lv > 0.95 ? root.clip-color : root.bar-color;
-        border-radius: 2px;
+        LxShellFooter {
+            Text {
+                text: "FOOTER";
+                font-size: Lx.font-sm;
+                color: Lx.amber-hot;
+                vertical-alignment: center;
+            }
+        }
     }
 }

@@ -1,0 +1,283 @@
+// Frozen plugin shell zones — Header / Left / Main / Right / Footer.
+// Vault ui-layout-spec: 990×660, header 50, footer 110, right bar 155.
+//
+// Canonical composition:
+//
+//   VerticalLayout {
+//       spacing: 0;
+//       LxShellHeader { plugin-name: "MERIDIAN"; mono <=> ...; }
+//       HorizontalLayout {
+//           vertical-stretch: 1;
+//           LxShellLeft  { title: "VAULT PRESETS"; /* ... */ }
+//           LxShellMain  { /* spectrum + EQ */ }
+//           LxShellRight { title: "OUTPUT LEVEL";  /* meters */ }
+//       }
+//       LxShellFooter { /* compressor / pan / width / reset */ }
+//   }
+//
+// Sugar: LxShell wraps header + body row; put left/main/right as its children,
+// keep LxShellFooter as a sibling below.
+
+import { Lx } from "lx-theme.slint";
+import { LxToggleBtn } from "lx-chrome.slint";
+
+// ── Zones ────────────────────────────────────────────────────────────────────
+
+/// Left sidebar (vault / presets). Default 180px.
+export component LxShellLeft inherits Rectangle {
+    in property <length> bar-width: Lx.left-bar-w;
+    in property <string> title: "";
+
+    width: root.bar-width;
+    horizontal-stretch: 0;
+    vertical-stretch: 1;
+    background: Lx.panel;
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: Lx.gap-sm;
+
+        if root.title != "": Text {
+            text: root.title;
+            font-size: 13px;
+            font-weight: 700;
+            color: Lx.text;
+            vertical-stretch: 0;
+        }
+
+        @children
+    }
+}
+
+/// Center main panel — fills remaining space.
+export component LxShellMain inherits Rectangle {
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+    background: #0f0f10;
+
+    VerticalLayout {
+        padding: 6px;
+        spacing: 6px;
+        @children
+    }
+}
+
+/// Right sidebar (output level / meters / gonio). Frozen 155px.
+export component LxShellRight inherits Rectangle {
+    in property <length> bar-width: Lx.right-bar-w;
+    in property <string> title: "OUTPUT LEVEL";
+
+    width: root.bar-width;
+    horizontal-stretch: 0;
+    vertical-stretch: 1;
+    background: #1a1a1a;
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 6px;
+
+        if root.title != "": Text {
+            text: root.title;
+            font-size: 12px;
+            font-weight: 600;
+            color: Lx.text-secondary;
+            vertical-stretch: 0;
+        }
+
+        @children
+    }
+}
+
+/// Footer strip. Frozen 110px.
+export component LxShellFooter inherits Rectangle {
+    in property <length> bar-height: Lx.footer-h;
+
+    height: root.bar-height;
+    vertical-stretch: 0;
+    horizontal-stretch: 1;
+    background: Lx.panel;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 10px;
+        alignment: center;
+        @children
+    }
+}
+
+// ── Header ───────────────────────────────────────────────────────────────────
+
+/// Brand + plugin name + version (left) + MONO/DELTA/BYPASS (right). Frozen 50px.
+export component LxShellHeader inherits Rectangle {
+    in property <string> brand-left: "LX";
+    in property <string> brand-right: "AUDIOLABS";
+    in property <string> plugin-name: "";
+    in property <string> version: "";
+    in property <string> status-text: "";
+
+    in-out property <bool> mono: false;
+    in-out property <bool> delta: false;
+    in-out property <bool> bypass: false;
+    in property <bool> show-monitor: true;
+
+    callback mono_changed(bool);
+    callback delta_changed(bool);
+    callback bypass_changed(bool);
+
+    height: Lx.header-h;
+    vertical-stretch: 0;
+    background: #141414;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 0;
+        alignment: stretch;
+
+        // ── Left: logo + plugin info ──
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: center;
+            horizontal-stretch: 0;
+
+            Text {
+                text: root.brand-left;
+                font-size: 18px;
+                font-weight: 700;
+                color: Lx.amber;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.brand-right;
+                font-size: 18px;
+                font-weight: 700;
+                color: Lx.text;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                width: 14px;
+                background: transparent;
+            }
+            Rectangle {
+                width: 1px;
+                height: 28px;
+                background: #2e3838;
+            }
+            Rectangle {
+                width: 14px;
+                background: transparent;
+            }
+
+            VerticalLayout {
+                spacing: 0;
+                alignment: center;
+                horizontal-stretch: 0;
+
+                Text {
+                    text: root.plugin-name;
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #ffa64d;
+                }
+                if root.version != "": Text {
+                    text: "v" + root.version;
+                    font-size: 10px;
+                    color: #808080;
+                }
+            }
+
+            if root.status-text != "": Text {
+                text: root.status-text;
+                font-size: Lx.font-sm;
+                color: Lx.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+
+        // ── Center: spacer ──
+        Rectangle {
+            horizontal-stretch: 1;
+            background: transparent;
+        }
+
+        // ── Right: monitor buttons ──
+        if root.show-monitor: HorizontalLayout {
+            spacing: 4px;
+            alignment: center;
+            horizontal-stretch: 0;
+
+            LxToggleBtn {
+                label: "MONO";
+                active <=> root.mono;
+                toggled(v) => { root.mono_changed(v); }
+            }
+            LxToggleBtn {
+                label: "DELTA";
+                active <=> root.delta;
+                toggled(v) => { root.delta_changed(v); }
+            }
+            LxToggleBtn {
+                label: "BYPASS";
+                active <=> root.bypass;
+                danger: true;
+                toggled(v) => { root.bypass_changed(v); }
+            }
+        }
+    }
+}
+
+// ── Sugar: header + body row ─────────────────────────────────────────────────
+
+/// Header + horizontal body. Children = LxShellLeft / LxShellMain / LxShellRight.
+/// Pair with a sibling `LxShellFooter` under a VerticalLayout for the full table.
+export component LxShell inherits Rectangle {
+    in property <string> brand-left: "LX";
+    in property <string> brand-right: "AUDIOLABS";
+    in property <string> plugin-name: "";
+    in property <string> version: "";
+    in property <string> status-text: "";
+    in-out property <bool> mono: false;
+    in-out property <bool> delta: false;
+    in-out property <bool> bypass: false;
+    in property <bool> show-monitor: true;
+
+    callback mono_changed(bool);
+    callback delta_changed(bool);
+    callback bypass_changed(bool);
+
+    background: Lx.window;
+    vertical-stretch: 1;
+    horizontal-stretch: 1;
+
+    VerticalLayout {
+        spacing: 0;
+        width: 100%;
+        height: 100%;
+
+        LxShellHeader {
+            brand-left: root.brand-left;
+            brand-right: root.brand-right;
+            plugin-name: root.plugin-name;
+            version: root.version;
+            status-text: root.status-text;
+            show-monitor: root.show-monitor;
+            mono <=> root.mono;
+            delta <=> root.delta;
+            bypass <=> root.bypass;
+            mono_changed(v) => { root.mono_changed(v); }
+            delta_changed(v) => { root.delta_changed(v); }
+            bypass_changed(v) => { root.bypass_changed(v); }
+        }
+
+        HorizontalLayout {
+            vertical-stretch: 1;
+            horizontal-stretch: 1;
+            spacing: 0;
+            @children
+        }
+    }
+}

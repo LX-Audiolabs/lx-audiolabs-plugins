@@ -1,0 +1,257 @@
+// Layout chrome: panels, sections, headers, monitor strip.
+
+import { Lx } from "lx-theme.slint";
+
+// Flat dark panel surface.
+export component LxPanel inherits Rectangle {
+    in property <color> surface: Lx.panel;
+    background: root.surface;
+    border-radius: Lx.radius-md;
+}
+
+// Card with optional amber section title.
+export component LxSection inherits Rectangle {
+    in property <string> title: "";
+    in property <bool> show-title: true;
+
+    background: Lx.section;
+    border-radius: Lx.radius-md;
+
+    VerticalLayout {
+        padding: Lx.pad-md;
+        spacing: Lx.gap-sm;
+
+        if root.show-title && root.title != "": Text {
+            text: root.title;
+            font-size: Lx.font-md;
+            font-weight: 700;
+            color: Lx.amber-hot;
+            vertical-stretch: 0;
+        }
+
+        @children
+    }
+}
+
+// Amber-when-active toggle button (MONO / DELTA / BYPASS / modes).
+export component LxToggleBtn inherits Rectangle {
+    in property <string> label: "";
+    in-out property <bool> active: false;
+    in property <bool> danger: false;
+    in property <bool> small: false;
+
+    callback toggled(bool);
+
+    height: root.small ? Lx.button-h-sm : Lx.button-h;
+    min-width: root.small ? 36px : 56px;
+    border-radius: Lx.radius-sm;
+    background: root.active
+        ? (root.danger ? Lx.crimson : Lx.amber)
+        : (root.danger ? Lx.danger-bg : Lx.control);
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.label;
+        font-size: root.small ? Lx.font-xs : Lx.font-md;
+        font-weight: 600;
+        color: root.active
+            ? Lx.text
+            : (root.danger ? Lx.danger-text : Lx.text);
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ta := TouchArea {
+        clicked => {
+            root.active = !root.active;
+            root.toggled(root.active);
+        }
+    }
+
+    states [
+        hover when ta.has-hover && !root.active: {
+            background: root.danger ? #4a1c1c : Lx.control-hover;
+        }
+        hover-active when ta.has-hover && root.active: {
+            background: root.danger ? #dd3333 : Lx.amber-soft;
+        }
+    ]
+}
+
+// Generic action button. Use `primary: true` for the amber SNAP-style variant.
+export component LxButton inherits Rectangle {
+    in property <string> text: "";
+    in property <bool> primary: false;
+    callback clicked;
+
+    height: Lx.button-h;
+    min-width: 56px;
+    border-radius: Lx.radius-sm;
+    background: root.primary ? Lx.amber : Lx.control;
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.text;
+        font-size: Lx.font-md;
+        font-weight: 600;
+        color: root.primary ? Lx.text : Lx.text-secondary;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    states [
+        hover when ta.has-hover && root.primary: { background: Lx.amber-soft; }
+        pressed when ta.pressed && root.primary: { background: Lx.amber-hot; }
+        hover when ta.has-hover && !root.primary: { background: Lx.control-hover; }
+        pressed when ta.pressed && !root.primary: { background: Lx.control-active; }
+    ]
+}
+
+// Danger action button (RESET etc.) — momentary press.
+export component LxDangerBtn inherits Rectangle {
+    in property <string> label: "RESET";
+    callback clicked;
+
+    height: Lx.button-h;
+    min-width: 56px;
+    border-radius: Lx.radius-sm;
+    background: Lx.danger-bg;
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.label;
+        font-size: Lx.font-md;
+        font-weight: 600;
+        color: Lx.danger-text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    states [
+        hover when ta.has-hover: { background: #4a1c1c; }
+        pressed when ta.pressed: { background: #5c2020; }
+    ]
+}
+
+// Compact plugin header (Aether etc.). Prefer LxShellHeader for full plugins.
+export component LxHeader inherits Rectangle {
+    in property <string> brand: "LX AUDIOLABS";
+    in property <string> plugin-name: "";
+    in property <string> status-text: "";
+    in property <bool> large: true;
+
+    in-out property <bool> mono: false;
+    in-out property <bool> delta: false;
+    in-out property <bool> bypass: false;
+    in property <bool> show-monitor: false;
+
+    callback mono_changed(bool);
+    callback delta_changed(bool);
+    callback bypass_changed(bool);
+
+    height: root.large ? Lx.header-h : Lx.header-h-sm;
+    vertical-stretch: 0;
+    background: #141414;
+
+    HorizontalLayout {
+        padding-left: Lx.pad-md;
+        padding-right: Lx.pad-md;
+        spacing: Lx.gap-md;
+        alignment: center;
+
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            horizontal-stretch: 1;
+
+            Text {
+                text: root.plugin-name != ""
+                    ? root.brand + " — " + root.plugin-name
+                    : root.brand;
+                font-size: Lx.font-lg;
+                font-weight: 700;
+                color: Lx.amber-hot;
+                vertical-alignment: center;
+            }
+
+            if root.status-text != "": Text {
+                text: root.status-text;
+                font-size: Lx.font-sm;
+                color: Lx.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Lx.gap-sm;
+            alignment: center;
+            horizontal-stretch: 0;
+            @children
+        }
+
+        if root.show-monitor: HorizontalLayout {
+            spacing: 4px;
+            alignment: end;
+            horizontal-stretch: 0;
+
+            LxToggleBtn {
+                label: "MONO";
+                active <=> root.mono;
+                toggled(v) => { root.mono_changed(v); }
+            }
+            LxToggleBtn {
+                label: "DELTA";
+                active <=> root.delta;
+                toggled(v) => { root.delta_changed(v); }
+            }
+            LxToggleBtn {
+                label: "BYPASS";
+                active <=> root.bypass;
+                danger: true;
+                toggled(v) => { root.bypass_changed(v); }
+            }
+        }
+    }
+}
+
+// Compact monitor strip for embedding outside the header.
+export component LxMonitorStrip inherits HorizontalLayout {
+    in-out property <bool> mono: false;
+    in-out property <bool> delta: false;
+    in-out property <bool> bypass: false;
+
+    callback mono_changed(bool);
+    callback delta_changed(bool);
+    callback bypass_changed(bool);
+
+    spacing: 6px;
+    alignment: end;
+
+    LxToggleBtn {
+        label: "MONO";
+        active <=> root.mono;
+        toggled(v) => { root.mono_changed(v); }
+    }
+    LxToggleBtn {
+        label: "DELTA";
+        active <=> root.delta;
+        toggled(v) => { root.delta_changed(v); }
+    }
+    LxToggleBtn {
+        label: "BYPASS";
+        active <=> root.bypass;
+        danger: true;
+        toggled(v) => { root.bypass_changed(v); }
+    }
+}

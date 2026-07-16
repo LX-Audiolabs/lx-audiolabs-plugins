@@ -19,6 +19,7 @@ use truce_core::editor::Editor;
 use truce_core::state::StateLoadError;
 
 mod editor;
+mod presets;
 
 const NUM_BANDS: usize = 5;
 const CF_DELAY_MAX: usize = 512; // ponytail: used in AetherDspState::Default via vec![0.0; CF_DELAY_MAX] — keep for readability

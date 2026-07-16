@@ -1,19 +1,75 @@
+use std::cell::RefCell;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use slint::{ModelRc, SharedString, VecModel};
 use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
 use truce_slint::{PluginContext, SlintEditor, SyncFn};
 
+use crate::presets::{
+    apply_profile, build_profile_md, default_preset_names, find_profile, load_cached_last_profile,
+    merge_preset_names, preset_save_dir, profile_from_params, save_last_preset, spawn_vault_scan,
+    PendingPresets, PresetEntry,
+};
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;
 use crate::{set_band, Biquad, NUM_BANDS};
 
 slint::include_modules!();
 
-const WINDOW_W: u32 = 760;
-const WINDOW_H: u32 = 580;
+// Original Vizia Aether window size.
+const WINDOW_W: u32 = 720;
+const WINDOW_H: u32 = 395;
+
+const FREQ_MIN: f32 = 20.0;
+const FREQ_MAX: f32 = 20000.0;
+const Q_MIN: f32 = 0.3;
+const Q_MAX: f32 = 8.0;
+
+/// Default band (freq, Q, type) for RESET — matches original Aether.
+const BAND_DEF: [(f32, f32, i32); 5] = [
+    (105.0, 0.7, 1),
+    (300.0, 1.0, 2),
+    (1200.0, 1.0, 2),
+    (4000.0, 1.0, 2),
+    (10000.0, 0.7, 3),
+];
+
+fn freq_to_norm(v: f32) -> f64 {
+    (((v / FREQ_MIN).log10() / 3.0) as f64).clamp(0.0, 1.0)
+}
+fn gain_to_norm(v: f32) -> f64 {
+    (((v + 12.0) / 24.0) as f64).clamp(0.0, 1.0)
+}
+fn q_to_norm(v: f32) -> f64 {
+    let span = (Q_MAX / Q_MIN).log10();
+    (((v / Q_MIN).log10() / span) as f64).clamp(0.0, 1.0)
+}
+
+fn parse_f32(s: &str) -> Option<f32> {
+    s.trim().replace(',', ".").parse::<f32>().ok()
+}
+
+fn names_model(names: &[String]) -> ModelRc<SharedString> {
+    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
+    ModelRc::new(VecModel::from(v))
+}
+
+struct PeakHold {
+    hold: f32,
+    ticks: u32,
+}
+
+struct VaultUiState {
+    vault_path: Option<String>,
+    names: Vec<String>,
+    cache: Vec<PresetEntry>,
+    pending: Arc<PendingPresets>,
+    /// Path we last kicked off a scan for (avoids re-spawning every frame).
+    scanning_for: Option<String>,
+}
 
 pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
@@ -23,52 +79,122 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
         move |state: PluginContext<AetherParams>| -> SyncFn<AetherParams> {
             let ui = AetherUi::new().unwrap();
 
-            // --- UI → host callbacks for every parameter ---
-            let s = state.clone();
-            ui.on_eq1_freq_changed(move |v| s.automate(P::Eq1Freq, v as f64));
-            let s = state.clone();
-            ui.on_eq1_gain_changed(move |v| s.automate(P::Eq1Gain, v as f64));
-            let s = state.clone();
-            ui.on_eq1_q_changed(move |v| s.automate(P::Eq1Q, v as f64));
+            // ── load config + last preset ──
+            let cfg = shared_analysis::load_config("Aether");
+            let vault_path = cfg.vault_path.clone();
+            if let Some(ref vp) = vault_path {
+                ui.set_vault_path(SharedString::from(vp.as_str()));
+            }
+            let last_name = cfg.last_preset.clone().unwrap_or_default();
+            if !last_name.is_empty() {
+                ui.set_preset_name(SharedString::from(last_name.as_str()));
+            }
+
+            // Apply last profile (JSON cache first, then name lookup).
+            if let Some(profile) = load_cached_last_profile()
+                .or_else(|| {
+                    if last_name.is_empty() {
+                        None
+                    } else {
+                        find_profile(&last_name, &vault_path, &[])
+                    }
+                })
+            {
+                apply_profile(&state, &profile);
+                if ui.get_preset_name().is_empty() && !profile.name.is_empty() {
+                    ui.set_preset_name(SharedString::from(profile.name.as_str()));
+                }
+            }
+
+            let pending = Arc::new(PendingPresets::new());
+            let vault_state = Arc::new(Mutex::new(VaultUiState {
+                vault_path: vault_path.clone(),
+                names: default_preset_names(),
+                cache: Vec::new(),
+                pending: pending.clone(),
+                scanning_for: None,
+            }));
+
+            // Seed UI list with built-ins; vault scan fills in shortly.
+            ui.set_preset_names(names_model(&default_preset_names()));
+            if let Some(ref vp) = vault_path {
+                if !vp.is_empty() {
+                    let scan_gen = pending.bump_generation();
+                    if let Ok(mut vs) = vault_state.lock() {
+                        vs.scanning_for = Some(vp.clone());
+                    }
+                    spawn_vault_scan(vp.clone(), pending.clone(), scan_gen);
+                }
+            } else {
+                // Still scan local presets folder.
+                let local = shared_analysis::get_plugin_dir("Aether").join("presets");
+                if local.is_dir() {
+                    let scan_gen = pending.bump_generation();
+                    spawn_vault_scan(local.to_string_lossy().into_owned(), pending.clone(), scan_gen);
+                }
+            }
+
+            // ── type cycle ──
             let s = state.clone();
             ui.on_eq1_type_changed(move |v| s.automate(P::Eq1Type, discrete_norm(v.max(0) as usize, 4)));
-
-            let s = state.clone();
-            ui.on_eq2_freq_changed(move |v| s.automate(P::Eq2Freq, v as f64));
-            let s = state.clone();
-            ui.on_eq2_gain_changed(move |v| s.automate(P::Eq2Gain, v as f64));
-            let s = state.clone();
-            ui.on_eq2_q_changed(move |v| s.automate(P::Eq2Q, v as f64));
             let s = state.clone();
             ui.on_eq2_type_changed(move |v| s.automate(P::Eq2Type, discrete_norm(v.max(0) as usize, 4)));
-
-            let s = state.clone();
-            ui.on_eq3_freq_changed(move |v| s.automate(P::Eq3Freq, v as f64));
-            let s = state.clone();
-            ui.on_eq3_gain_changed(move |v| s.automate(P::Eq3Gain, v as f64));
-            let s = state.clone();
-            ui.on_eq3_q_changed(move |v| s.automate(P::Eq3Q, v as f64));
             let s = state.clone();
             ui.on_eq3_type_changed(move |v| s.automate(P::Eq3Type, discrete_norm(v.max(0) as usize, 4)));
-
-            let s = state.clone();
-            ui.on_eq4_freq_changed(move |v| s.automate(P::Eq4Freq, v as f64));
-            let s = state.clone();
-            ui.on_eq4_gain_changed(move |v| s.automate(P::Eq4Gain, v as f64));
-            let s = state.clone();
-            ui.on_eq4_q_changed(move |v| s.automate(P::Eq4Q, v as f64));
             let s = state.clone();
             ui.on_eq4_type_changed(move |v| s.automate(P::Eq4Type, discrete_norm(v.max(0) as usize, 4)));
-
-            let s = state.clone();
-            ui.on_eq5_freq_changed(move |v| s.automate(P::Eq5Freq, v as f64));
-            let s = state.clone();
-            ui.on_eq5_gain_changed(move |v| s.automate(P::Eq5Gain, v as f64));
-            let s = state.clone();
-            ui.on_eq5_q_changed(move |v| s.automate(P::Eq5Q, v as f64));
             let s = state.clone();
             ui.on_eq5_type_changed(move |v| s.automate(P::Eq5Type, discrete_norm(v.max(0) as usize, 4)));
 
+            // ── text field commits (plain → normalised) ──
+            macro_rules! bind_freq {
+                ($cb:ident, $pid:expr) => {{
+                    let s = state.clone();
+                    ui.$cb(move |txt: SharedString| {
+                        if let Some(v) = parse_f32(txt.as_str()) {
+                            s.automate($pid, freq_to_norm(v.clamp(FREQ_MIN, FREQ_MAX)));
+                        }
+                    });
+                }};
+            }
+            macro_rules! bind_gain {
+                ($cb:ident, $pid:expr) => {{
+                    let s = state.clone();
+                    ui.$cb(move |txt: SharedString| {
+                        if let Some(v) = parse_f32(txt.as_str()) {
+                            s.automate($pid, gain_to_norm(v.clamp(-12.0, 12.0)));
+                        }
+                    });
+                }};
+            }
+            macro_rules! bind_q {
+                ($cb:ident, $pid:expr) => {{
+                    let s = state.clone();
+                    ui.$cb(move |txt: SharedString| {
+                        if let Some(v) = parse_f32(txt.as_str()) {
+                            s.automate($pid, q_to_norm(v.clamp(Q_MIN, Q_MAX)));
+                        }
+                    });
+                }};
+            }
+
+            bind_freq!(on_eq1_freq_committed, P::Eq1Freq);
+            bind_gain!(on_eq1_gain_committed, P::Eq1Gain);
+            bind_q!(on_eq1_q_committed, P::Eq1Q);
+            bind_freq!(on_eq2_freq_committed, P::Eq2Freq);
+            bind_gain!(on_eq2_gain_committed, P::Eq2Gain);
+            bind_q!(on_eq2_q_committed, P::Eq2Q);
+            bind_freq!(on_eq3_freq_committed, P::Eq3Freq);
+            bind_gain!(on_eq3_gain_committed, P::Eq3Gain);
+            bind_q!(on_eq3_q_committed, P::Eq3Q);
+            bind_freq!(on_eq4_freq_committed, P::Eq4Freq);
+            bind_gain!(on_eq4_gain_committed, P::Eq4Gain);
+            bind_q!(on_eq4_q_committed, P::Eq4Q);
+            bind_freq!(on_eq5_freq_committed, P::Eq5Freq);
+            bind_gain!(on_eq5_gain_committed, P::Eq5Gain);
+            bind_q!(on_eq5_q_committed, P::Eq5Q);
+
+            // ── knobs ──
             let s = state.clone();
             ui.on_blend_changed(move |v| s.automate(P::Blend, v as f64));
             let s = state.clone();
@@ -78,73 +204,261 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             let s = state.clone();
             ui.on_gain_changed(move |v| s.automate(P::Gain, v as f64));
             let s = state.clone();
-            ui.on_cf_realism_changed(move |v| s.automate(P::CfRealism, discrete_norm(v.max(0) as usize, 3)));
+            ui.on_cf_realism_changed(move |v| {
+                s.automate(P::CfRealism, discrete_norm(v.max(0) as usize, 3))
+            });
             let s = state.clone();
             ui.on_bypass_changed(move |v| s.automate(P::Bypass, if v { 1.0 } else { 0.0 }));
 
+            // ── RESET ──
+            let s = state.clone();
+            ui.on_reset_clicked(move || {
+                for (i, &(fd, qd, td)) in BAND_DEF.iter().enumerate() {
+                    let (fp, gp, qp, tp) = match i {
+                        0 => (P::Eq1Freq, P::Eq1Gain, P::Eq1Q, P::Eq1Type),
+                        1 => (P::Eq2Freq, P::Eq2Gain, P::Eq2Q, P::Eq2Type),
+                        2 => (P::Eq3Freq, P::Eq3Gain, P::Eq3Q, P::Eq3Type),
+                        3 => (P::Eq4Freq, P::Eq4Gain, P::Eq4Q, P::Eq4Type),
+                        _ => (P::Eq5Freq, P::Eq5Gain, P::Eq5Q, P::Eq5Type),
+                    };
+                    s.automate(fp, freq_to_norm(fd));
+                    s.automate(gp, gain_to_norm(0.0));
+                    s.automate(qp, q_to_norm(qd));
+                    s.automate(tp, discrete_norm(td.max(0) as usize, 4));
+                }
+                s.automate(P::Blend, 1.0);
+                s.automate(P::CfAngle, ((60.0 - 30.0) / 45.0) as f64);
+                s.automate(P::CfAmount, 0.0);
+                s.automate(P::CfRealism, 0.0);
+                s.automate(P::Gain, 0.5);
+                s.automate(P::Bypass, 0.0);
+            });
+
+            // ── SAVE preset ──
+            let params_save = params.clone();
+            let vs_save = vault_state.clone();
+            let ui_weak_save = ui.as_weak();
+            ui.on_save_clicked(move || {
+                let Some(ui) = ui_weak_save.upgrade() else { return };
+                let name = ui.get_preset_name().to_string();
+                let name = name.trim().to_string();
+                if name.is_empty() {
+                    return;
+                }
+                let md = build_profile_md(&params_save);
+                let vp = vs_save.lock().ok().and_then(|g| g.vault_path.clone());
+                let dir = preset_save_dir(&vp);
+                let _ = std::fs::create_dir_all(&dir);
+                let fp = dir.join(format!("{name}.md"));
+                if std::fs::write(&fp, md).is_ok() {
+                    let mut profile = profile_from_params(&params_save, &name);
+                    profile.name = name.clone();
+                    if let Ok(mut vs) = vs_save.lock() {
+                        if let Some(pos) = vs.cache.iter().position(|(n, _, _)| n == &name) {
+                            vs.cache[pos] = (name.clone(), fp.clone(), profile.clone());
+                        } else {
+                            vs.cache.push((name.clone(), fp.clone(), profile.clone()));
+                        }
+                        if !vs.names.iter().any(|n| n == &name) {
+                            vs.names.push(name.clone());
+                        }
+                        ui.set_preset_names(names_model(&vs.names));
+                        save_last_preset(&vs.vault_path, &profile);
+                        // Rescan so disk and UI stay aligned.
+                        if let Some(ref vault) = vs.vault_path.clone() {
+                            if !vault.is_empty() {
+                                let scan_gen = vs.pending.bump_generation();
+                                vs.scanning_for = Some(vault.clone());
+                                spawn_vault_scan(vault.clone(), vs.pending.clone(), scan_gen);
+                            }
+                        }
+                    }
+                    ui.set_preset_name(SharedString::from(name.as_str()));
+                }
+            });
+
+            // ── vault path changed ──
+            let vs_path = vault_state.clone();
+            let ui_weak_path = ui.as_weak();
+            ui.on_vault_path_changed(move |path: SharedString| {
+                let path = path.to_string().trim().to_string();
+                let new_vp = if path.is_empty() { None } else { Some(path) };
+                if let Ok(mut vs) = vs_path.lock() {
+                    vs.vault_path = new_vp.clone();
+                    let mut cfg = shared_analysis::load_config("Aether");
+                    cfg.vault_path = new_vp.clone();
+                    let _ = shared_analysis::save_config("Aether", &cfg);
+
+                    let scan_gen = vs.pending.bump_generation();
+                    if let Some(ref vp) = new_vp {
+                        vs.scanning_for = Some(vp.clone());
+                        spawn_vault_scan(vp.clone(), vs.pending.clone(), scan_gen);
+                    } else {
+                        vs.names = default_preset_names();
+                        vs.cache.clear();
+                        vs.scanning_for = None;
+                        if let Some(ui) = ui_weak_path.upgrade() {
+                            ui.set_preset_names(names_model(&vs.names));
+                        }
+                        // Local-only rescan
+                        let local = shared_analysis::get_plugin_dir("Aether").join("presets");
+                        if local.is_dir() {
+                            let scan_gen = vs.pending.bump_generation();
+                            spawn_vault_scan(
+                                local.to_string_lossy().into_owned(),
+                                vs.pending.clone(),
+                                scan_gen,
+                            );
+                        }
+                    }
+                }
+            });
+
+            // ── preset selected from dropdown ──
+            let s_sel = state.clone();
+            let vs_sel = vault_state.clone();
+            let ui_weak_sel = ui.as_weak();
+            ui.on_preset_selected(move |name: SharedString| {
+                let name = name.to_string();
+                let profile = {
+                    let vs = vs_sel.lock().ok();
+                    let (vp, cache) = vs
+                        .as_ref()
+                        .map(|g| (g.vault_path.clone(), g.cache.clone()))
+                        .unwrap_or((None, vec![]));
+                    find_profile(&name, &vp, &cache)
+                };
+                if let Some(profile) = profile {
+                    apply_profile(&s_sel, &profile);
+                    save_last_preset(
+                        &vs_sel.lock().ok().and_then(|g| g.vault_path.clone()),
+                        &profile,
+                    );
+                    if let Some(ui) = ui_weak_sel.upgrade() {
+                        ui.set_preset_name(SharedString::from(profile.name.as_str()));
+                    }
+                }
+            });
+
             let params_for_curve = params.clone();
             let shared_for_curve = shared.clone();
+            let peak_hold = RefCell::new(PeakHold {
+                hold: -90.0,
+                ticks: 0,
+            });
+            let vault_state_sync = vault_state.clone();
 
             Box::new(move |state: &PluginContext<AetherParams>| {
-                // Normalised values for sliders/knobs.
-                ui.set_eq1_freq(PluginContextReadF32::get_param(state, P::Eq1Freq));
-                ui.set_eq1_gain(PluginContextReadF32::get_param(state, P::Eq1Gain));
-                ui.set_eq1_q(PluginContextReadF32::get_param(state, P::Eq1Q));
-                ui.set_eq2_freq(PluginContextReadF32::get_param(state, P::Eq2Freq));
-                ui.set_eq2_gain(PluginContextReadF32::get_param(state, P::Eq2Gain));
-                ui.set_eq2_q(PluginContextReadF32::get_param(state, P::Eq2Q));
-                ui.set_eq3_freq(PluginContextReadF32::get_param(state, P::Eq3Freq));
-                ui.set_eq3_gain(PluginContextReadF32::get_param(state, P::Eq3Gain));
-                ui.set_eq3_q(PluginContextReadF32::get_param(state, P::Eq3Q));
-                ui.set_eq4_freq(PluginContextReadF32::get_param(state, P::Eq4Freq));
-                ui.set_eq4_gain(PluginContextReadF32::get_param(state, P::Eq4Gain));
-                ui.set_eq4_q(PluginContextReadF32::get_param(state, P::Eq4Q));
-                ui.set_eq5_freq(PluginContextReadF32::get_param(state, P::Eq5Freq));
-                ui.set_eq5_gain(PluginContextReadF32::get_param(state, P::Eq5Gain));
-                ui.set_eq5_q(PluginContextReadF32::get_param(state, P::Eq5Q));
+                // Drain background vault scan results.
+                if let Ok(mut vs) = vault_state_sync.lock() {
+                    if vs.pending.ready.swap(false, Ordering::Acquire) {
+                        let current_gen = vs.pending.generation.load(Ordering::Acquire);
+                        let scanned = {
+                            let guard = vs.pending.presets.lock().ok();
+                            guard.and_then(|g| match &*g {
+                                Some((scan_gen, scanned)) if *scan_gen == current_gen => {
+                                    Some(scanned.clone())
+                                }
+                                _ => None,
+                            })
+                        };
+                        if let Some(scanned) = scanned {
+                            vs.cache = scanned;
+                            vs.names = merge_preset_names(&vs.cache);
+                            ui.set_preset_names(names_model(&vs.names));
+                        }
+                    }
+                }
 
+                // Types
+                ui.set_eq1_type(
+                    discrete_index(PluginContextReadF32::get_param(state, P::Eq1Type) as f64, 4)
+                        as i32,
+                );
+                ui.set_eq2_type(
+                    discrete_index(PluginContextReadF32::get_param(state, P::Eq2Type) as f64, 4)
+                        as i32,
+                );
+                ui.set_eq3_type(
+                    discrete_index(PluginContextReadF32::get_param(state, P::Eq3Type) as f64, 4)
+                        as i32,
+                );
+                ui.set_eq4_type(
+                    discrete_index(PluginContextReadF32::get_param(state, P::Eq4Type) as f64, 4)
+                        as i32,
+                );
+                ui.set_eq5_type(
+                    discrete_index(PluginContextReadF32::get_param(state, P::Eq5Type) as f64, 4)
+                        as i32,
+                );
+                ui.set_cf_realism(
+                    discrete_index(
+                        PluginContextReadF32::get_param(state, P::CfRealism) as f64,
+                        3,
+                    ) as i32,
+                );
+
+                // Knobs (normalised)
                 ui.set_blend(PluginContextReadF32::get_param(state, P::Blend));
                 ui.set_cf_angle(PluginContextReadF32::get_param(state, P::CfAngle));
                 ui.set_cf_amount(PluginContextReadF32::get_param(state, P::CfAmount));
                 ui.set_gain(PluginContextReadF32::get_param(state, P::Gain));
-
-                ui.set_eq1_type(discrete_index(PluginContextReadF32::get_param(state, P::Eq1Type) as f64, 4) as i32);
-                ui.set_eq2_type(discrete_index(PluginContextReadF32::get_param(state, P::Eq2Type) as f64, 4) as i32);
-                ui.set_eq3_type(discrete_index(PluginContextReadF32::get_param(state, P::Eq3Type) as f64, 4) as i32);
-                ui.set_eq4_type(discrete_index(PluginContextReadF32::get_param(state, P::Eq4Type) as f64, 4) as i32);
-                ui.set_eq5_type(discrete_index(PluginContextReadF32::get_param(state, P::Eq5Type) as f64, 4) as i32);
-                ui.set_cf_realism(discrete_index(PluginContextReadF32::get_param(state, P::CfRealism) as f64, 3) as i32);
-
                 ui.set_bypass(PluginContextReadF32::get_param(state, P::Bypass) > 0.5);
 
-                // Formatted value texts.
-                ui.set_eq1_freq_text(slint::SharedString::from(state.format_param(P::Eq1Freq)));
-                ui.set_eq1_gain_text(slint::SharedString::from(state.format_param(P::Eq1Gain)));
-                ui.set_eq1_q_text(slint::SharedString::from(state.format_param(P::Eq1Q)));
-                ui.set_eq2_freq_text(slint::SharedString::from(state.format_param(P::Eq2Freq)));
-                ui.set_eq2_gain_text(slint::SharedString::from(state.format_param(P::Eq2Gain)));
-                ui.set_eq2_q_text(slint::SharedString::from(state.format_param(P::Eq2Q)));
-                ui.set_eq3_freq_text(slint::SharedString::from(state.format_param(P::Eq3Freq)));
-                ui.set_eq3_gain_text(slint::SharedString::from(state.format_param(P::Eq3Gain)));
-                ui.set_eq3_q_text(slint::SharedString::from(state.format_param(P::Eq3Q)));
-                ui.set_eq4_freq_text(slint::SharedString::from(state.format_param(P::Eq4Freq)));
-                ui.set_eq4_gain_text(slint::SharedString::from(state.format_param(P::Eq4Gain)));
-                ui.set_eq4_q_text(slint::SharedString::from(state.format_param(P::Eq4Q)));
-                ui.set_eq5_freq_text(slint::SharedString::from(state.format_param(P::Eq5Freq)));
-                ui.set_eq5_gain_text(slint::SharedString::from(state.format_param(P::Eq5Gain)));
-                ui.set_eq5_q_text(slint::SharedString::from(state.format_param(P::Eq5Q)));
-                ui.set_blend_text(slint::SharedString::from(state.format_param(P::Blend)));
-                ui.set_cf_angle_text(slint::SharedString::from(state.format_param(P::CfAngle)));
-                ui.set_cf_amount_text(slint::SharedString::from(state.format_param(P::CfAmount)));
-                ui.set_gain_text(slint::SharedString::from(state.format_param(P::Gain)));
+                // Plain AutoEQ-style field text
+                let plain = |p: P| PluginContextReadF32::get_param_plain(state, p);
+                ui.set_eq1_freq_text(SharedString::from(format!("{:.0}", plain(P::Eq1Freq))));
+                ui.set_eq1_gain_text(SharedString::from(format!("{:.1}", plain(P::Eq1Gain))));
+                ui.set_eq1_q_text(SharedString::from(format!("{:.2}", plain(P::Eq1Q))));
+                ui.set_eq2_freq_text(SharedString::from(format!("{:.0}", plain(P::Eq2Freq))));
+                ui.set_eq2_gain_text(SharedString::from(format!("{:.1}", plain(P::Eq2Gain))));
+                ui.set_eq2_q_text(SharedString::from(format!("{:.2}", plain(P::Eq2Q))));
+                ui.set_eq3_freq_text(SharedString::from(format!("{:.0}", plain(P::Eq3Freq))));
+                ui.set_eq3_gain_text(SharedString::from(format!("{:.1}", plain(P::Eq3Gain))));
+                ui.set_eq3_q_text(SharedString::from(format!("{:.2}", plain(P::Eq3Q))));
+                ui.set_eq4_freq_text(SharedString::from(format!("{:.0}", plain(P::Eq4Freq))));
+                ui.set_eq4_gain_text(SharedString::from(format!("{:.1}", plain(P::Eq4Gain))));
+                ui.set_eq4_q_text(SharedString::from(format!("{:.2}", plain(P::Eq4Q))));
+                ui.set_eq5_freq_text(SharedString::from(format!("{:.0}", plain(P::Eq5Freq))));
+                ui.set_eq5_gain_text(SharedString::from(format!("{:.1}", plain(P::Eq5Gain))));
+                ui.set_eq5_q_text(SharedString::from(format!("{:.2}", plain(P::Eq5Q))));
 
+                let blend = plain(P::Blend);
+                ui.set_blend_text(SharedString::from(format!("{blend:.0}%")));
+                let angle = plain(P::CfAngle);
+                ui.set_cf_angle_text(SharedString::from(format!("{angle:.0}°")));
+                let amount = plain(P::CfAmount);
+                ui.set_cf_amount_text(SharedString::from(format!("{amount:.0}%")));
+                let g = plain(P::Gain);
+                ui.set_gain_text(SharedString::from(format!("{g:.1} dB")));
+
+                // Input peak + hold (UI-side, same behaviour as original Ticker)
                 let peak_db = state.shared.input_peak.load(Ordering::Relaxed);
-                ui.set_input_db_text(slint::SharedString::from(format!("{peak_db:.1} dB")));
+                {
+                    let mut ph = peak_hold.borrow_mut();
+                    if peak_db > ph.hold {
+                        ph.hold = peak_db;
+                        ph.ticks = 90;
+                    } else if ph.ticks > 0 {
+                        ph.ticks -= 1;
+                    } else {
+                        ph.hold = (ph.hold - 0.5).max(peak_db);
+                    }
+                    if peak_db <= -90.0 {
+                        ui.set_input_db_text(SharedString::from("--"));
+                    } else {
+                        ui.set_input_db_text(SharedString::from(format!("{peak_db:.1} dB")));
+                    }
+                    if ph.hold <= -90.0 {
+                        ui.set_input_peak_text(SharedString::from(""));
+                    } else {
+                        ui.set_input_peak_text(SharedString::from(format!("pk {:.1} dB", ph.hold)));
+                    }
+                }
 
-                // Build the EQ curve path from the current parameters.
                 let sr = shared_for_curve.sample_rate.load(Ordering::Relaxed).max(1.0);
                 let cmds = eq_curve_path(&params_for_curve, sr);
-                ui.set_curve_cmds(slint::SharedString::from(cmds));
+                ui.set_curve_cmds(SharedString::from(cmds));
             })
         },
     )
@@ -190,8 +504,8 @@ fn eq_curve_path(params: &AetherParams, sr: f32) -> String {
     }
 
     const N: usize = 240;
-    const W: f32 = 720.0;
-    const H: f32 = 180.0;
+    const W: f32 = 696.0;
+    const H: f32 = 90.0;
     const DB_MIN: f32 = -12.0;
     const DB_MAX: f32 = 12.0;
     let db_range = DB_MAX - DB_MIN;
@@ -204,7 +518,11 @@ fn eq_curve_path(params: &AetherParams, sr: f32) -> String {
     for i in 0..N {
         let t = i as f32 / (N - 1) as f32;
         let freq = 20.0f32 * 1000.0f32.powf(t);
-        let db: f32 = bands.iter().map(|b| b.magnitude_db(freq, sr)).sum::<f32>().clamp(DB_MIN, DB_MAX);
+        let db: f32 = bands
+            .iter()
+            .map(|b| b.magnitude_db(freq, sr))
+            .sum::<f32>()
+            .clamp(DB_MIN, DB_MAX);
         let x = t * W;
         let y = db_to_y(db);
         if i == 0 {

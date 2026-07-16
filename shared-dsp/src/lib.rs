@@ -279,6 +279,11 @@ impl TiltEq {
         self.lo.reset();
         self.hi.reset();
     }
+
+    /// Combined magnitude response of the lo-shelf + hi-shelf pair in dB.
+    pub fn magnitude_db(&self, freq: f32, sample_rate: f32) -> f32 {
+        self.lo.magnitude_db(freq, sample_rate) + self.hi.magnitude_db(freq, sample_rate)
+    }
 }
 
 // =============================================================================

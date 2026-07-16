@@ -1,0 +1,407 @@
+// Branded LX controls. LxKnob is a custom compact amber knob; sliders/toggles/dropdowns
+// still wrap @truce while we migrate piece by piece.
+
+import { ParamSlider, Toggle, Dropdown } from "@truce";
+import { Lx } from "lx-theme.slint";
+
+// ─── Compact amber knob ──────────────────────────────────────────────────────
+
+export component LxKnob inherits VerticalLayout {
+    in property <string> label: "";
+    in-out property <float> value: 0.5;
+    in property <string> value-text: "";
+    in property <float> minimum: 0.0;
+    in property <float> maximum: 1.0;
+    in property <float> step: 0.0;          // 0 = continuous; 1, 2, ... = discrete
+    in property <bool> small: false;        // uses Lx.knob-d-sm instead of Lx.knob-d
+
+    callback changed(float);
+
+    spacing: Lx.knob-gap;
+    alignment: center;
+
+    property <length> diameter: root.small ? Lx.knob-d-sm : Lx.knob-d;
+    property <float> norm: clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0, 1);
+
+    // Arc from 7:30 (135°) to 4:30 (135° + 270° * value), clockwise.
+    function knob_arc_commands(cx: float, cy: float, r: float, value: float) -> string {
+        return "M " + (cx + r * cos(135deg)) + " " + (cy + r * sin(135deg))
+            + " A " + r + " " + r + " 0 " + ((clamp(value, 0, 1) * 270) > 180 ? 1 : 0) + " 1 "
+            + (cx + r * cos((135 + clamp(value, 0, 1) * 270) * 1deg)) + " "
+            + (cy + r * sin((135 + clamp(value, 0, 1) * 270) * 1deg));
+    }
+
+    function value_from_drag(
+        start_norm: float,
+        delta_y: length,
+        minimum: float,
+        maximum: float,
+        step: float,
+    ) -> float {
+        return step > 0
+            ? clamp(
+                round((minimum + clamp(start_norm + delta_y / 1px * 0.003, 0, 1) * (maximum - minimum)) / step) * step,
+                minimum, maximum
+              )
+            : clamp(
+                minimum + clamp(start_norm + delta_y / 1px * 0.003, 0, 1) * (maximum - minimum),
+                minimum, maximum
+              );
+    }
+
+    // Label above the knob graphic.
+    if root.label != "": Text {
+        text: root.label;
+        font-size: Lx.font-xs;
+        color: Lx.text-label;
+        horizontal-alignment: center;
+        vertical-stretch: 0;
+    }
+
+    // Knob graphic.
+    Rectangle {
+        width: root.diameter;
+        height: root.diameter;
+        background: transparent;
+        vertical-stretch: 0;
+
+        // Track arc (always shows the full 270° travel range).
+        Path {
+            width: parent.width;
+            height: parent.height;
+            viewbox-x: 0; viewbox-y: 0;
+            viewbox-width: 100; viewbox-height: 100;
+            commands: root.knob_arc_commands(50, 50, 42, 1.0);
+            stroke: Lx.steel;
+            stroke-width: Lx.knob-stroke;
+            fill: transparent;
+        }
+
+        // Value arc.
+        Path {
+            width: parent.width;
+            height: parent.height;
+            viewbox-x: 0; viewbox-y: 0;
+            viewbox-width: 100; viewbox-height: 100;
+            commands: root.knob_arc_commands(50, 50, 42, root.norm);
+            stroke: ta.pressed ? Lx.amber-hot : (ta.has-hover ? Lx.amber-soft : Lx.amber);
+            stroke-width: Lx.knob-stroke;
+            fill: transparent;
+        }
+
+        // Pointer dot at the current value position.
+        Rectangle {
+            property <angle> angle_rad: (135 + root.norm * 270) * 1deg;
+            // Pointer sits inside the arc so it stays visible against the amber value stroke.
+            property <length> orbit_r: root.diameter * 28 / 100;
+
+            x: root.diameter / 2 + orbit_r * cos(angle_rad) - Lx.knob-pointer / 2;
+            y: root.diameter / 2 + orbit_r * sin(angle_rad) - Lx.knob-pointer / 2;
+            width: Lx.knob-pointer;
+            height: self.width;
+            border-radius: self.width / 2;
+            background: Lx.text;
+        }
+
+        ta := TouchArea {
+            property <length> drag_start_y;
+            property <float> drag_start_norm;
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    self.drag_start_y = self.mouse-y;
+                    self.drag_start_norm = root.norm;
+                }
+            }
+            moved => {
+                if self.pressed {
+                    root.value = root.value_from_drag(
+                        self.drag_start_norm,
+                        self.drag_start_y - self.mouse_y,
+                        root.minimum, root.maximum, root.step
+                    );
+                    root.changed(root.value);
+                }
+            }
+        }
+    }
+
+    // Formatted value text below the knob.
+    if root.value-text != "": Text {
+        text: root.value-text;
+        font-size: Lx.font-xs;
+        color: Lx.text-secondary;
+        horizontal-alignment: center;
+        vertical-stretch: 0;
+    }
+}
+
+// ─── Custom line edit with amber focus ───────────────────────────────────────
+
+export component LxLineEdit inherits Rectangle {
+    in-out property <string> text: "";
+    in property <string> placeholder-text: "";
+    // Light style matches original Aether preset/EQ value fields (white box).
+    in property <bool> light: false;
+    in property <length> field-width: 0px; // 0 = stretch
+    out property <bool> has-focus: ti.has-focus;
+
+    callback accepted(string); // Enter pressed
+    callback committed(string); // focus lost after edit
+
+    height: Lx.button-h;
+    // field-width > 0 → fixed width; otherwise stretch in parent.
+    min-width: root.field-width > 0px ? root.field-width : 40px;
+    max-width: root.field-width > 0px ? root.field-width : 9999px;
+    horizontal-stretch: root.field-width > 0px ? 0 : 1;
+    background: root.light ? #e6e6e6 : Lx.control;
+    border-radius: Lx.radius-sm;
+    border-width: ti.has-focus ? 1px : (root.light ? 1px : 0px);
+    border-color: ti.has-focus ? Lx.amber : (root.light ? #8c8c8c : transparent);
+
+    property <bool> was-focused: false;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+
+        Rectangle {
+            clip: true;
+            vertical-stretch: 1;
+
+            if root.text == "": Text {
+                width: 100%;
+                height: 100%;
+                text: root.placeholder-text;
+                color: root.light ? #808080 : Lx.text-muted;
+                font-size: Lx.font-md;
+                vertical-alignment: center;
+            }
+
+            ti := TextInput {
+                width: 100%;
+                height: 100%;
+                text <=> root.text;
+                color: root.light ? #282828 : Lx.text;
+                font-size: Lx.font-md;
+                vertical-alignment: center;
+                single-line: true;
+                accepted => { root.accepted(root.text); }
+                changed has-focus => {
+                    if root.was-focused && !self.has-focus {
+                        root.committed(root.text);
+                    }
+                    root.was-focused = self.has-focus;
+                }
+            }
+        }
+    }
+}
+
+// ─── Host-synced param field (skips overwrite while focused) ──────────────────
+
+export component LxParamField inherits VerticalLayout {
+    in property <string> label: "";
+    // Host-formatted display value. Applied only when the field is not focused.
+    in property <string> value-text: "";
+    in property <bool> light: true;
+    in property <length> field-width: 56px;
+
+    callback committed(string);
+
+    spacing: 2px;
+    alignment: center;
+    horizontal-stretch: 0;
+
+    property <string> local-text: "";
+    property <bool> seeded: false;
+
+    changed value-text => {
+        if !edit.has-focus {
+            root.local-text = root.value-text;
+        }
+    }
+
+    init => {
+        root.local-text = root.value-text;
+        root.seeded = true;
+    }
+
+    if root.label != "": Text {
+        text: root.label;
+        font-size: Lx.font-xs;
+        color: Lx.text-label;
+        horizontal-alignment: center;
+        vertical-stretch: 0;
+    }
+
+    edit := LxLineEdit {
+        text <=> root.local-text;
+        light: root.light;
+        field-width: root.field-width;
+        horizontal-stretch: 0;
+        accepted(s) => { root.committed(s); }
+        committed(s) => { root.committed(s); }
+    }
+}
+
+// ─── Cycle button (click to advance LSC/PK/HSC/OFF, STANDARD/LIFE/HYPER, …) ─
+
+export component LxCycleBtn inherits Rectangle {
+    in property <[string]> choices: ["OFF", "LSC", "PK", "HSC"];
+    in-out property <int> index: 0;
+    // When true, amber fill if index != inactive-index (default 0 = OFF).
+    in property <int> inactive-index: 0;
+    in property <length> btn-width: 56px;
+    in property <length> btn-height: Lx.button-h;
+
+    callback changed(int);
+
+    property <bool> active: root.index != root.inactive-index;
+    property <string> label: root.choices[root.index];
+
+    width: root.btn-width;
+    height: root.btn-height;
+    border-radius: Lx.radius-sm;
+    background: root.active ? Lx.amber : Lx.control;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.label;
+        font-size: Lx.font-xs;
+        font-weight: 600;
+        color: root.active ? Lx.text : Lx.text-secondary;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ta := TouchArea {
+        clicked => {
+            if root.choices.length > 0 {
+                root.index = Math.mod(root.index + 1, root.choices.length);
+                root.changed(root.index);
+            }
+        }
+    }
+
+    states [
+        hover when ta.has-hover && root.active: { background: Lx.amber-soft; }
+        pressed when ta.pressed && root.active: { background: Lx.amber-hot; }
+        hover when ta.has-hover && !root.active: { background: Lx.control-hover; }
+        pressed when ta.pressed && !root.active: { background: Lx.control-active; }
+    ]
+}
+
+// ─── 3-state segmented button (A/B/C style) ──────────────────────────────────
+
+export component LxSegmentedButton inherits HorizontalLayout {
+    in-out property <float> index: 0.0;
+    in property <[string]> choices: ["A", "B", "C"];
+
+    callback changed(float);
+
+    spacing: 2px;
+    height: Lx.button-h-sm;
+
+    for choice[i] in root.choices: Rectangle {
+        property <bool> active: root.index == i;
+
+        horizontal-stretch: 1;
+        height: Lx.button-h-sm;
+        background: active ? Lx.amber : Lx.control;
+        border-radius: Lx.radius-sm;
+
+        Text {
+            width: 100%;
+            height: 100%;
+            text: choice;
+            font-size: Lx.font-xs;
+            font-weight: 600;
+            color: active ? Lx.text : Lx.text-secondary;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        ta := TouchArea {
+            clicked => {
+                root.index = i;
+                root.changed(i);
+            }
+        }
+
+        states [
+            hover when ta.has-hover && !active: { background: Lx.control-hover; }
+            pressed when ta.pressed && !active: { background: Lx.control-active; }
+        ]
+    }
+}
+
+// ─── Wrappers around @truce controls ─────────────────────────────────────────
+
+export component LxSlider inherits ParamSlider {
+    label-color: Lx.text-label;
+    value-color: Lx.text-secondary;
+}
+
+export component LxToggle inherits Toggle {
+    label-color: Lx.text-label;
+}
+
+export component LxDropdown inherits Dropdown {
+    label-color: Lx.text-label;
+}
+
+// EQ band column — Aether style: cycle type button + FREQ/GAIN/Q text fields.
+// Tab order follows field tree order (freq → gain → q → next band).
+export component LxBandColumn inherits VerticalLayout {
+    in property <[string]> type_choices: ["OFF", "LSC", "PK", "HSC"];
+    in-out property <int> type_index: 0;
+
+    // Host-formatted plain values (e.g. "105", "2.8", "0.70").
+    in property <string> freq_text: "";
+    in property <string> gain_text: "";
+    in property <string> q_text: "";
+
+    in property <length> field-width: 56px;
+
+    callback type_changed(int);
+    // Committed plain-value text from the fields (parse + normalize in Rust).
+    callback freq_committed(string);
+    callback gain_committed(string);
+    callback q_committed(string);
+
+    spacing: 2px;
+    alignment: center;
+    horizontal-stretch: 0;
+
+    LxCycleBtn {
+        choices: root.type_choices;
+        index <=> root.type_index;
+        btn-width: root.field-width;
+        changed(v) => { root.type_changed(v); }
+    }
+
+    LxParamField {
+        label: "FREQ";
+        value-text: root.freq_text;
+        field-width: root.field-width;
+        committed(s) => { root.freq_committed(s); }
+    }
+
+    LxParamField {
+        label: "GAIN";
+        value-text: root.gain_text;
+        field-width: root.field-width;
+        committed(s) => { root.gain_committed(s); }
+    }
+
+    LxParamField {
+        label: "Q";
+        value-text: root.q_text;
+        field-width: root.field-width;
+        committed(s) => { root.q_committed(s); }
+    }
+}

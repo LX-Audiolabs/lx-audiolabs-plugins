@@ -1,0 +1,342 @@
+// Analysis visuals: spectrum, EQ curve, goniometer — grid chrome + path data from Rust.
+
+import { Lx } from "lx-theme.slint";
+import { LxPanel } from "lx-chrome.slint";
+
+// Filled spectrum area. Path commands in path-w × path-h viewBox coords.
+export component LxSpectrum inherits LxPanel {
+    in property <string> commands: "";
+    in property <color> fill-color: #19e6804d;
+    in property <color> stroke-color: Lx.gonio;
+    in property <length> stroke-width: 1px;
+    in property <float> path-w: 100;
+    in property <float> path-h: 100;
+    in property <bool> show-grid: true;
+    in property <bool> show-labels: true;
+
+    // dB / freq labels (decorative — path itself is pre-mapped in Rust)
+    in property <string> db-top: "";
+    in property <string> db-mid: "";
+    in property <string> db-bot: "";
+    in property <string> freq-lo: "20 Hz";
+    in property <string> freq-mid: "1 kHz";
+    in property <string> freq-hi: "20 kHz";
+
+    surface: #0f0f14;
+    clip: true;
+
+    // Horizontal grid lines
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.25;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid;
+    }
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.5;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid-strong;
+    }
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.75;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid;
+    }
+
+    // Vertical freq guides (approx log positions for 100 / 1k / 10k on 20–20k)
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.25;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid;
+    }
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.5;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid;
+    }
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.75;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid;
+    }
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.path-w;
+        viewbox-height: root.path-h;
+        commands: root.commands;
+        fill: root.fill-color;
+        stroke: root.stroke-color;
+        stroke-width: root.stroke-width;
+    }
+
+    if root.show-labels && root.db-top != "": Text {
+        x: 6px; y: 4px;
+        text: root.db-top;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+    if root.show-labels && root.db-mid != "": Text {
+        x: 6px; y: parent.height * 0.5 - 6px;
+        text: root.db-mid;
+        font-size: Lx.font-xs;
+        color: #ffffff60;
+    }
+    if root.show-labels && root.db-bot != "": Text {
+        x: 6px; y: parent.height - 28px;
+        text: root.db-bot;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+    if root.show-labels: Text {
+        x: 8px; y: parent.height - 14px;
+        text: root.freq-lo;
+        font-size: Lx.font-xs;
+        color: #ffffff50;
+    }
+    if root.show-labels: Text {
+        x: parent.width * 0.5 - 16px; y: parent.height - 14px;
+        text: root.freq-mid;
+        font-size: Lx.font-xs;
+        color: #ffffff50;
+    }
+    if root.show-labels: Text {
+        x: parent.width - 48px; y: parent.height - 14px;
+        text: root.freq-hi;
+        font-size: Lx.font-xs;
+        color: #ffffff50;
+    }
+}
+
+// EQ transfer curve (stroke only) with ±dB grid.
+export component LxEqCurve inherits LxPanel {
+    in property <string> commands: "";
+    in property <color> stroke-color: Lx.eq-curve;
+    in property <length> stroke-width: 2px;
+    in property <float> path-w: 720;
+    in property <float> path-h: 180;
+    in property <bool> show-grid: true;
+    in property <bool> show-labels: true;
+    in property <bool> labels-right: false; // place dB labels on the right (dual y-axis)
+    in property <string> db-top: "+12 dB";
+    in property <string> db-mid: "0 dB";
+    in property <string> db-bot: "-12 dB";
+    in property <string> freq-lo: "20 Hz";
+    in property <string> freq-mid: "1 kHz";
+    in property <string> freq-hi: "20 kHz";
+
+    surface: #0f0f14;
+    clip: true;
+
+    // 0 dB line
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.5;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid-strong;
+    }
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.25;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid;
+    }
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.75;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid;
+    }
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.path-w;
+        viewbox-height: root.path-h;
+        commands: root.commands;
+        stroke: root.stroke-color;
+        stroke-width: root.stroke-width;
+        fill: transparent;
+    }
+
+    if root.show-labels && !root.labels-right: Text {
+        x: 6px; y: 4px;
+        text: root.db-top;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+    if root.show-labels && !root.labels-right: Text {
+        x: 6px; y: parent.height * 0.5 - 6px;
+        text: root.db-mid;
+        font-size: Lx.font-xs;
+        color: #ffffff60;
+    }
+    if root.show-labels && !root.labels-right: Text {
+        x: 6px; y: parent.height - 28px;
+        text: root.db-bot;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+    if root.show-labels && root.labels-right: Text {
+        x: parent.width - 42px; y: 4px;
+        text: root.db-top;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+    if root.show-labels && root.labels-right: Text {
+        x: parent.width - 30px; y: parent.height * 0.5 - 6px;
+        text: root.db-mid;
+        font-size: Lx.font-xs;
+        color: #ffffff60;
+    }
+    if root.show-labels && root.labels-right: Text {
+        x: parent.width - 42px; y: parent.height - 28px;
+        text: root.db-bot;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+    if root.show-labels && !root.labels-right: Text {
+        x: 8px; y: parent.height - 14px;
+        text: root.freq-lo;
+        font-size: Lx.font-xs;
+        color: #ffffff50;
+    }
+    if root.show-labels && !root.labels-right: Text {
+        x: parent.width * 0.5 - 16px; y: parent.height - 14px;
+        text: root.freq-mid;
+        font-size: Lx.font-xs;
+        color: #ffffff50;
+    }
+    if root.show-labels && !root.labels-right: Text {
+        x: parent.width - 48px; y: parent.height - 14px;
+        text: root.freq-hi;
+        font-size: Lx.font-xs;
+        color: #ffffff50;
+    }
+}
+
+// Goniometer with M/S crosshair grid. Path from Rust (M/S mapped).
+export component LxGoniometer inherits LxPanel {
+    in property <string> commands: "";
+    in property <color> stroke-color: Lx.gonio;
+    in property <length> stroke-width: 1px;
+    in property <float> path-w: 100;
+    in property <float> path-h: 100;
+    in property <bool> show-grid: true;
+
+    surface: #0f0f10;
+    clip: true;
+
+    // Crosshair + diagonals (static chrome) — brighter so it stays readable.
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.5;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid-strong;
+    }
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.5;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid-strong;
+    }
+    // Diagonals via Path.
+    if root.show-grid: Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0; viewbox-y: 0;
+        viewbox-width: 100; viewbox-height: 100;
+        stroke: Lx.grid-strong;
+        stroke-width: 1px;
+        fill: transparent;
+        commands: "M 0 0 L 100 100 M 100 0 L 0 100";
+    }
+    // Outer circle guide
+    if root.show-grid: Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0; viewbox-y: 0;
+        viewbox-width: 100; viewbox-height: 100;
+        stroke: #ffffff30;
+        stroke-width: 1px;
+        fill: transparent;
+        commands: "M 95 50 A 45 45 0 1 1 5 50 A 45 45 0 1 1 95 50";
+    }
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.path-w;
+        viewbox-height: root.path-h;
+        commands: root.commands;
+        stroke: root.stroke-color;
+        stroke-width: root.stroke-width;
+        fill: transparent;
+    }
+
+}
+
+// Compressor mini-display: PK / GR readouts + horizontal GR meter bar.
+export component LxCompDisplay inherits Rectangle {
+    in property <string> pk-text: "PK: 0.0";
+    in property <string> gr-text: "GR: 0.0";
+    in property <float> gr: 0.0; // 0..1 (amount of reduction)
+
+    width: 64px;
+    height: 100%;
+    background: transparent;
+
+    VerticalLayout {
+        padding-top: 4px;
+        padding-bottom: 4px;
+        spacing: 2px;
+        alignment: center;
+
+        Text {
+            text: root.pk-text;
+            font-size: Lx.font-xs;
+            color: Lx.amber;
+            horizontal-alignment: center;
+            font-weight: 600;
+        }
+        Text {
+            text: root.gr-text;
+            font-size: Lx.font-xs;
+            color: Lx.amber;
+            horizontal-alignment: center;
+            font-weight: 600;
+        }
+
+        // Horizontal GR meter bar
+        Rectangle {
+            height: 3px;
+            width: 100%;
+            background: Lx.steel;
+            border-radius: 1px;
+
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: root.gr * parent.width;
+                height: 100%;
+                background: Lx.amber;
+                border-radius: 1px;
+            }
+        }
+    }
+}
