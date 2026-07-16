@@ -113,16 +113,14 @@ export component AetherUi inherits Window {
                 spacing: 4px;
                 alignment: center;
 
-                // Preset dropdown trigger — light style, matches original Aether
+                // Preset dropdown trigger — dark style, matches Meridian
                 preset_dd := Rectangle {
                     width: 130px;
                     height: Lx.button-h-lg;
                     vertical-stretch: 0;
                     horizontal-stretch: 0;
-                    background: #e6e6e6;
+                    background: Lx.control;
                     border-radius: Lx.radius-sm;
-                    border-width: 1px;
-                    border-color: #8c8c8c;
 
                     HorizontalLayout {
                         padding-left: 6px;
@@ -133,7 +131,7 @@ export component AetherUi inherits Window {
                         Text {
                             text: root.preset_name == "" ? "Select preset" : root.preset_name;
                             font-size: Lx.font-md;
-                            color: #282828;
+                            color: Lx.text;
                             vertical-alignment: center;
                             horizontal-stretch: 1;
                             overflow: elide;
@@ -141,7 +139,7 @@ export component AetherUi inherits Window {
                         Text {
                             text: "▼";
                             font-size: 8px;
-                            color: #646464;
+                            color: Lx.text-muted;
                             vertical-alignment: center;
                             horizontal-stretch: 0;
                         }
@@ -155,7 +153,6 @@ export component AetherUi inherits Window {
                 LxLineEdit {
                     text <=> root.preset_name;
                     placeholder-text: "Preset name";
-                    light: true;
                     field-width: 130px;
                     height: Lx.button-h-lg;
                     vertical-stretch: 0;
@@ -196,14 +193,12 @@ export component AetherUi inherits Window {
         // ═══════════════════════════════════════════════════════════════════
         // MAIN — curve + controls
         // ═══════════════════════════════════════════════════════════════════
-        LxShellBody {
-            LxShellMain {
-                VerticalLayout {
-                    padding: 6px;
-                    spacing: 4px;
-                    vertical-stretch: 1;
+        VerticalLayout {
+            padding: 12px;
+            spacing: 4px;
+            vertical-stretch: 1;
 
-                    LxEqCurve {
+            LxEqCurve {
                 height: 90px;
                 vertical-stretch: 0;
                 commands: root.curve_cmds;
@@ -313,7 +308,6 @@ export component AetherUi inherits Window {
                 Rectangle { width: 1px; background: #1f2929; horizontal-stretch: 0; }
 
                 // ── HARMAN BLEND + RESET ──
-                // Same padding/title size as EQ so headers share one baseline.
                 VerticalLayout {
                     spacing: 6px;
                     padding: 4px;
@@ -321,21 +315,11 @@ export component AetherUi inherits Window {
                     horizontal-stretch: 0;
                     width: 104px;
 
-                    Text {
-                        width: 100%;
-                        text: "HARMAN BLEND";
-                        font-size: Lx.font-sm;
-                        color: Lx.text-secondary;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
-
-                    // width 100% → LxKnob's internal center aligns graphic in column
                     LxKnob {
                         width: 100%;
                         horizontal-stretch: 0;
                         vertical-stretch: 0;
-                        label: "";
+                        label: "HARMAN BLEND";
                         value <=> root.blend;
                         value-text: root.blend_text;
                         changed(v) => { root.blend_changed(v); }
@@ -458,20 +442,11 @@ export component AetherUi inherits Window {
 
                     Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
 
-                    Text {
-                        width: 100%;
-                        text: "GAIN";
-                        font-size: Lx.font-lg;
-                        color: Lx.text-secondary;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
-
                     LxKnob {
                         width: 100%;
                         horizontal-stretch: 0;
                         vertical-stretch: 0;
-                        label: "";
+                        label: "GAIN";
                         value <=> root.gain;
                         value-text: root.gain_text;
                         changed(v) => { root.gain_changed(v); }
@@ -481,9 +456,7 @@ export component AetherUi inherits Window {
         }
     }
 
-    }
-
-    // ── Preset list popup — anchored under the light dropdown trigger ──
+    // ── Preset list popup — anchored under the dark dropdown trigger ──
     preset_popup := PopupWindow {
         width: max(146px, preset_dd.width);
         x: preset_dd.absolute-position.x;
@@ -533,7 +506,6 @@ export component AetherUi inherits Window {
                 }
             }
         }
-    }
 
     // Full-window dimmer keeps dialog above Path layers (spectrum/EQ).
     setup_popup := LxVaultSetupPopup {

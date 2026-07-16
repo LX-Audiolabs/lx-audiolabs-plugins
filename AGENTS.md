@@ -25,6 +25,6 @@ Github AUTH always as github.user "lxndrbe"
 - New path: **Slint** via `truce-slint`, **Truce standard widgets** (`@truce`), **software renderer** (`renderer-software`). Goal: no special femtovg/truce forks.
 - Prototypes live in sibling repo: `C:\Users\lxndr\Documents\LX-AudioLabs\lx-audiolabs-slint`
 - That workspace **path-deps only** shared crates from this vizia tree (`shared-dsp`, `shared-analysis`, `shared-vault`, `shm-hub`) — no DSP copy.
-- **When rebuilding a plugin in Slint, use shared-ui-slint.** Header = `LxShellHeader` + custom actions as children; body = `LxShellBody` + `LxShellLeft` / `LxShellMain` / `LxShellRight`. No old `LxShell`.
+- **When rebuilding a plugin in Slint, use shared-ui-slint.** Header = `LxShellHeader` (branding left only) + custom actions as children; body = `LxShellBody` + `LxShellLeft` / `LxShellMain` / `LxShellRight`. No old `LxShell`. Reuse `LxKnob`, `LxLineEdit`, `LxButton`, etc. — don't hand-roll plugin-specific styling.
 - Status: **Aether Slint** done. **Meridian Slint** done.
 - This repo (`lx-audiolabs-dev`) remains production Vizia plugins until a cutover decision.
