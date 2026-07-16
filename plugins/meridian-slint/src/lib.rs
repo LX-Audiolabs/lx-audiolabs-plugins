@@ -1109,6 +1109,7 @@ impl PluginLogic for Meridian {
 
         let mut gr_db = 0.0f32;
         let mut max_gr_db = 0.0f32;
+        let mut max_comp_peak = 0.0f32;
         let is_measuring = params
             .shared
             .auto_loud_measuring
@@ -1185,6 +1186,7 @@ impl PluginLogic for Meridian {
             }
 
             // Compressor
+            max_comp_peak = max_comp_peak.max(x_l.abs()).max(x_r.abs());
             let (mut comp_l, mut comp_r) = state.compressor.process(
                 x_l, x_r, comp_t, comp_m, comp_att, comp_rel, ratio, knee, &mut gr_db,
             );
@@ -1330,6 +1332,13 @@ impl PluginLogic for Meridian {
             .shared
             .gain_reduction
             .store(max_gr_db, Ordering::Release);
+
+        // Compressor input peak for footer mini-display
+        let comp_peak_db = gain_to_db(max_comp_peak);
+        params
+            .shared
+            .comp_peak
+            .store(comp_peak_db, Ordering::Release);
 
         // Smoothed band levels
         let sample_weight = 1.0 / count_samples as f32;

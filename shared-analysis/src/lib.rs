@@ -236,6 +236,8 @@ pub struct SharedState {
     pub reset_peak: Arc<AtomicBool>,
     pub reset_analysis: Arc<AtomicBool>,
     pub gain_reduction: Arc<AtomicF32>,
+    /// Compressor sidechain input peak (dBFS, block max) — Meridian footer mini-display.
+    pub comp_peak: Arc<AtomicF32>,
     pub balance: Arc<AtomicF32>,
     /// UI sets true to start AUTO LOUD measurement
     pub auto_loud_trigger: Arc<AtomicBool>,
@@ -363,6 +365,7 @@ impl Default for SharedState {
             reset_peak: Arc::new(AtomicBool::new(false)),
             reset_analysis: Arc::new(AtomicBool::new(false)),
             gain_reduction: Arc::new(AtomicF32::new(0.0)),
+            comp_peak: Arc::new(AtomicF32::new(-90.0)),
             balance: Arc::new(AtomicF32::new(0.0)),
             auto_loud_trigger: Arc::new(AtomicBool::new(false)),
             auto_loud_measuring: Arc::new(AtomicBool::new(false)),

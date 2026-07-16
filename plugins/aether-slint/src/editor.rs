@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use slint::{ModelRc, SharedString, VecModel};
@@ -67,43 +67,62 @@ struct VaultUiState {
     names: Vec<String>,
     cache: Vec<PresetEntry>,
     pending: Arc<PendingPresets>,
-    /// Path we last kicked off a scan for (avoids re-spawning every frame).
     scanning_for: Option<String>,
+}
+
+/// Owns the Slint UI for one editor open.
+///
+/// On drop, `live` is set false *before* the component tree is destroyed.
+/// That blocks focus-lost TextInput commits from calling host `automate`
+/// during REAPER FX remove — a common crash-on-readd cause.
+struct EditorSession {
+    ui: AetherUi,
+    live: Arc<AtomicBool>,
+}
+
+impl Drop for EditorSession {
+    fn drop(&mut self) {
+        self.live.store(false, Ordering::SeqCst);
+    }
 }
 
 pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
+    // Fixed-size editor: avoid host resize races on open/close.
     SlintEditor::new(
         params.clone(),
         (WINDOW_W, WINDOW_H),
         move |state: PluginContext<AetherParams>| -> SyncFn<AetherParams> {
-            let ui = AetherUi::new().unwrap();
+            let live = Arc::new(AtomicBool::new(true));
+            // Never unwrap here: with a bad panic strategy (or host without
+            // catch_unwind) this would kill REAPER on FX add when GUI is created.
+            let ui_component = match AetherUi::new() {
+                Ok(ui) => ui,
+                Err(e) => {
+                    tracing::error!("AetherUi::new failed: {e:?}");
+                    // Empty sync — editor opens blank rather than aborting host.
+                    return Box::new(|_state: &PluginContext<AetherParams>| {});
+                }
+            };
+            let session = EditorSession {
+                ui: ui_component,
+                live: live.clone(),
+            };
+            let ui = &session.ui;
 
-            // ── load config + last preset ──
+            // Labels only — never automate host params on open.
             let cfg = shared_analysis::load_config("Aether");
             let vault_path = cfg.vault_path.clone();
             if let Some(ref vp) = vault_path {
                 ui.set_vault_path(SharedString::from(vp.as_str()));
             }
-            let last_name = cfg.last_preset.clone().unwrap_or_default();
+            let last_name = cfg
+                .last_preset
+                .clone()
+                .or_else(|| load_cached_last_profile().map(|p| p.name))
+                .unwrap_or_default();
             if !last_name.is_empty() {
                 ui.set_preset_name(SharedString::from(last_name.as_str()));
-            }
-
-            // Apply last profile (JSON cache first, then name lookup).
-            if let Some(profile) = load_cached_last_profile()
-                .or_else(|| {
-                    if last_name.is_empty() {
-                        None
-                    } else {
-                        find_profile(&last_name, &vault_path, &[])
-                    }
-                })
-            {
-                apply_profile(&state, &profile);
-                if ui.get_preset_name().is_empty() && !profile.name.is_empty() {
-                    ui.set_preset_name(SharedString::from(profile.name.as_str()));
-                }
             }
 
             let pending = Arc::new(PendingPresets::new());
@@ -115,42 +134,39 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 scanning_for: None,
             }));
 
-            // Seed UI list with built-ins; vault scan fills in shortly.
+            // Built-ins only. Vault scan starts on first SAVE/SETUP/path change —
+            // not on every editor open (avoids bg threads vs REAPER add/remove).
             ui.set_preset_names(names_model(&default_preset_names()));
-            if let Some(ref vp) = vault_path {
-                if !vp.is_empty() {
-                    let scan_gen = pending.bump_generation();
-                    if let Ok(mut vs) = vault_state.lock() {
-                        vs.scanning_for = Some(vp.clone());
-                    }
-                    spawn_vault_scan(vp.clone(), pending.clone(), scan_gen);
-                }
-            } else {
-                // Still scan local presets folder.
-                let local = shared_analysis::get_plugin_dir("Aether").join("presets");
-                if local.is_dir() {
-                    let scan_gen = pending.bump_generation();
-                    spawn_vault_scan(local.to_string_lossy().into_owned(), pending.clone(), scan_gen);
-                }
-            }
+            let _ = pending; // held via vault_state
 
             // ── type cycle ──
-            let s = state.clone();
-            ui.on_eq1_type_changed(move |v| s.automate(P::Eq1Type, discrete_norm(v.max(0) as usize, 4)));
-            let s = state.clone();
-            ui.on_eq2_type_changed(move |v| s.automate(P::Eq2Type, discrete_norm(v.max(0) as usize, 4)));
-            let s = state.clone();
-            ui.on_eq3_type_changed(move |v| s.automate(P::Eq3Type, discrete_norm(v.max(0) as usize, 4)));
-            let s = state.clone();
-            ui.on_eq4_type_changed(move |v| s.automate(P::Eq4Type, discrete_norm(v.max(0) as usize, 4)));
-            let s = state.clone();
-            ui.on_eq5_type_changed(move |v| s.automate(P::Eq5Type, discrete_norm(v.max(0) as usize, 4)));
+            macro_rules! bind_type {
+                ($cb:ident, $pid:expr) => {{
+                    let s = state.clone();
+                    let lv = live.clone();
+                    ui.$cb(move |v| {
+                        if !lv.load(Ordering::Acquire) {
+                            return;
+                        }
+                        s.automate($pid, discrete_norm(v.max(0) as usize, 4));
+                    });
+                }};
+            }
+            bind_type!(on_eq1_type_changed, P::Eq1Type);
+            bind_type!(on_eq2_type_changed, P::Eq2Type);
+            bind_type!(on_eq3_type_changed, P::Eq3Type);
+            bind_type!(on_eq4_type_changed, P::Eq4Type);
+            bind_type!(on_eq5_type_changed, P::Eq5Type);
 
-            // ── text field commits (plain → normalised) ──
+            // ── text field commits ──
             macro_rules! bind_freq {
                 ($cb:ident, $pid:expr) => {{
                     let s = state.clone();
+                    let lv = live.clone();
                     ui.$cb(move |txt: SharedString| {
+                        if !lv.load(Ordering::Acquire) {
+                            return;
+                        }
                         if let Some(v) = parse_f32(txt.as_str()) {
                             s.automate($pid, freq_to_norm(v.clamp(FREQ_MIN, FREQ_MAX)));
                         }
@@ -160,7 +176,11 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             macro_rules! bind_gain {
                 ($cb:ident, $pid:expr) => {{
                     let s = state.clone();
+                    let lv = live.clone();
                     ui.$cb(move |txt: SharedString| {
+                        if !lv.load(Ordering::Acquire) {
+                            return;
+                        }
                         if let Some(v) = parse_f32(txt.as_str()) {
                             s.automate($pid, gain_to_norm(v.clamp(-12.0, 12.0)));
                         }
@@ -170,14 +190,17 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             macro_rules! bind_q {
                 ($cb:ident, $pid:expr) => {{
                     let s = state.clone();
+                    let lv = live.clone();
                     ui.$cb(move |txt: SharedString| {
+                        if !lv.load(Ordering::Acquire) {
+                            return;
+                        }
                         if let Some(v) = parse_f32(txt.as_str()) {
                             s.automate($pid, q_to_norm(v.clamp(Q_MIN, Q_MAX)));
                         }
                     });
                 }};
             }
-
             bind_freq!(on_eq1_freq_committed, P::Eq1Freq);
             bind_gain!(on_eq1_gain_committed, P::Eq1Gain);
             bind_q!(on_eq1_q_committed, P::Eq1Q);
@@ -195,24 +218,44 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             bind_q!(on_eq5_q_committed, P::Eq5Q);
 
             // ── knobs ──
+            macro_rules! bind_float {
+                ($cb:ident, $pid:expr) => {{
+                    let s = state.clone();
+                    let lv = live.clone();
+                    ui.$cb(move |v| {
+                        if lv.load(Ordering::Acquire) {
+                            s.automate($pid, v as f64);
+                        }
+                    });
+                }};
+            }
+            bind_float!(on_blend_changed, P::Blend);
+            bind_float!(on_cf_angle_changed, P::CfAngle);
+            bind_float!(on_cf_amount_changed, P::CfAmount);
+            bind_float!(on_gain_changed, P::Gain);
+
             let s = state.clone();
-            ui.on_blend_changed(move |v| s.automate(P::Blend, v as f64));
-            let s = state.clone();
-            ui.on_cf_angle_changed(move |v| s.automate(P::CfAngle, v as f64));
-            let s = state.clone();
-            ui.on_cf_amount_changed(move |v| s.automate(P::CfAmount, v as f64));
-            let s = state.clone();
-            ui.on_gain_changed(move |v| s.automate(P::Gain, v as f64));
-            let s = state.clone();
+            let lv = live.clone();
             ui.on_cf_realism_changed(move |v| {
-                s.automate(P::CfRealism, discrete_norm(v.max(0) as usize, 3))
+                if lv.load(Ordering::Acquire) {
+                    s.automate(P::CfRealism, discrete_norm(v.max(0) as usize, 3));
+                }
             });
             let s = state.clone();
-            ui.on_bypass_changed(move |v| s.automate(P::Bypass, if v { 1.0 } else { 0.0 }));
+            let lv = live.clone();
+            ui.on_bypass_changed(move |v| {
+                if lv.load(Ordering::Acquire) {
+                    s.automate(P::Bypass, if v { 1.0 } else { 0.0 });
+                }
+            });
 
             // ── RESET ──
             let s = state.clone();
+            let lv = live.clone();
             ui.on_reset_clicked(move || {
+                if !lv.load(Ordering::Acquire) {
+                    return;
+                }
                 for (i, &(fd, qd, td)) in BAND_DEF.iter().enumerate() {
                     let (fp, gp, qp, tp) = match i {
                         0 => (P::Eq1Freq, P::Eq1Gain, P::Eq1Q, P::Eq1Type),
@@ -234,14 +277,19 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 s.automate(P::Bypass, 0.0);
             });
 
-            // ── SAVE preset ──
+            // ── SAVE ──
             let params_save = params.clone();
             let vs_save = vault_state.clone();
             let ui_weak_save = ui.as_weak();
+            let lv = live.clone();
             ui.on_save_clicked(move || {
-                let Some(ui) = ui_weak_save.upgrade() else { return };
-                let name = ui.get_preset_name().to_string();
-                let name = name.trim().to_string();
+                if !lv.load(Ordering::Acquire) {
+                    return;
+                }
+                let Some(ui) = ui_weak_save.upgrade() else {
+                    return;
+                };
+                let name = ui.get_preset_name().to_string().trim().to_string();
                 if name.is_empty() {
                     return;
                 }
@@ -264,7 +312,6 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                         }
                         ui.set_preset_names(names_model(&vs.names));
                         save_last_preset(&vs.vault_path, &profile);
-                        // Rescan so disk and UI stay aligned.
                         if let Some(ref vault) = vs.vault_path.clone() {
                             if !vault.is_empty() {
                                 let scan_gen = vs.pending.bump_generation();
@@ -277,10 +324,14 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 }
             });
 
-            // ── vault path changed ──
+            // ── vault path ──
             let vs_path = vault_state.clone();
             let ui_weak_path = ui.as_weak();
+            let lv = live.clone();
             ui.on_vault_path_changed(move |path: SharedString| {
+                if !lv.load(Ordering::Acquire) {
+                    return;
+                }
                 let path = path.to_string().trim().to_string();
                 let new_vp = if path.is_empty() { None } else { Some(path) };
                 if let Ok(mut vs) = vs_path.lock() {
@@ -288,7 +339,6 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                     let mut cfg = shared_analysis::load_config("Aether");
                     cfg.vault_path = new_vp.clone();
                     let _ = shared_analysis::save_config("Aether", &cfg);
-
                     let scan_gen = vs.pending.bump_generation();
                     if let Some(ref vp) = new_vp {
                         vs.scanning_for = Some(vp.clone());
@@ -300,7 +350,6 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                         if let Some(ui) = ui_weak_path.upgrade() {
                             ui.set_preset_names(names_model(&vs.names));
                         }
-                        // Local-only rescan
                         let local = shared_analysis::get_plugin_dir("Aether").join("presets");
                         if local.is_dir() {
                             let scan_gen = vs.pending.bump_generation();
@@ -314,11 +363,15 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 }
             });
 
-            // ── preset selected from dropdown ──
+            // ── preset selected ──
             let s_sel = state.clone();
             let vs_sel = vault_state.clone();
             let ui_weak_sel = ui.as_weak();
+            let lv = live.clone();
             ui.on_preset_selected(move |name: SharedString| {
+                if !lv.load(Ordering::Acquire) {
+                    return;
+                }
                 let name = name.to_string();
                 let profile = {
                     let vs = vs_sel.lock().ok();
@@ -347,14 +400,20 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 ticks: 0,
             });
             let vault_state_sync = vault_state.clone();
+            let live_sync = live.clone();
 
             Box::new(move |state: &PluginContext<AetherParams>| {
-                // Drain background vault scan results.
-                if let Ok(mut vs) = vault_state_sync.lock() {
+                if !live_sync.load(Ordering::Acquire) {
+                    return;
+                }
+                let ui = &session.ui;
+
+                // Drain background vault scan (non-blocking).
+                if let Ok(mut vs) = vault_state_sync.try_lock() {
                     if vs.pending.ready.swap(false, Ordering::Acquire) {
                         let current_gen = vs.pending.generation.load(Ordering::Acquire);
                         let scanned = {
-                            let guard = vs.pending.presets.lock().ok();
+                            let guard = vs.pending.presets.try_lock().ok();
                             guard.and_then(|g| match &*g {
                                 Some((scan_gen, scanned)) if *scan_gen == current_gen => {
                                     Some(scanned.clone())
@@ -370,7 +429,6 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                     }
                 }
 
-                // Types
                 ui.set_eq1_type(
                     discrete_index(PluginContextReadF32::get_param(state, P::Eq1Type) as f64, 4)
                         as i32,
@@ -398,14 +456,12 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                     ) as i32,
                 );
 
-                // Knobs (normalised)
                 ui.set_blend(PluginContextReadF32::get_param(state, P::Blend));
                 ui.set_cf_angle(PluginContextReadF32::get_param(state, P::CfAngle));
                 ui.set_cf_amount(PluginContextReadF32::get_param(state, P::CfAmount));
                 ui.set_gain(PluginContextReadF32::get_param(state, P::Gain));
                 ui.set_bypass(PluginContextReadF32::get_param(state, P::Bypass) > 0.5);
 
-                // Plain AutoEQ-style field text
                 let plain = |p: P| PluginContextReadF32::get_param_plain(state, p);
                 ui.set_eq1_freq_text(SharedString::from(format!("{:.0}", plain(P::Eq1Freq))));
                 ui.set_eq1_gain_text(SharedString::from(format!("{:.1}", plain(P::Eq1Gain))));
@@ -432,7 +488,6 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 let g = plain(P::Gain);
                 ui.set_gain_text(SharedString::from(format!("{g:.1} dB")));
 
-                // Input peak + hold (UI-side, same behaviour as original Ticker)
                 let peak_db = state.shared.input_peak.load(Ordering::Relaxed);
                 {
                     let mut ph = peak_hold.borrow_mut();
@@ -462,6 +517,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             })
         },
     )
+    .resizable(false)
     .into_editor()
 }
 

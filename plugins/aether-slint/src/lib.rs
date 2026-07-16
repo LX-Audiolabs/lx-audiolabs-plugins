@@ -230,7 +230,6 @@ impl AetherParams {
 
 pub struct Aether;
 
-#[derive(Default)]
 pub struct AetherDspState {
     sample_rate: f32,
     eq_l: [Biquad; NUM_BANDS],
@@ -240,6 +239,23 @@ pub struct AetherDspState {
     cf_delay_l: Vec<f32>,
     cf_delay_r: Vec<f32>,
     cf_delay_pos: usize,
+}
+
+impl Default for AetherDspState {
+    fn default() -> Self {
+        Self {
+            sample_rate: 48_000.0,
+            eq_l: std::array::from_fn(|_| Biquad::new()),
+            eq_r: std::array::from_fn(|_| Biquad::new()),
+            cf_lp_l: 0.0,
+            cf_lp_r: 0.0,
+            // Always allocate delay lines — process must never see empty buffers
+            // (len()-1 underflow / % 0 panic if process races reset).
+            cf_delay_l: vec![0.0; CF_DELAY_MAX],
+            cf_delay_r: vec![0.0; CF_DELAY_MAX],
+            cf_delay_pos: 0,
+        }
+    }
 }
 
 impl AetherDspState {
@@ -383,27 +399,27 @@ impl PluginLogic for Aether {
     }
 
     fn init(_params: &AetherParams, _cx: &InitContext) -> AetherDspState {
-        AetherDspState {
-            cf_delay_l: vec![0.0; CF_DELAY_MAX],
-            cf_delay_r: vec![0.0; CF_DELAY_MAX],
-            ..Default::default()
-        }
+        AetherDspState::default()
     }
 
     fn reset(state: &mut AetherDspState, params: &AetherParams, config: &AudioConfig) {
-        let sr = config.sample_rate;
-        state.sample_rate = sr as f32;
+        let sr = (config.sample_rate as f32).max(1.0);
+        state.sample_rate = sr;
         params
             .shared
             .sample_rate
-            .store(sr as f32, std::sync::atomic::Ordering::Release);
+            .store(sr, std::sync::atomic::Ordering::Release);
         for b in state.eq_l.iter_mut().chain(state.eq_r.iter_mut()) {
             b.reset();
         }
         state.cf_lp_l = 0.0;
         state.cf_lp_r = 0.0;
-        state.cf_delay_l.resize(CF_DELAY_MAX, 0.0);
-        state.cf_delay_r.resize(CF_DELAY_MAX, 0.0);
+        if state.cf_delay_l.len() != CF_DELAY_MAX {
+            state.cf_delay_l.resize(CF_DELAY_MAX, 0.0);
+        }
+        if state.cf_delay_r.len() != CF_DELAY_MAX {
+            state.cf_delay_r.resize(CF_DELAY_MAX, 0.0);
+        }
         state.cf_delay_l.fill(0.0);
         state.cf_delay_r.fill(0.0);
         state.cf_delay_pos = 0;
@@ -422,6 +438,18 @@ impl PluginLogic for Aether {
         if buffer.num_input_channels() < 2 {
             return ProcessStatus::Normal;
         }
+        // ponytail: never process with empty delay (would panic on % 0)
+        if state.cf_delay_l.len() < 2 || state.cf_delay_r.len() < 2 {
+            if state.cf_delay_l.len() != CF_DELAY_MAX {
+                state.cf_delay_l.resize(CF_DELAY_MAX, 0.0);
+            }
+            if state.cf_delay_r.len() != CF_DELAY_MAX {
+                state.cf_delay_r.resize(CF_DELAY_MAX, 0.0);
+            }
+            state.cf_delay_pos = 0;
+        }
+        let delay_len = state.cf_delay_l.len();
+        let sr = state.sample_rate.max(1.0);
         let num_samples = buffer.num_samples();
 
         let mut in_peak = 0.0f32;
@@ -459,9 +487,13 @@ impl PluginLogic for Aether {
             ((params.cf_amount.raw_target() as f32 / 100.0) * 0.5 * feed_mul).min(0.75);
         let cf_norm = ((params.cf_angle.raw_target() as f32 - 30.0) / 45.0).clamp(0.0, 1.0);
         let cf_fc = (700.0 + cf_norm * 1300.0) * cut_mul;
-        let cf_a = 1.0 - (-2.0 * std::f32::consts::PI * cf_fc / state.sample_rate).exp();
-        let delay_samples =
-            ((itd_ms * 0.001 * state.sample_rate).round() as usize).min(state.cf_delay_l.len() - 1);
+        let cf_a = 1.0 - (-2.0 * std::f32::consts::PI * cf_fc / sr).exp();
+        let max_delay = delay_len - 1;
+        let delay_samples = ((itd_ms * 0.001 * sr).round() as usize).min(max_delay);
+        // Keep write head in range if state was resized mid-flight.
+        if state.cf_delay_pos >= delay_len {
+            state.cf_delay_pos = 0;
+        }
 
         for i in 0..num_samples {
             let in_l = buffer.input(0)[i];
@@ -479,10 +511,10 @@ impl PluginLogic for Aether {
             let wp = state.cf_delay_pos;
             state.cf_delay_l[wp] = h_l;
             state.cf_delay_r[wp] = h_r;
-            let rp = (wp + state.cf_delay_l.len() - delay_samples) % state.cf_delay_l.len();
+            let rp = (wp + delay_len - delay_samples) % delay_len;
             let del_l = state.cf_delay_l[rp];
             let del_r = state.cf_delay_r[rp];
-            state.cf_delay_pos = (wp + 1) % state.cf_delay_l.len();
+            state.cf_delay_pos = (wp + 1) % delay_len;
 
             state.cf_lp_l += cf_a * (del_r - state.cf_lp_l);
             state.cf_lp_r += cf_a * (del_l - state.cf_lp_r);

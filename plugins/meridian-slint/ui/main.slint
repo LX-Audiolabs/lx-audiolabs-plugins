@@ -8,71 +8,71 @@ import "JetBrainsMono-Regular.ttf";
 
 export component MeridianUi inherits Window {
     // --- float params (normalized) + formatted text ---
-    in-out property <float> hpf_freq: 0.5; in property <string> hpf_freq_text: "";
+    in-out property <float> hpf_freq: 0.5; in property <string> hpf_freq_text: ""; in property <float> hpf_freq_default: 0.5;
     callback hpf_freq_changed(float);
-    in-out property <float> lpf_freq: 0.5; in property <string> lpf_freq_text: "";
+    in-out property <float> lpf_freq: 0.5; in property <string> lpf_freq_text: ""; in property <float> lpf_freq_default: 0.5;
     callback lpf_freq_changed(float);
 
-    in-out property <float> bass_gain: 0.5; in property <string> bass_gain_text: "";
+    in-out property <float> bass_gain: 0.5; in property <string> bass_gain_text: ""; in property <float> bass_gain_default: 0.5;
     callback bass_gain_changed(float);
-    in-out property <float> lo_mid_gain: 0.5; in property <string> lo_mid_gain_text: "";
+    in-out property <float> lo_mid_gain: 0.5; in property <string> lo_mid_gain_text: ""; in property <float> lo_mid_gain_default: 0.5;
     callback lo_mid_gain_changed(float);
-    in-out property <float> mid_gain: 0.5; in property <string> mid_gain_text: "";
+    in-out property <float> mid_gain: 0.5; in property <string> mid_gain_text: ""; in property <float> mid_gain_default: 0.5;
     callback mid_gain_changed(float);
-    in-out property <float> high_gain: 0.5; in property <string> high_gain_text: "";
+    in-out property <float> high_gain: 0.5; in property <string> high_gain_text: ""; in property <float> high_gain_default: 0.5;
     callback high_gain_changed(float);
-    in-out property <float> excite_gain: 0.5; in property <string> excite_gain_text: "";
+    in-out property <float> excite_gain: 0.5; in property <string> excite_gain_text: ""; in property <float> excite_gain_default: 0.5;
     callback excite_gain_changed(float);
 
-    in-out property <float> eq_freq_1: 0.5; in property <string> eq_freq_1_text: "";
+    in-out property <float> eq_freq_1: 0.5; in property <string> eq_freq_1_text: ""; in property <float> eq_freq_1_default: 0.5;
     callback eq_freq_1_changed(float);
-    in-out property <float> eq_freq_2: 0.5; in property <string> eq_freq_2_text: "";
+    in-out property <float> eq_freq_2: 0.5; in property <string> eq_freq_2_text: ""; in property <float> eq_freq_2_default: 0.5;
     callback eq_freq_2_changed(float);
-    in-out property <float> eq_freq_3: 0.5; in property <string> eq_freq_3_text: "";
+    in-out property <float> eq_freq_3: 0.5; in property <string> eq_freq_3_text: ""; in property <float> eq_freq_3_default: 0.5;
     callback eq_freq_3_changed(float);
-    in-out property <float> eq_freq_4: 0.5; in property <string> eq_freq_4_text: "";
+    in-out property <float> eq_freq_4: 0.5; in property <string> eq_freq_4_text: ""; in property <float> eq_freq_4_default: 0.5;
     callback eq_freq_4_changed(float);
-    in-out property <float> eq_freq_5: 0.5; in property <string> eq_freq_5_text: "";
+    in-out property <float> eq_freq_5: 0.5; in property <string> eq_freq_5_text: ""; in property <float> eq_freq_5_default: 0.5;
     callback eq_freq_5_changed(float);
 
-    in-out property <float> tilt_gain: 0.5; in property <string> tilt_gain_text: "";
+    in-out property <float> tilt_gain: 0.5; in property <string> tilt_gain_text: ""; in property <float> tilt_gain_default: 0.5;
     callback tilt_gain_changed(float);
 
-    in-out property <float> warmth_drive: 0.0; in property <string> warmth_drive_text: "";
+    in-out property <float> warmth_drive: 0.0; in property <string> warmth_drive_text: ""; in property <float> warmth_drive_default: 0.0;
     callback warmth_drive_changed(float);
-    in-out property <float> warmth_mix: 0.0; in property <string> warmth_mix_text: "";
+    in-out property <float> warmth_mix: 0.0; in property <string> warmth_mix_text: ""; in property <float> warmth_mix_default: 0.0;
     callback warmth_mix_changed(float);
 
-    in-out property <float> excite_amount: 0.0; in property <string> excite_amount_text: "";
+    in-out property <float> excite_amount: 0.0; in property <string> excite_amount_text: ""; in property <float> excite_amount_default: 0.0;
     callback excite_amount_changed(float);
-    in-out property <float> excite_blend: 0.0; in property <string> excite_blend_text: "";
+    in-out property <float> excite_blend: 0.0; in property <string> excite_blend_text: ""; in property <float> excite_blend_default: 0.0;
     callback excite_blend_changed(float);
-    in-out property <float> excite_freq: 0.5; in property <string> excite_freq_text: "";
+    in-out property <float> excite_freq: 0.5; in property <string> excite_freq_text: ""; in property <float> excite_freq_default: 0.5;
     callback excite_freq_changed(float);
 
-    in-out property <float> comp_threshold: 0.5; in property <string> comp_threshold_text: "";
+    in-out property <float> comp_threshold: 0.5; in property <string> comp_threshold_text: ""; in property <float> comp_threshold_default: 0.5;
     callback comp_threshold_changed(float);
-    in-out property <float> comp_mix: 0.0; in property <string> comp_mix_text: "";
+    in-out property <float> comp_mix: 0.0; in property <string> comp_mix_text: ""; in property <float> comp_mix_default: 0.0;
     callback comp_mix_changed(float);
-    in-out property <float> comp_attack: 0.5; in property <string> comp_attack_text: "";
+    in-out property <float> comp_attack: 0.5; in property <string> comp_attack_text: ""; in property <float> comp_attack_default: 0.5;
     callback comp_attack_changed(float);
-    in-out property <float> comp_release: 0.5; in property <string> comp_release_text: "";
+    in-out property <float> comp_release: 0.5; in property <string> comp_release_text: ""; in property <float> comp_release_default: 0.5;
     callback comp_release_changed(float);
-    in-out property <float> comp_character: 0.5; in property <string> comp_character_text: "";
+    in-out property <float> comp_character: 0.5; in property <string> comp_character_text: ""; in property <float> comp_character_default: 0.5;
     callback comp_character_changed(float);
-    in-out property <float> comp_makeup: 0.0; in property <string> comp_makeup_text: "";
+    in-out property <float> comp_makeup: 0.0; in property <string> comp_makeup_text: ""; in property <float> comp_makeup_default: 0.0;
     callback comp_makeup_changed(float);
 
-    in-out property <float> inflate_effect: 0.0; in property <string> inflate_effect_text: "";
+    in-out property <float> inflate_effect: 0.0; in property <string> inflate_effect_text: ""; in property <float> inflate_effect_default: 0.0;
     callback inflate_effect_changed(float);
-    in-out property <float> inflate_curve: 0.5; in property <string> inflate_curve_text: "";
+    in-out property <float> inflate_curve: 0.5; in property <string> inflate_curve_text: ""; in property <float> inflate_curve_default: 0.5;
     callback inflate_curve_changed(float);
 
-    in-out property <float> stereo_width: 0.5; in property <string> stereo_width_text: "";
+    in-out property <float> stereo_width: 0.5; in property <string> stereo_width_text: ""; in property <float> stereo_width_default: 0.5;
     callback stereo_width_changed(float);
-    in-out property <float> pan: 0.5; in property <string> pan_text: "";
+    in-out property <float> pan: 0.5; in property <string> pan_text: ""; in property <float> pan_default: 0.5;
     callback pan_changed(float);
-    in-out property <float> output_gain: 0.5; in property <string> output_gain_text: "";
+    in-out property <float> output_gain: 0.5; in property <string> output_gain_text: ""; in property <float> output_gain_default: 0.5;
     callback output_gain_changed(float);
 
     // --- int params (slope selectors) ---
@@ -99,7 +99,6 @@ export component MeridianUi inherits Window {
     in property <float> peak_hold_l: 0.0;
     in property <float> peak_hold_r: 0.0;
     in property <float> gr: 0.0;
-    in property <float> comp_peak: 0.0;
     in property <string> comp_peak_text: "";
     in property <string> gr_text: "";
     in property <float> correlation: 0.0;
@@ -291,7 +290,7 @@ export component MeridianUi inherits Window {
                             HorizontalLayout {
                                 spacing: 4px;
                                 alignment: center;
-                                LxKnob { label: "LOW CUT"; value <=> root.hpf_freq; value-text: root.hpf_freq_text; changed(v) => { root.hpf_freq_changed(v); } }
+                                LxKnob { label: "LOW CUT"; value <=> root.hpf_freq; value-text: root.hpf_freq_text; default-value: root.hpf_freq_default; changed(v) => { root.hpf_freq_changed(v); } }
                                 VerticalLayout {
                                     alignment: center;
                                     height: 100%;
@@ -301,7 +300,7 @@ export component MeridianUi inherits Window {
                                         changed(v) => { root.cut_slope_changed(v); }
                                     }
                                 }
-                                LxKnob { label: "HIGH CUT"; value <=> root.lpf_freq; value-text: root.lpf_freq_text; changed(v) => { root.lpf_freq_changed(v); } }
+                                LxKnob { label: "HIGH CUT"; value <=> root.lpf_freq; value-text: root.lpf_freq_text; default-value: root.lpf_freq_default; changed(v) => { root.lpf_freq_changed(v); } }
                             }
                         }
 
@@ -325,8 +324,8 @@ export component MeridianUi inherits Window {
                             HorizontalLayout {
                                 spacing: 4px;
                                 alignment: center;
-                                LxKnob { label: "DRIVE"; value <=> root.warmth_drive; value-text: root.warmth_drive_text; changed(v) => { root.warmth_drive_changed(v); } }
-                                LxKnob { label: "W/MIX"; value <=> root.warmth_mix; value-text: root.warmth_mix_text; changed(v) => { root.warmth_mix_changed(v); } }
+                                LxKnob { label: "DRIVE"; value <=> root.warmth_drive; value-text: root.warmth_drive_text; default-value: root.warmth_drive_default; changed(v) => { root.warmth_drive_changed(v); } }
+                                LxKnob { label: "W/MIX"; value <=> root.warmth_mix; value-text: root.warmth_mix_text; default-value: root.warmth_mix_default; changed(v) => { root.warmth_mix_changed(v); } }
                             }
                         }
 
@@ -350,9 +349,9 @@ export component MeridianUi inherits Window {
                             HorizontalLayout {
                                 spacing: 4px;
                                 alignment: center;
-                                LxKnob { label: "AMT"; value <=> root.excite_amount; value-text: root.excite_amount_text; changed(v) => { root.excite_amount_changed(v); } }
-                                LxKnob { label: "BLEND"; value <=> root.excite_blend; value-text: root.excite_blend_text; changed(v) => { root.excite_blend_changed(v); } }
-                                LxKnob { label: "FREQ"; value <=> root.excite_freq; value-text: root.excite_freq_text; changed(v) => { root.excite_freq_changed(v); } }
+                                LxKnob { label: "AMT"; value <=> root.excite_amount; value-text: root.excite_amount_text; default-value: root.excite_amount_default; changed(v) => { root.excite_amount_changed(v); } }
+                                LxKnob { label: "BLEND"; value <=> root.excite_blend; value-text: root.excite_blend_text; default-value: root.excite_blend_default; changed(v) => { root.excite_blend_changed(v); } }
+                                LxKnob { label: "FREQ"; value <=> root.excite_freq; value-text: root.excite_freq_text; default-value: root.excite_freq_default; changed(v) => { root.excite_freq_changed(v); } }
                             }
                         }
 
@@ -376,7 +375,7 @@ export component MeridianUi inherits Window {
                             HorizontalLayout {
                                 spacing: 4px;
                                 alignment: center;
-                                LxKnob { label: "SLOPE"; value <=> root.tilt_gain; value-text: root.tilt_gain_text; changed(v) => { root.tilt_gain_changed(v); } }
+                                LxKnob { label: "SLOPE"; value <=> root.tilt_gain; value-text: root.tilt_gain_text; default-value: root.tilt_gain_default; changed(v) => { root.tilt_gain_changed(v); } }
                             }
                         }
                     }
@@ -396,11 +395,11 @@ export component MeridianUi inherits Window {
                         HorizontalLayout {
                             spacing: 4px;
                             alignment: space-around;
-                            LxKnob { label: "LO"; value <=> root.bass_gain; value-text: root.bass_gain_text; changed(v) => { root.bass_gain_changed(v); } }
-                            LxKnob { label: "LM"; value <=> root.lo_mid_gain; value-text: root.lo_mid_gain_text; changed(v) => { root.lo_mid_gain_changed(v); } }
-                            LxKnob { label: "MID"; value <=> root.mid_gain; value-text: root.mid_gain_text; changed(v) => { root.mid_gain_changed(v); } }
-                            LxKnob { label: "HM"; value <=> root.high_gain; value-text: root.high_gain_text; changed(v) => { root.high_gain_changed(v); } }
-                            LxKnob { label: "HI"; value <=> root.excite_gain; value-text: root.excite_gain_text; changed(v) => { root.excite_gain_changed(v); } }
+                            LxKnob { label: "LO"; value <=> root.bass_gain; value-text: root.bass_gain_text; default-value: root.bass_gain_default; changed(v) => { root.bass_gain_changed(v); } }
+                            LxKnob { label: "LM"; value <=> root.lo_mid_gain; value-text: root.lo_mid_gain_text; default-value: root.lo_mid_gain_default; changed(v) => { root.lo_mid_gain_changed(v); } }
+                            LxKnob { label: "MID"; value <=> root.mid_gain; value-text: root.mid_gain_text; default-value: root.mid_gain_default; changed(v) => { root.mid_gain_changed(v); } }
+                            LxKnob { label: "HM"; value <=> root.high_gain; value-text: root.high_gain_text; default-value: root.high_gain_default; changed(v) => { root.high_gain_changed(v); } }
+                            LxKnob { label: "HI"; value <=> root.excite_gain; value-text: root.excite_gain_text; default-value: root.excite_gain_default; changed(v) => { root.excite_gain_changed(v); } }
                         }
                     }
 
@@ -423,31 +422,31 @@ export component MeridianUi inherits Window {
                             VerticalLayout {
                                 spacing: 2px;
                                 alignment: start;
-                                LxKnob { label: "LO FREQ"; value <=> root.eq_freq_1; value-text: root.eq_freq_1_text; changed(v) => { root.eq_freq_1_changed(v); } }
+                                LxKnob { label: "LO FREQ"; value <=> root.eq_freq_1; value-text: root.eq_freq_1_text; default-value: root.eq_freq_1_default; changed(v) => { root.eq_freq_1_changed(v); } }
                                 LxSegmentedButton { index <=> root.bass_slope; changed(v) => { root.bass_slope_changed(v); } }
                             }
                             VerticalLayout {
                                 spacing: 2px;
                                 alignment: start;
-                                LxKnob { label: "LM FREQ"; value <=> root.eq_freq_2; value-text: root.eq_freq_2_text; changed(v) => { root.eq_freq_2_changed(v); } }
+                                LxKnob { label: "LM FREQ"; value <=> root.eq_freq_2; value-text: root.eq_freq_2_text; default-value: root.eq_freq_2_default; changed(v) => { root.eq_freq_2_changed(v); } }
                                 LxSegmentedButton { index <=> root.lo_mid_slope; changed(v) => { root.lo_mid_slope_changed(v); } }
                             }
                             VerticalLayout {
                                 spacing: 2px;
                                 alignment: start;
-                                LxKnob { label: "MID FREQ"; value <=> root.eq_freq_3; value-text: root.eq_freq_3_text; changed(v) => { root.eq_freq_3_changed(v); } }
+                                LxKnob { label: "MID FREQ"; value <=> root.eq_freq_3; value-text: root.eq_freq_3_text; default-value: root.eq_freq_3_default; changed(v) => { root.eq_freq_3_changed(v); } }
                                 LxSegmentedButton { index <=> root.mid_slope; changed(v) => { root.mid_slope_changed(v); } }
                             }
                             VerticalLayout {
                                 spacing: 2px;
                                 alignment: start;
-                                LxKnob { label: "HM FREQ"; value <=> root.eq_freq_4; value-text: root.eq_freq_4_text; changed(v) => { root.eq_freq_4_changed(v); } }
+                                LxKnob { label: "HM FREQ"; value <=> root.eq_freq_4; value-text: root.eq_freq_4_text; default-value: root.eq_freq_4_default; changed(v) => { root.eq_freq_4_changed(v); } }
                                 LxSegmentedButton { index <=> root.high_slope; changed(v) => { root.high_slope_changed(v); } }
                             }
                             VerticalLayout {
                                 spacing: 2px;
                                 alignment: start;
-                                LxKnob { label: "HI FREQ"; value <=> root.eq_freq_5; value-text: root.eq_freq_5_text; changed(v) => { root.eq_freq_5_changed(v); } }
+                                LxKnob { label: "HI FREQ"; value <=> root.eq_freq_5; value-text: root.eq_freq_5_text; default-value: root.eq_freq_5_default; changed(v) => { root.eq_freq_5_changed(v); } }
                                 LxSegmentedButton { index <=> root.excite_slope; changed(v) => { root.excite_slope_changed(v); } }
                             }
                         }
@@ -462,7 +461,7 @@ export component MeridianUi inherits Window {
                 LxKnob {
                     label: "OUT GAIN";
                     value <=> root.output_gain;
-                    value-text: root.output_gain_text;
+                    value-text: root.output_gain_text; default-value: root.output_gain_default;
                     changed(v) => { root.output_gain_changed(v); }
                     vertical-stretch: 0;
                 }
@@ -538,7 +537,7 @@ export component MeridianUi inherits Window {
             }
         }
 
-        // ── FOOTER: compressor + stereo + reset ──────────────────────────
+        // ── FOOTER: compressor + inflate + stereo/routing + reset ────────
         LxShellFooter {
             // Compressor block (left)
             VerticalLayout {
@@ -554,33 +553,23 @@ export component MeridianUi inherits Window {
                 }
                 HorizontalLayout {
                     spacing: 2px;
-                    LxKnob { label: "THRESH"; small: true; value <=> root.comp_threshold; value-text: root.comp_threshold_text; changed(v) => { root.comp_threshold_changed(v); } }
-                    LxKnob { label: "MIX"; small: true; value <=> root.comp_mix; value-text: root.comp_mix_text; changed(v) => { root.comp_mix_changed(v); } }
-                    LxKnob { label: "ATTACK"; small: true; value <=> root.comp_attack; value-text: root.comp_attack_text; changed(v) => { root.comp_attack_changed(v); } }
-                    LxKnob { label: "RELEASE"; small: true; value <=> root.comp_release; value-text: root.comp_release_text; changed(v) => { root.comp_release_changed(v); } }
-                    LxKnob { label: "RATIO"; small: true; value <=> root.comp_character; value-text: root.comp_character_text; changed(v) => { root.comp_character_changed(v); } }
-                    LxKnob { label: "MAKEUP"; small: true; value <=> root.comp_makeup; value-text: root.comp_makeup_text; changed(v) => { root.comp_makeup_changed(v); } }
+                    LxKnob { label: "THRESH"; small: true; value <=> root.comp_threshold; value-text: root.comp_threshold_text; default-value: root.comp_threshold_default; changed(v) => { root.comp_threshold_changed(v); } }
+                    LxKnob { label: "MIX"; small: true; value <=> root.comp_mix; value-text: root.comp_mix_text; default-value: root.comp_mix_default; changed(v) => { root.comp_mix_changed(v); } }
+                    LxKnob { label: "ATTACK"; small: true; value <=> root.comp_attack; value-text: root.comp_attack_text; default-value: root.comp_attack_default; changed(v) => { root.comp_attack_changed(v); } }
+                    LxKnob { label: "RELEASE"; small: true; value <=> root.comp_release; value-text: root.comp_release_text; default-value: root.comp_release_default; changed(v) => { root.comp_release_changed(v); } }
+                    LxKnob { label: "RATIO"; small: true; value <=> root.comp_character; value-text: root.comp_character_text; default-value: root.comp_character_default; changed(v) => { root.comp_character_changed(v); } }
+                    LxKnob { label: "MAKEUP"; small: true; value <=> root.comp_makeup; value-text: root.comp_makeup_text; default-value: root.comp_makeup_default; changed(v) => { root.comp_makeup_changed(v); } }
                 }
             }
 
-            // GR meter
-            VerticalLayout {
-                spacing: 4px;
-                width: 50px;
-                horizontal-stretch: 0;
-                alignment: center;
-                Text {
-                    text: "GR";
-                    font-size: Lx.font-xs;
-                    color: Lx.text-muted;
-                    horizontal-alignment: center;
-                }
-                LxGrMeter {
-                    level: root.gr;
-                    label: "";
-                    width: 40px;
-                }
+            // Mini compressor display: PK / GR + horizontal meter
+            LxCompDisplay {
+                pk-text: root.comp_peak_text;
+                gr-text: root.gr_text;
+                gr: root.gr;
             }
+
+            Rectangle { width: 1px; height: 100%; background: Lx.steel; }
 
             // Inflate block
             VerticalLayout {
@@ -595,8 +584,8 @@ export component MeridianUi inherits Window {
                 }
                 HorizontalLayout {
                     spacing: 2px;
-                    LxKnob { label: "EFFECT"; small: true; value <=> root.inflate_effect; value-text: root.inflate_effect_text; changed(v) => { root.inflate_effect_changed(v); } }
-                    LxKnob { label: "CURVE"; small: true; value <=> root.inflate_curve; value-text: root.inflate_curve_text; changed(v) => { root.inflate_curve_changed(v); } }
+                    LxKnob { label: "EFFECT"; small: true; value <=> root.inflate_effect; value-text: root.inflate_effect_text; default-value: root.inflate_effect_default; changed(v) => { root.inflate_effect_changed(v); } }
+                    LxKnob { label: "CURVE"; small: true; value <=> root.inflate_curve; value-text: root.inflate_curve_text; default-value: root.inflate_curve_default; changed(v) => { root.inflate_curve_changed(v); } }
                 }
                 HorizontalLayout {
                     spacing: 4px;
@@ -613,11 +602,7 @@ export component MeridianUi inherits Window {
                 }
             }
 
-            // Fill spacer (room for future ANALYZE etc.)
-            Rectangle {
-                horizontal-stretch: 1;
-                background: transparent;
-            }
+            Rectangle { width: 1px; height: 100%; background: Lx.steel; }
 
             // Stereo / routing (right)
             VerticalLayout {
@@ -625,17 +610,19 @@ export component MeridianUi inherits Window {
                 horizontal-stretch: 0;
                 alignment: start;
                 Text {
-                    text: "STEREO";
+                    text: "STEREO / ROUTING";
                     font-size: Lx.font-xs;
                     font-weight: 700;
                     color: Lx.amber-hot;
                 }
                 HorizontalLayout {
                     spacing: 4px;
-                    LxKnob { label: "PAN"; small: true; value <=> root.pan; value-text: root.pan_text; changed(v) => { root.pan_changed(v); } }
-                    LxKnob { label: "WIDTH"; small: true; value <=> root.stereo_width; value-text: root.stereo_width_text; changed(v) => { root.stereo_width_changed(v); } }
+                    LxKnob { label: "PAN"; small: true; value <=> root.pan; value-text: root.pan_text; default-value: root.pan_default; changed(v) => { root.pan_changed(v); } }
+                    LxKnob { label: "WIDTH"; small: true; value <=> root.stereo_width; value-text: root.stereo_width_text; default-value: root.stereo_width_default; changed(v) => { root.stereo_width_changed(v); } }
                 }
             }
+
+            Rectangle { width: 8px; background: transparent; }
 
             LxDangerBtn {
                 label: "RESET";

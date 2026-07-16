@@ -333,9 +333,12 @@ pub fn save_last_preset(vault_path: &Option<String>, profile: &AetherProfile) {
     }
 }
 
+/// Resolve a profile from cache / built-ins only.
+/// Never does a synchronous vault directory scan (that can hang the UI thread
+/// on large Obsidian vaults). Callers must wait for background scan cache.
 pub fn find_profile(
     name: &str,
-    vault_path: &Option<String>,
+    _vault_path: &Option<String>,
     cache: &[PresetEntry],
 ) -> Option<AetherProfile> {
     if name == "Harman Flat" {
@@ -344,19 +347,17 @@ pub fn find_profile(
     if let Some((_, _, p)) = cache.iter().find(|(n, _, _)| n == name) {
         return Some(p.clone());
     }
-    if let Some(vp) = vault_path {
-        for (n, _, p) in scan_aether_presets(Path::new(vp)) {
-            if n == name {
-                return Some(p);
-            }
-        }
-    }
-    // Local plugin presets dir
+    // Single-file load by name under the local presets dir only (small, bounded).
     let local = shared_analysis::get_plugin_dir("Aether").join("presets");
-    for (n, _, p) in scan_aether_presets(&local) {
-        if n == name {
-            return Some(p);
+    let candidate = local.join(format!("{name}.md"));
+    if candidate.is_file()
+        && let Ok(c) = std::fs::read_to_string(&candidate)
+        && let Some(mut pf) = parse_aether_preset(&c)
+    {
+        if pf.name.is_empty() {
+            pf.name = name.to_string();
         }
+        return Some(pf);
     }
     None
 }

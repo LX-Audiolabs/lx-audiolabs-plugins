@@ -62,6 +62,11 @@ macro_rules! sync_floats {
             truce_slint::paste! {
                 $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p));
                 $ui.[<set_ $name _text>](slint::SharedString::from($state.format_param($p)));
+                {
+                    let param = &$state.params().$name;
+                    let default_norm = param.info.range.normalize(param.info.default_plain) as f32;
+                    $ui.[<set_ $name _default>](default_norm);
+                }
             }
         )*
     };
@@ -231,6 +236,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let hold_l_db = shared.peak_hold_l.load(Ordering::Relaxed);
                 let hold_r_db = shared.peak_hold_r.load(Ordering::Relaxed);
                 let gr_db = shared.gain_reduction.load(Ordering::Relaxed);
+                let comp_peak_db = shared.comp_peak.load(Ordering::Relaxed);
                 let corr = shared.phase_correlation.load(Ordering::Relaxed);
                 let balance = shared.balance.load(Ordering::Relaxed);
 
@@ -240,6 +246,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 ui.set_peak_hold_l(db_to_meter(hold_l_db));
                 ui.set_peak_hold_r(db_to_meter(hold_r_db));
                 ui.set_gr(db_to_gr(gr_db));
+                ui.set_gr_text(slint::SharedString::from(format!("GR: {gr_db:.1}")));
+                ui.set_comp_peak_text(slint::SharedString::from(format!("PK: {comp_peak_db:.1}")));
                 ui.set_correlation(corr);
                 ui.set_balance(balance);
                 ui.set_corr_text(slint::SharedString::from(format!("corr: {corr:.2}")));

@@ -21,7 +21,9 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
+# MUST be unwind: truce-slint/truce-clap fence host crashes with catch_unwind.
+# panic=abort turns any UI/setup panic into a hard REAPER kill on FX add.
+panic = "unwind"
 
 [profile.dbg]
 inherits = "release"

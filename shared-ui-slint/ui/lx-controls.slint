@@ -1,7 +1,7 @@
 // Branded LX controls. LxKnob is a custom compact amber knob; sliders/toggles/dropdowns
 // still wrap @truce while we migrate piece by piece.
 
-import { ParamSlider, Toggle, Dropdown } from "@truce";
+import { Toggle, Dropdown } from "@truce";
 import { Lx } from "lx-theme.slint";
 
 // ─── Compact amber knob ──────────────────────────────────────────────────────
@@ -14,6 +14,7 @@ export component LxKnob inherits VerticalLayout {
     in property <float> maximum: 1.0;
     in property <float> step: 0.0;          // 0 = continuous; 1, 2, ... = discrete
     in property <bool> small: false;        // uses Lx.knob-d-sm instead of Lx.knob-d
+    in property <float> default-value: 0.5; // right-click resets to this value
 
     callback changed(float);
 
@@ -109,8 +110,13 @@ export component LxKnob inherits VerticalLayout {
 
             pointer-event(event) => {
                 if event.kind == PointerEventKind.down {
-                    self.drag_start_y = self.mouse-y;
-                    self.drag_start_norm = root.norm;
+                    if event.button == PointerEventButton.right {
+                        root.value = root.default-value;
+                        root.changed(root.default-value);
+                    } else {
+                        self.drag_start_y = self.mouse-y;
+                        self.drag_start_norm = root.norm;
+                    }
                 }
             }
             moved => {
@@ -147,7 +153,9 @@ export component LxLineEdit inherits Rectangle {
     out property <bool> has-focus: ti.has-focus;
 
     callback accepted(string); // Enter pressed
-    callback committed(string); // focus lost after edit
+    // Focus-lost commit. Host callbacks MUST ignore this during editor teardown
+    // (TextInput loses focus while the component tree is destroyed).
+    callback committed(string);
 
     height: Lx.button-h;
     // field-width > 0 → fixed width; otherwise stretch in parent.
@@ -160,6 +168,9 @@ export component LxLineEdit inherits Rectangle {
     border-color: ti.has-focus ? Lx.amber : (root.light ? #8c8c8c : transparent);
 
     property <bool> was-focused: false;
+    // Set false from host before destroying the UI if possible; also
+    // host-side live flags must gate automate (see aether editor).
+    in-out property <bool> allow-commit: true;
 
     HorizontalLayout {
         padding-left: 6px;
@@ -186,9 +197,13 @@ export component LxLineEdit inherits Rectangle {
                 font-size: Lx.font-md;
                 vertical-alignment: center;
                 single-line: true;
-                accepted => { root.accepted(root.text); }
+                accepted => {
+                    if root.allow-commit {
+                        root.accepted(root.text);
+                    }
+                }
                 changed has-focus => {
-                    if root.was-focused && !self.has-focus {
+                    if root.was-focused && !self.has-focus && root.allow-commit {
                         root.committed(root.text);
                     }
                     root.was-focused = self.has-focus;
@@ -217,7 +232,9 @@ export component LxParamField inherits VerticalLayout {
     property <bool> seeded: false;
 
     changed value-text => {
-        if !edit.has-focus {
+        // Only push host text when idle and the value actually changed —
+        // avoids thrashing TextInput every frame from the host sync.
+        if !edit.has-focus && root.local-text != root.value-text {
             root.local-text = root.value-text;
         }
     }
@@ -258,7 +275,11 @@ export component LxCycleBtn inherits Rectangle {
     callback changed(int);
 
     property <bool> active: root.index != root.inactive-index;
-    property <string> label: root.choices[root.index];
+    // Clamp index so a host race / out-of-range discrete never panics Slint.
+    property <int> safe-index: root.choices.length == 0
+        ? 0
+        : min(max(root.index, 0), root.choices.length - 1);
+    property <string> label: root.choices.length == 0 ? "" : root.choices[root.safe-index];
 
     width: root.btn-width;
     height: root.btn-height;
@@ -281,7 +302,7 @@ export component LxCycleBtn inherits Rectangle {
     ta := TouchArea {
         clicked => {
             if root.choices.length > 0 {
-                root.index = Math.mod(root.index + 1, root.choices.length);
+                root.index = Math.mod(root.safe-index + 1, root.choices.length);
                 root.changed(root.index);
             }
         }
@@ -341,10 +362,119 @@ export component LxSegmentedButton inherits HorizontalLayout {
 
 // ─── Wrappers around @truce controls ─────────────────────────────────────────
 
-export component LxSlider inherits ParamSlider {
-    label-color: Lx.text-label;
-    value-color: Lx.text-secondary;
+// ─── Custom horizontal slider ────────────────────────────────────────────────
+
+export component LxSlider inherits VerticalLayout {
+    in property <string> label: "";
+    in-out property <float> value: 0.5;
+    in property <float> minimum: 0.0;
+    in property <float> maximum: 1.0;
+    in property <string> value-text: "";
+    in property <float> default-value: 0.5; // right-click resets to this value
+
+    callback changed(float);
+
+    spacing: Lx.knob-gap;
+    alignment: center;
+
+    property <length> track-h: 4px;
+    property <length> thumb-d: 12px;
+    property <float> norm: clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0, 1);
+
+    // Label above the track.
+    if root.label != "": Text {
+        text: root.label;
+        font-size: Lx.font-xs;
+        color: Lx.text-label;
+        horizontal-alignment: center;
+        vertical-stretch: 0;
+    }
+
+    // Track + thumb.
+    Rectangle {
+        width: 100%;
+        height: root.thumb-d;
+        background: transparent;
+        vertical-stretch: 0;
+
+        // Inactive track.
+        Rectangle {
+            y: (parent.height - root.track-h) / 2;
+            height: root.track-h;
+            width: 100%;
+            background: Lx.steel;
+            border-radius: root.track-h / 2;
+        }
+
+        // Active (amber) fill.
+        Rectangle {
+            x: 0;
+            y: (parent.height - root.track-h) / 2;
+            height: root.track-h;
+            width: root.norm * (parent.width - root.thumb-d) + root.thumb-d / 2;
+            background: Lx.amber;
+            border-radius: root.track-h / 2;
+        }
+
+        // White thumb.
+        Rectangle {
+            x: root.norm * (parent.width - root.thumb-d);
+            y: (parent.height - root.thumb-d) / 2;
+            width: root.thumb-d;
+            height: root.thumb-d;
+            border-radius: root.thumb-d / 2;
+            background: Lx.text;
+        }
+
+        ta := TouchArea {
+            property <length> drag_start_x;
+            property <float> drag_start_norm;
+
+            function set_from_x(x: length) {
+                root.value = clamp(
+                    root.minimum + (x / 1px) / ((parent.width - root.thumb-d) / 1px) * (root.maximum - root.minimum),
+                    root.minimum, root.maximum
+                );
+                root.changed(root.value);
+            }
+
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    if event.button == PointerEventButton.right {
+                        root.value = root.default-value;
+                        root.changed(root.default-value);
+                    } else {
+                        self.drag_start_x = self.mouse-x;
+                        self.drag_start_norm = root.norm;
+                        // Click-to-set: jump immediately on press.
+                        self.set_from_x(self.mouse-x - root.thumb-d / 2);
+                    }
+                }
+            }
+            moved => {
+                if self.pressed {
+                    let delta_px = (self.mouse-x - self.drag_start_x) / 1px;
+                    let track_px = (parent.width - root.thumb-d) / 1px;
+                    root.value = clamp(
+                        root.minimum + (self.drag_start_norm + delta_px / track_px) * (root.maximum - root.minimum),
+                        root.minimum, root.maximum
+                    );
+                    root.changed(root.value);
+                }
+            }
+        }
+    }
+
+    // Formatted value below the track.
+    if root.value-text != "": Text {
+        text: root.value-text;
+        font-size: Lx.font-xs;
+        color: Lx.text-secondary;
+        horizontal-alignment: center;
+        vertical-stretch: 0;
+    }
 }
+
 
 export component LxToggle inherits Toggle {
     label-color: Lx.text-label;
