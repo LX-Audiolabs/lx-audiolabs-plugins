@@ -134,9 +134,27 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 scanning_for: None,
             }));
 
-            // Built-ins only. Vault scan starts on first SAVE/SETUP/path change —
-            // not on every editor open (avoids bg threads vs REAPER add/remove).
+            // Built-ins immediately; bg-scan vault (or local presets) so the
+            // dropdown fills without needing SETUP → SAVE first. Drain is
+            // non-blocking (try_lock + generation) on the UI sync tick.
             ui.set_preset_names(names_model(&default_preset_names()));
+            {
+                let scan_path = vault_path
+                    .as_ref()
+                    .filter(|p| !p.is_empty())
+                    .cloned()
+                    .or_else(|| {
+                        let local = shared_analysis::get_plugin_dir("Aether").join("presets");
+                        local.is_dir().then(|| local.to_string_lossy().into_owned())
+                    });
+                if let Some(vp) = scan_path {
+                    if let Ok(mut vs) = vault_state.lock() {
+                        let scan_gen = vs.pending.bump_generation();
+                        vs.scanning_for = Some(vp.clone());
+                        spawn_vault_scan(vp, vs.pending.clone(), scan_gen);
+                    }
+                }
+            }
             let _ = pending; // held via vault_state
 
             // ── type cycle ──

@@ -1406,10 +1406,11 @@ impl PluginLogic for Meridian {
         };
         params.shared.balance.store(balance, Ordering::Release);
 
-        // FFT Spectrum
+        // FFT Spectrum — hop on full window, then bins → EMA (no dual-lock).
         {
             let n = num_samples;
             let fft_size = state.fft_input.len();
+            let mut did_fft = false;
             for i in 0..n {
                 state.fft_input[state.fft_write_pos] = (out0[i] + out1[i]) * 0.5;
                 state.fft_write_pos += 1;
@@ -1424,45 +1425,58 @@ impl PluginLogic for Meridian {
                         state.fft_windowed[i] = state.fft_input[i] * state.fft_hann[i];
                     }
                     let fft = state.fft_planner.plan_fft_forward(fft_size);
-                    fft.process(&mut state.fft_windowed, &mut state.fft_output_cache)
-                        .ok();
-                }
-            }
-
-            // Compute and write spectrum after each buffer
-            if let Ok(mut spectrum_frame) = params.shared.spectrum_bins.try_lock() {
-                shared_analysis::compute_spectrum_bins(
-                    &state.fft_output_cache,
-                    &mut spectrum_frame,
-                    fft_size,
-                    sample_rate,
-                );
-            }
-
-            // Update spectrum_avg (EMA) from spectrum_bins
-            if let Ok(mut avg) = params.shared.spectrum_avg.try_lock()
-                && let Ok(bins) = params.shared.spectrum_bins.try_lock()
-            {
-                let n_bins = SPECTRUM_BINS;
-                // Energy-gating: only update EMA if signal above -80 dB
-                let frame_energy = bins.iter().map(|x| x * x).sum::<f32>() / n_bins as f32;
-                let energy_db = 10.0 * frame_energy.log10().max(-40.0);
-                let gate = energy_db > -80.0;
-
-                if !gate {
-                    for sample in state.fft_input.iter_mut() {
-                        *sample = 0.0;
+                    if fft
+                        .process(&mut state.fft_windowed, &mut state.fft_output_cache)
+                        .is_ok()
+                    {
+                        did_fft = true;
                     }
                 }
+            }
 
-                for k in 0..n_bins {
-                    let freq = k as f32 * sample_rate / fft_size as f32;
-                    let log_norm = ((freq.max(20.0).ln() - 20.0_f32.ln())
-                        / (20000.0_f32.ln() - 20.0_f32.ln()))
-                    .clamp(0.0, 1.0);
-                    let alpha = 0.02 + (0.10 - 0.02) * log_norm;
-                    let input = if gate { bins[k] } else { 0.0 };
-                    avg[k] = avg[k] * (1.0 - alpha) + input * alpha;
+            if did_fft {
+                // Snapshot bins under one lock, then EMA under the other (UI may hold avg).
+                let frame_bins = {
+                    if let Ok(mut spectrum_frame) = params.shared.spectrum_bins.try_lock() {
+                        shared_analysis::compute_spectrum_bins(
+                            &state.fft_output_cache,
+                            &mut spectrum_frame,
+                            fft_size,
+                            sample_rate,
+                        );
+                        Some(spectrum_frame.clone())
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(bins) = frame_bins {
+                    if let Ok(mut avg) = params.shared.spectrum_avg.try_lock() {
+                        let n_bins = SPECTRUM_BINS.min(bins.len()).min(avg.len());
+                        // Peak dB gate — bins are dB, not linear energy.
+                        let peak_db = bins[..n_bins]
+                            .iter()
+                            .copied()
+                            .fold(-90.0f32, f32::max);
+                        let gate = peak_db > -80.0;
+
+                        if !gate {
+                            for sample in state.fft_input.iter_mut() {
+                                *sample = 0.0;
+                            }
+                        }
+
+                        for k in 0..n_bins {
+                            let freq = k as f32 * sample_rate / fft_size as f32;
+                            let log_norm = ((freq.max(20.0).ln() - 20.0_f32.ln())
+                                / (20000.0_f32.ln() - 20.0_f32.ln()))
+                            .clamp(0.0, 1.0);
+                            let alpha = 0.02 + (0.10 - 0.02) * log_norm;
+                            // Silence → floor dB (not 0.0 which is full-scale).
+                            let input = if gate { bins[k] } else { -90.0 };
+                            avg[k] = avg[k] * (1.0 - alpha) + input * alpha;
+                        }
+                    }
                 }
             }
         }

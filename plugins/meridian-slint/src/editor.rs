@@ -256,8 +256,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 ui.set_peak_r_text(slint::SharedString::from(fmt_db(hold_r_db)));
 
                 // --- spectrum & goniometer paths ---
-                // Main spectrum width ≈ 990 − 180 − 155 − padding ≈ 620
-                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 200.0)));
+                // Main spectrum ≈ 990 − 180 − 155 − pad ≈ 620 × 170
+                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 170.0)));
                 // Right-bar gonio is square ~139×139
                 ui.set_gonio_path(slint::SharedString::from(gonio_path(shared, 139.0, 139.0)));
             })
@@ -289,12 +289,15 @@ fn db_to_gr(db: f32) -> f32 {
 
 fn spectrum_path(shared: &shared_analysis::SharedState, w: f32, h: f32) -> String {
     use shared_analysis::SPECTRUM_BINS;
-    let bins = match shared.spectrum_avg.try_lock() {
-        Ok(b) => b.clone(),
-        Err(_) => return String::new(),
-    };
+    // Prefer smoothed avg; fall back to raw bins if UI/audio contended on avg.
+    let bins = shared
+        .spectrum_avg
+        .try_lock()
+        .map(|b| b.clone())
+        .or_else(|_| shared.spectrum_bins.try_lock().map(|b| b.clone()))
+        .unwrap_or_default();
     let n = bins.len().min(SPECTRUM_BINS);
-    if n == 0 {
+    if n < 2 {
         return String::new();
     }
 
@@ -302,10 +305,12 @@ fn spectrum_path(shared: &shared_analysis::SharedState, w: f32, h: f32) -> Strin
     let floor = h - 2.0;
     s.push_str(&format!("M 0 {floor:.1}"));
     for i in 0..n {
-        let t = i as f32 / (n - 1).max(1) as f32;
+        let t = i as f32 / (n - 1) as f32;
+        // Log-ish x (sqrt) matches prior Meridian display mapping.
         let x = t.sqrt() * w;
-        let db = bins[i].clamp(-90.0, 0.0);
-        let norm = (db + 90.0) / 90.0;
+        // Display range −90..+6 dB (tilt can push slightly above 0).
+        let db = bins[i].clamp(-90.0, 6.0);
+        let norm = (db + 90.0) / 96.0;
         let y = floor - norm * (h - 4.0);
         s.push_str(&format!(" L {x:.1} {y:.1}"));
     }

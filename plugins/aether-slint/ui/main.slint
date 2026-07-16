@@ -2,7 +2,6 @@ import {
     Lx, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn, LxDangerBtn,
     LxLineEdit, LxEqCurve,
 } from "../../../shared-ui-slint/ui/lx.slint";
-import "JetBrainsMono-Regular.ttf";
 
 // Aether window matches original Vizia UI: 720 × 395.
 export component AetherUi inherits Window {
@@ -95,7 +94,6 @@ export component AetherUi inherits Window {
     min-width: 720px;
     min-height: 395px;
     background: #171717;
-    default-font-family: Lx.font-family;
 
     property <[string]> band-types: ["OFF", "LSC", "PK", "HSC"];
     property <[string]> realism-labels: ["STANDARD", "LIFELIKE", "HYPERREAL"];
@@ -111,11 +109,13 @@ export component AetherUi inherits Window {
             vertical-stretch: 0;
             background: #141414;
 
+            // stretch fills 50px; nested rows use alignment:center so controls
+            // sit mid-header (not top-stuck like a bare start-aligned row).
             HorizontalLayout {
                 padding-left: 10px;
                 padding-right: 10px;
                 spacing: 4px;
-                alignment: center;
+                alignment: stretch;
 
                 // Brand + plugin
                 HorizontalLayout {
@@ -162,75 +162,89 @@ export component AetherUi inherits Window {
 
                 Rectangle { horizontal-stretch: 1; background: transparent; }
 
-                // Preset dropdown trigger (light) + name edit — matches original
-                preset_dd := Rectangle {
-                    width: 130px;
-                    height: Lx.button-h;
+                // Preset + actions — vertically centered as a group
+                HorizontalLayout {
+                    spacing: 4px;
+                    alignment: center;
                     horizontal-stretch: 0;
-                    background: #e6e6e6;
-                    border-radius: Lx.radius-sm;
-                    border-width: 1px;
-                    border-color: #8c8c8c;
 
-                    HorizontalLayout {
-                        padding-left: 6px;
-                        padding-right: 6px;
-                        spacing: 4px;
+                    // Preset dropdown trigger (light) + name edit — matches original
+                    preset_dd := Rectangle {
+                        width: 130px;
+                        height: Lx.button-h-lg;
+                        vertical-stretch: 0;
+                        horizontal-stretch: 0;
+                        background: #e6e6e6;
+                        border-radius: Lx.radius-sm;
+                        border-width: 1px;
+                        border-color: #8c8c8c;
 
-                        Text {
-                            text: root.preset_name == "" ? "Select preset" : root.preset_name;
-                            font-size: Lx.font-md;
-                            color: #282828;
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                            overflow: elide;
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 4px;
+                            alignment: center;
+
+                            Text {
+                                text: root.preset_name == "" ? "Select preset" : root.preset_name;
+                                font-size: Lx.font-md;
+                                color: #282828;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: "▼";
+                                font-size: 8px;
+                                color: #646464;
+                                vertical-alignment: center;
+                                horizontal-stretch: 0;
+                            }
                         }
-                        Text {
-                            text: "▼";
-                            font-size: 8px;
-                            color: #646464;
-                            vertical-alignment: center;
-                            horizontal-stretch: 0;
+
+                        TouchArea {
+                            clicked => { preset_popup.show(); }
                         }
                     }
 
-                    TouchArea {
-                        clicked => { preset_popup.show(); }
+                    LxLineEdit {
+                        text <=> root.preset_name;
+                        placeholder-text: "Preset name";
+                        light: true;
+                        field-width: 130px;
+                        height: Lx.button-h-lg;
+                        vertical-stretch: 0;
+                        horizontal-stretch: 0;
                     }
-                }
 
-                LxLineEdit {
-                    text <=> root.preset_name;
-                    placeholder-text: "Preset name";
-                    light: true;
-                    field-width: 130px;
-                    horizontal-stretch: 0;
-                }
+                    Rectangle { width: 6px; background: transparent; }
 
-                Rectangle { width: 6px; background: transparent; }
+                    LxButton {
+                        text: "SAVE";
+                        horizontal-stretch: 0;
+                        vertical-stretch: 0;
+                        height: Lx.button-h-lg;
+                        min-width: 56px;
+                        clicked => { root.save_clicked(); }
+                    }
 
-                LxButton {
-                    text: "SAVE";
-                    horizontal-stretch: 0;
-                    height: Lx.button-h-lg;
-                    min-width: 56px;
-                    clicked => { root.save_clicked(); }
-                }
+                    LxButton {
+                        text: "SETUP";
+                        horizontal-stretch: 0;
+                        vertical-stretch: 0;
+                        height: Lx.button-h-lg;
+                        min-width: 56px;
+                        clicked => { setup_popup.show(); }
+                    }
 
-                LxButton {
-                    text: "SETUP";
-                    horizontal-stretch: 0;
-                    height: Lx.button-h-lg;
-                    min-width: 56px;
-                    clicked => { setup_popup.show(); }
-                }
-
-                LxToggleBtn {
-                    label: "BYPASS";
-                    active <=> root.bypass;
-                    horizontal-stretch: 0;
-                    height: Lx.button-h-lg;
-                    toggled(v) => { root.bypass_changed(v); }
+                    LxToggleBtn {
+                        label: "BYPASS";
+                        active <=> root.bypass;
+                        horizontal-stretch: 0;
+                        vertical-stretch: 0;
+                        height: Lx.button-h-lg;
+                        toggled(v) => { root.bypass_changed(v); }
+                    }
                 }
             }
         }
@@ -350,51 +364,67 @@ export component AetherUi inherits Window {
                 }
 
                 // separator
-                Rectangle { width: 1px; height: 185px; background: #1f2929; horizontal-stretch: 0; }
+                Rectangle { width: 1px; background: #1f2929; horizontal-stretch: 0; }
 
                 // ── HARMAN BLEND + RESET ──
+                // Same padding/title size as EQ so headers share one baseline.
                 VerticalLayout {
-                    spacing: 4px;
+                    spacing: 6px;
+                    padding: 4px;
                     alignment: center;
                     horizontal-stretch: 0;
                     width: 104px;
 
                     Text {
+                        width: 100%;
                         text: "HARMAN BLEND";
-                        font-size: Lx.font-xs;
+                        font-size: Lx.font-sm;
                         color: Lx.text-secondary;
                         horizontal-alignment: center;
                         vertical-stretch: 0;
                     }
 
+                    // width 100% → LxKnob's internal center aligns graphic in column
                     LxKnob {
+                        width: 100%;
+                        horizontal-stretch: 0;
+                        vertical-stretch: 0;
                         label: "";
                         value <=> root.blend;
                         value-text: root.blend_text;
-                        small: true;
                         changed(v) => { root.blend_changed(v); }
                     }
 
-                    Rectangle { height: 40px; background: transparent; vertical-stretch: 0; }
+                    Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
 
-                    LxDangerBtn {
-                        label: "RESET";
-                        min-width: 60px;
-                        clicked => { root.reset_clicked(); }
+                    // Center RESET in column
+                    HorizontalLayout {
+                        width: 100%;
+                        vertical-stretch: 0;
+                        Rectangle { horizontal-stretch: 1; }
+                        LxDangerBtn {
+                            label: "RESET";
+                            min-width: 60px;
+                            horizontal-stretch: 0;
+                            clicked => { root.reset_clicked(); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
                     }
                 }
 
                 // separator
-                Rectangle { width: 1px; height: 185px; background: #1f2929; horizontal-stretch: 0; }
+                Rectangle { width: 1px; background: #1f2929; horizontal-stretch: 0; }
 
                 // ── CROSSFEED ──
                 VerticalLayout {
-                    spacing: 4px;
+                    spacing: 6px;
+                    padding: 4px;
                     alignment: center;
                     horizontal-stretch: 0;
                     width: 131px;
 
                     Text {
+                        width: 100%;
                         text: "CROSSFEED";
                         font-size: Lx.font-sm;
                         color: Lx.text-secondary;
@@ -403,73 +433,87 @@ export component AetherUi inherits Window {
                     }
 
                     HorizontalLayout {
+                        width: 100%;
                         spacing: 6px;
                         alignment: center;
+                        vertical-stretch: 0;
 
+                        Rectangle { horizontal-stretch: 1; }
                         LxKnob {
+                            horizontal-stretch: 0;
                             label: "ANGLE";
                             value <=> root.cf_angle;
                             value-text: root.cf_angle_text;
-                            small: true;
                             changed(v) => { root.cf_angle_changed(v); }
                         }
                         LxKnob {
+                            horizontal-stretch: 0;
                             label: "AMOUNT";
                             value <=> root.cf_amount;
                             value-text: root.cf_amount_text;
-                            small: true;
                             changed(v) => { root.cf_amount_changed(v); }
                         }
+                        Rectangle { horizontal-stretch: 1; }
                     }
 
-                    Rectangle { height: 10px; background: transparent; vertical-stretch: 0; }
+                    Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
 
-                    LxCycleBtn {
-                        choices: root.realism-labels;
-                        index <=> root.cf_realism;
-                        inactive-index: 0;
-                        btn-width: 110px;
-                        changed(v) => { root.cf_realism_changed(v); }
+                    // Center STANDARD/LIFELIKE/HYPERREAL under knobs
+                    HorizontalLayout {
+                        width: 100%;
+                        vertical-stretch: 0;
+                        Rectangle { horizontal-stretch: 1; }
+                        LxCycleBtn {
+                            choices: root.realism-labels;
+                            index <=> root.cf_realism;
+                            inactive-index: 0;
+                            btn-width: 110px;
+                            horizontal-stretch: 0;
+                            changed(v) => { root.cf_realism_changed(v); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
                     }
                 }
 
                 // separator
-                Rectangle { width: 1px; height: 185px; background: #1f2929; horizontal-stretch: 0; }
+                Rectangle { width: 1px; background: #1f2929; horizontal-stretch: 0; }
 
                 // ── INPUT + GAIN ──
                 VerticalLayout {
-                    spacing: 4px;
+                    spacing: 6px;
+                    padding: 4px;
                     alignment: center;
                     horizontal-stretch: 1;
 
-                    VerticalLayout {
-                        spacing: 2px;
-                        alignment: center;
+                    Text {
+                        width: 100%;
+                        text: "INPUT";
+                        font-size: Lx.font-sm;
+                        color: Lx.text-secondary;
+                        horizontal-alignment: center;
                         vertical-stretch: 0;
-
-                        Text {
-                            text: "INPUT";
-                            font-size: Lx.font-xs;
-                            color: Lx.text-secondary;
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: root.input_db_text;
-                            font-size: Lx.font-lg;
-                            color: Lx.text;
-                            horizontal-alignment: center;
-                        }
-                        if root.input_peak_text != "": Text {
-                            text: root.input_peak_text;
-                            font-size: Lx.font-sm;
-                            color: Lx.amber;
-                            horizontal-alignment: center;
-                        }
+                    }
+                    Text {
+                        width: 100%;
+                        text: root.input_db_text;
+                        font-size: Lx.font-lg;
+                        color: Lx.text;
+                        horizontal-alignment: center;
+                        vertical-stretch: 0;
+                    }
+                    if root.input_peak_text != "": Text {
+                        width: 100%;
+                        text: root.input_peak_text;
+                        font-size: Lx.font-sm;
+                        color: Lx.amber;
+                        horizontal-alignment: center;
+                        vertical-stretch: 0;
                     }
 
-                    Rectangle { height: 20px; background: transparent; vertical-stretch: 1; }
+                    Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
 
                     Text {
+                        width: 100%;
                         text: "GAIN";
                         font-size: Lx.font-lg;
                         color: Lx.text-secondary;
@@ -478,10 +522,12 @@ export component AetherUi inherits Window {
                     }
 
                     LxKnob {
+                        width: 100%;
+                        horizontal-stretch: 0;
+                        vertical-stretch: 0;
                         label: "";
                         value <=> root.gain;
                         value-text: root.gain_text;
-                        small: true;
                         changed(v) => { root.gain_changed(v); }
                     }
                 }
@@ -489,12 +535,11 @@ export component AetherUi inherits Window {
         }
     }
 
-    // ── Preset list popup ──
+    // ── Preset list popup — anchored under the light dropdown trigger ──
     preset_popup := PopupWindow {
-        width: 146px;
-        // Approx under the dropdown (header right side)
-        x: root.width - 420px;
-        y: 48px;
+        width: max(146px, preset_dd.width);
+        x: preset_dd.absolute-position.x;
+        y: preset_dd.absolute-position.y + preset_dd.height + 2px;
         height: min(160px, 8px + root.preset_names.length * 22px);
 
         Rectangle {
@@ -542,11 +587,13 @@ export component AetherUi inherits Window {
     }
 
     // ── SETUP popup (vault path) ──
+    // close-on-click closes on ANY click (incl. TextInput focus) — use outside only.
     setup_popup := PopupWindow {
         width: 420px;
         height: 160px;
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;
+        close-policy: close-on-click-outside;
 
         Rectangle {
             background: Lx.panel;

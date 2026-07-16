@@ -73,6 +73,8 @@ export component LxSpectrum inherits LxPanel {
         viewbox-y: 0;
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
+        // Stretch path to widget (default contain letterboxes / can hide fill).
+        fit: fill;
         commands: root.commands;
         fill: root.fill-color;
         stroke: root.stroke-color;
@@ -165,6 +167,7 @@ export component LxEqCurve inherits LxPanel {
         viewbox-y: 0;
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
+        fit: fill;
         commands: root.commands;
         stroke: root.stroke-color;
         stroke-width: root.stroke-width;
@@ -283,6 +286,7 @@ export component LxGoniometer inherits LxPanel {
         viewbox-y: 0;
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
+        fit: fill;
         commands: root.commands;
         stroke: root.stroke-color;
         stroke-width: root.stroke-width;
