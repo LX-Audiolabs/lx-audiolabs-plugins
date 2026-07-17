@@ -49,8 +49,10 @@ export component LxKnob inherits VerticalLayout {
               );
     }
 
-    // Label above the knob graphic.
+    // Label above the knob graphic. width 100% so center works when parent
+    // assigns a wider column (e.g. HARMAN BLEND / GAIN).
     if root.label != "": Text {
+        width: 100%;
         text: root.label;
         font-size: Lx.font-xs;
         color: Lx.text-label;
@@ -64,6 +66,7 @@ export component LxKnob inherits VerticalLayout {
         height: root.diameter;
         background: transparent;
         vertical-stretch: 0;
+        horizontal-stretch: 0;
 
         // Track arc (always shows the full 270° travel range).
         Path {
@@ -133,6 +136,7 @@ export component LxKnob inherits VerticalLayout {
 
     // Formatted value text below the knob.
     if root.value-text != "": Text {
+        width: 100%;
         text: root.value-text;
         font-size: Lx.font-xs;
         color: Lx.text-secondary;

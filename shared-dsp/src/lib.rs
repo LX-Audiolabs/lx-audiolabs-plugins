@@ -22,6 +22,16 @@ pub struct Biquad {
     s2: f64,
 }
 
+/// Single-sample audio filter. Every filter type in shared-dsp implements this,
+/// so consumers can be generic over the filter implementation rather than
+/// coupling to the concrete `Biquad` type.
+pub trait Filter {
+    /// Process one sample, returning the filtered output.
+    fn process(&mut self, input: f32) -> f32;
+    /// Zero internal state (no ringing, no memory of past input).
+    fn reset(&mut self);
+}
+
 impl Biquad {
     pub fn new() -> Self {
         Self::default()
@@ -249,6 +259,16 @@ impl Biquad {
     pub fn reset(&mut self) {
         self.s1 = 0.0;
         self.s2 = 0.0;
+    }
+}
+
+impl Filter for Biquad {
+    #[inline]
+    fn process(&mut self, input: f32) -> f32 {
+        self.process(input)
+    }
+    fn reset(&mut self) {
+        self.reset();
     }
 }
 

@@ -29,3 +29,9 @@ panic = "unwind"
 inherits = "release"
 strip = false
 debug = "full"
+
+# ponytail: patch fontique to remove fontconfig dep, enabling
+# cross-compilation from Windows to Linux without a Linux sysroot.
+# Linux system font discovery is disabled; use bundled/embedded fonts.
+[patch.crates-io]
+fontique = { path = "patches/fontique" }

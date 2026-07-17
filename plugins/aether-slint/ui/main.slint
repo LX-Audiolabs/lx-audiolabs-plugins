@@ -4,7 +4,7 @@ import {
 } from "../../../shared-ui-slint/ui/lx.slint";
 import { LxVaultSetupPopup } from "../../../shared-ui-slint/ui/lx-dialogs.slint";
 
-// Aether window matches original Vizia UI: 720 × 395.
+// Aether window: 720 × 395 (do not grow canvas).
 export component AetherUi inherits Window {
     // ── EQ band types (0=OFF, 1=LSC, 2=PK, 3=HSC) ──
     in-out property <int> eq1_type: 1;
@@ -192,17 +192,21 @@ export component AetherUi inherits Window {
 
         // ═══════════════════════════════════════════════════════════════════
         // MAIN — curve + controls
+        // Fixed column shells (Slint-safe). 340+96+130+100+3 + pad12 = 681 < 720.
+        // Shells lock outer width so preferred-size blowouts cannot hide CF/IO.
+        // Canvas stays 720×395.
         // ═══════════════════════════════════════════════════════════════════
         VerticalLayout {
-            padding: 12px;
+            padding: 6px;
             spacing: 4px;
             vertical-stretch: 1;
+            min-width: 0px;
 
             LxEqCurve {
                 height: 90px;
                 vertical-stretch: 0;
                 commands: root.curve_cmds;
-                path-w: 696;
+                path-w: 708;
                 path-h: 90;
                 surface: #141414;
                 db-top: "+6";
@@ -220,236 +224,255 @@ export component AetherUi inherits Window {
                 vertical-stretch: 0;
             }
 
-            // ── Control row: EQ | BLEND | CROSSFEED | IO ──
+            // ── Control row: EQ | BLEND | CROSSFEED | INPUT/GAIN ──
             HorizontalLayout {
                 spacing: 0px;
                 vertical-stretch: 1;
-                alignment: stretch;
+                horizontal-stretch: 0;
+                alignment: start;
 
-                // ── EQ (5 band columns) ──
-                VerticalLayout {
-                    spacing: 4px;
-                    padding: 4px;
-                    alignment: center;
+                // ── EQ 340 ──
+                Rectangle {
+                    width: 340px;
                     horizontal-stretch: 0;
-                    width: 358px;
+                    background: transparent;
 
-                    Text {
-                        text: "EQ";
-                        font-size: Lx.font-sm;
-                        color: Lx.text-secondary;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
-
-                    HorizontalLayout {
-                        spacing: 6px;
+                    VerticalLayout {
+                        width: 100%;
+                        height: 100%;
+                        spacing: 4px;
+                        padding: 2px;
                         alignment: center;
 
-                        LxBandColumn {
-                            type_choices: root.band-types;
-                            type_index <=> root.eq1_type;
-                            freq_text: root.eq1_freq_text;
-                            gain_text: root.eq1_gain_text;
-                            q_text: root.eq1_q_text;
-                            type_changed(v) => { root.eq1_type_changed(v); }
-                            freq_committed(s) => { root.eq1_freq_committed(s); }
-                            gain_committed(s) => { root.eq1_gain_committed(s); }
-                            q_committed(s) => { root.eq1_q_committed(s); }
+                        Text {
+                            text: "EQ";
+                            font-size: Lx.font-sm;
+                            color: Lx.text-secondary;
+                            horizontal-alignment: center;
+                            vertical-stretch: 0;
                         }
-                        LxBandColumn {
-                            type_choices: root.band-types;
-                            type_index <=> root.eq2_type;
-                            freq_text: root.eq2_freq_text;
-                            gain_text: root.eq2_gain_text;
-                            q_text: root.eq2_q_text;
-                            type_changed(v) => { root.eq2_type_changed(v); }
-                            freq_committed(s) => { root.eq2_freq_committed(s); }
-                            gain_committed(s) => { root.eq2_gain_committed(s); }
-                            q_committed(s) => { root.eq2_q_committed(s); }
-                        }
-                        LxBandColumn {
-                            type_choices: root.band-types;
-                            type_index <=> root.eq3_type;
-                            freq_text: root.eq3_freq_text;
-                            gain_text: root.eq3_gain_text;
-                            q_text: root.eq3_q_text;
-                            type_changed(v) => { root.eq3_type_changed(v); }
-                            freq_committed(s) => { root.eq3_freq_committed(s); }
-                            gain_committed(s) => { root.eq3_gain_committed(s); }
-                            q_committed(s) => { root.eq3_q_committed(s); }
-                        }
-                        LxBandColumn {
-                            type_choices: root.band-types;
-                            type_index <=> root.eq4_type;
-                            freq_text: root.eq4_freq_text;
-                            gain_text: root.eq4_gain_text;
-                            q_text: root.eq4_q_text;
-                            type_changed(v) => { root.eq4_type_changed(v); }
-                            freq_committed(s) => { root.eq4_freq_committed(s); }
-                            gain_committed(s) => { root.eq4_gain_committed(s); }
-                            q_committed(s) => { root.eq4_q_committed(s); }
-                        }
-                        LxBandColumn {
-                            type_choices: root.band-types;
-                            type_index <=> root.eq5_type;
-                            freq_text: root.eq5_freq_text;
-                            gain_text: root.eq5_gain_text;
-                            q_text: root.eq5_q_text;
-                            type_changed(v) => { root.eq5_type_changed(v); }
-                            freq_committed(s) => { root.eq5_freq_committed(s); }
-                            gain_committed(s) => { root.eq5_gain_committed(s); }
-                            q_committed(s) => { root.eq5_q_committed(s); }
+
+                        HorizontalLayout {
+                            spacing: 4px;
+                            alignment: center;
+                            horizontal-stretch: 0;
+
+                            LxBandColumn {
+                                type_choices: root.band-types;
+                                type_index <=> root.eq1_type;
+                                freq_text: root.eq1_freq_text;
+                                gain_text: root.eq1_gain_text;
+                                q_text: root.eq1_q_text;
+                                type_changed(v) => { root.eq1_type_changed(v); }
+                                freq_committed(s) => { root.eq1_freq_committed(s); }
+                                gain_committed(s) => { root.eq1_gain_committed(s); }
+                                q_committed(s) => { root.eq1_q_committed(s); }
+                            }
+                            LxBandColumn {
+                                type_choices: root.band-types;
+                                type_index <=> root.eq2_type;
+                                freq_text: root.eq2_freq_text;
+                                gain_text: root.eq2_gain_text;
+                                q_text: root.eq2_q_text;
+                                type_changed(v) => { root.eq2_type_changed(v); }
+                                freq_committed(s) => { root.eq2_freq_committed(s); }
+                                gain_committed(s) => { root.eq2_gain_committed(s); }
+                                q_committed(s) => { root.eq2_q_committed(s); }
+                            }
+                            LxBandColumn {
+                                type_choices: root.band-types;
+                                type_index <=> root.eq3_type;
+                                freq_text: root.eq3_freq_text;
+                                gain_text: root.eq3_gain_text;
+                                q_text: root.eq3_q_text;
+                                type_changed(v) => { root.eq3_type_changed(v); }
+                                freq_committed(s) => { root.eq3_freq_committed(s); }
+                                gain_committed(s) => { root.eq3_gain_committed(s); }
+                                q_committed(s) => { root.eq3_q_committed(s); }
+                            }
+                            LxBandColumn {
+                                type_choices: root.band-types;
+                                type_index <=> root.eq4_type;
+                                freq_text: root.eq4_freq_text;
+                                gain_text: root.eq4_gain_text;
+                                q_text: root.eq4_q_text;
+                                type_changed(v) => { root.eq4_type_changed(v); }
+                                freq_committed(s) => { root.eq4_freq_committed(s); }
+                                gain_committed(s) => { root.eq4_gain_committed(s); }
+                                q_committed(s) => { root.eq4_q_committed(s); }
+                            }
+                            LxBandColumn {
+                                type_choices: root.band-types;
+                                type_index <=> root.eq5_type;
+                                freq_text: root.eq5_freq_text;
+                                gain_text: root.eq5_gain_text;
+                                q_text: root.eq5_q_text;
+                                type_changed(v) => { root.eq5_type_changed(v); }
+                                freq_committed(s) => { root.eq5_freq_committed(s); }
+                                gain_committed(s) => { root.eq5_gain_committed(s); }
+                                q_committed(s) => { root.eq5_q_committed(s); }
+                            }
                         }
                     }
                 }
 
-                // separator
-                Rectangle { width: 1px; background: #1f2929; horizontal-stretch: 0; }
+                Rectangle { width: 1px; horizontal-stretch: 0; background: #1f2929; }
 
-                // ── HARMAN BLEND + RESET ──
-                VerticalLayout {
-                    spacing: 6px;
-                    padding: 4px;
-                    alignment: center;
+                // ── HARMAN BLEND 96 ──
+                Rectangle {
+                    width: 96px;
                     horizontal-stretch: 0;
-                    width: 104px;
+                    background: transparent;
 
-                    LxKnob {
+                    VerticalLayout {
                         width: 100%;
-                        horizontal-stretch: 0;
-                        vertical-stretch: 0;
-                        label: "HARMAN BLEND";
-                        value <=> root.blend;
-                        value-text: root.blend_text;
-                        changed(v) => { root.blend_changed(v); }
-                    }
+                        height: 100%;
+                        spacing: 4px;
+                        alignment: center;
 
-                    Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+                        Text {
+                            text: "HARMAN BLEND";
+                            font-size: Lx.font-xs;
+                            color: Lx.text-secondary;
+                            horizontal-alignment: center;
+                            vertical-stretch: 0;
+                        }
 
-                    // Center RESET in column
-                    HorizontalLayout {
-                        width: 100%;
-                        vertical-stretch: 0;
-                        Rectangle { horizontal-stretch: 1; }
+                        LxKnob {
+                            horizontal-stretch: 0;
+                            vertical-stretch: 0;
+                            label: "";
+                            small: true;
+                            value <=> root.blend;
+                            value-text: root.blend_text;
+                            changed(v) => { root.blend_changed(v); }
+                        }
+
+                        Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+
                         LxDangerBtn {
                             label: "RESET";
                             min-width: 60px;
                             horizontal-stretch: 0;
                             clicked => { root.reset_clicked(); }
                         }
-                        Rectangle { horizontal-stretch: 1; }
                     }
                 }
 
-                // separator
-                Rectangle { width: 1px; background: #1f2929; horizontal-stretch: 0; }
+                Rectangle { width: 1px; horizontal-stretch: 0; background: #1f2929; }
 
-                // ── CROSSFEED ──
-                VerticalLayout {
-                    spacing: 6px;
-                    padding: 4px;
-                    alignment: center;
+                // ── CROSSFEED 130 ──
+                Rectangle {
+                    width: 130px;
                     horizontal-stretch: 0;
-                    width: 131px;
+                    background: transparent;
 
-                    Text {
+                    VerticalLayout {
                         width: 100%;
-                        text: "CROSSFEED";
-                        font-size: Lx.font-sm;
-                        color: Lx.text-secondary;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
-
-                    HorizontalLayout {
-                        width: 100%;
-                        spacing: 6px;
+                        height: 100%;
+                        spacing: 4px;
                         alignment: center;
-                        vertical-stretch: 0;
 
-                        Rectangle { horizontal-stretch: 1; }
-                        LxKnob {
-                            horizontal-stretch: 0;
-                            label: "ANGLE";
-                            value <=> root.cf_angle;
-                            value-text: root.cf_angle_text;
-                            changed(v) => { root.cf_angle_changed(v); }
+                        Text {
+                            text: "CROSSFEED";
+                            font-size: Lx.font-sm;
+                            color: Lx.text-secondary;
+                            horizontal-alignment: center;
+                            vertical-stretch: 0;
                         }
-                        LxKnob {
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: center;
                             horizontal-stretch: 0;
-                            label: "AMOUNT";
-                            value <=> root.cf_amount;
-                            value-text: root.cf_amount_text;
-                            changed(v) => { root.cf_amount_changed(v); }
+                            vertical-stretch: 0;
+
+                            LxKnob {
+                                horizontal-stretch: 0;
+                                label: "ANGLE";
+                                small: true;
+                                value <=> root.cf_angle;
+                                value-text: root.cf_angle_text;
+                                changed(v) => { root.cf_angle_changed(v); }
+                            }
+                            LxKnob {
+                                horizontal-stretch: 0;
+                                label: "AMOUNT";
+                                small: true;
+                                value <=> root.cf_amount;
+                                value-text: root.cf_amount_text;
+                                changed(v) => { root.cf_amount_changed(v); }
+                            }
                         }
-                        Rectangle { horizontal-stretch: 1; }
-                    }
 
-                    Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+                        Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
 
-                    // Center STANDARD/LIFELIKE/HYPERREAL under knobs
-                    HorizontalLayout {
-                        width: 100%;
-                        vertical-stretch: 0;
-                        Rectangle { horizontal-stretch: 1; }
                         LxCycleBtn {
                             choices: root.realism-labels;
                             index <=> root.cf_realism;
                             inactive-index: 0;
-                            btn-width: 110px;
+                            btn-width: 100px;
                             horizontal-stretch: 0;
                             changed(v) => { root.cf_realism_changed(v); }
                         }
-                        Rectangle { horizontal-stretch: 1; }
                     }
                 }
 
-                // separator
-                Rectangle { width: 1px; background: #1f2929; horizontal-stretch: 0; }
+                Rectangle { width: 1px; horizontal-stretch: 0; background: #1f2929; }
 
-                // ── INPUT + GAIN ──
-                VerticalLayout {
-                    spacing: 6px;
-                    padding: 4px;
-                    alignment: center;
-                    horizontal-stretch: 1;
+                // ── INPUT + GAIN 100 ──
+                Rectangle {
+                    width: 100px;
+                    horizontal-stretch: 0;
+                    background: transparent;
 
-                    Text {
+                    VerticalLayout {
                         width: 100%;
-                        text: "INPUT";
-                        font-size: Lx.font-sm;
-                        color: Lx.text-secondary;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
-                    Text {
-                        width: 100%;
-                        text: root.input_db_text;
-                        font-size: Lx.font-lg;
-                        color: Lx.text;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
-                    if root.input_peak_text != "": Text {
-                        width: 100%;
-                        text: root.input_peak_text;
-                        font-size: Lx.font-sm;
-                        color: Lx.amber;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
+                        height: 100%;
+                        spacing: 4px;
+                        alignment: center;
 
-                    Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+                        Text {
+                            text: "INPUT";
+                            font-size: Lx.font-xs;
+                            color: Lx.text-secondary;
+                            horizontal-alignment: center;
+                            vertical-stretch: 0;
+                        }
+                        Text {
+                            text: root.input_db_text;
+                            font-size: Lx.font-lg;
+                            color: Lx.text;
+                            horizontal-alignment: center;
+                            vertical-stretch: 0;
+                        }
+                        if root.input_peak_text != "": Text {
+                            text: root.input_peak_text;
+                            font-size: Lx.font-sm;
+                            color: Lx.amber;
+                            horizontal-alignment: center;
+                            vertical-stretch: 0;
+                        }
 
-                    LxKnob {
-                        width: 100%;
-                        horizontal-stretch: 0;
-                        vertical-stretch: 0;
-                        label: "GAIN";
-                        value <=> root.gain;
-                        value-text: root.gain_text;
-                        changed(v) => { root.gain_changed(v); }
+                        Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+
+                        Text {
+                            text: "GAIN";
+                            font-size: Lx.font-lg;
+                            color: Lx.text-secondary;
+                            horizontal-alignment: center;
+                            vertical-stretch: 0;
+                        }
+
+                        LxKnob {
+                            horizontal-stretch: 0;
+                            vertical-stretch: 0;
+                            label: "";
+                            small: true;
+                            value <=> root.gain;
+                            value-text: root.gain_text;
+                            changed(v) => { root.gain_changed(v); }
+                        }
                     }
                 }
             }
@@ -503,9 +526,9 @@ export component AetherUi inherits Window {
                         }
                     }
                 }
-                }
             }
         }
+    }
 
     // Full-window dimmer keeps dialog above Path layers (spectrum/EQ).
     setup_popup := LxVaultSetupPopup {

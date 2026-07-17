@@ -1308,8 +1308,6 @@ dependencies = [
 [[package]]
 name = "fontique"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30bbc252c93499b6d3635d692f892a637db0dbb130ce9b32bf20b28e0dcc470b"
 dependencies = [
  "bytemuck",
  "hashbrown 0.16.1",
@@ -1321,7 +1319,6 @@ dependencies = [
  "objc2-core-text",
  "objc2-foundation 0.3.2",
  "read-fonts 0.35.0",
- "roxmltree",
  "smallvec",
  "windows 0.58.0",
  "windows-core 0.58.0",
