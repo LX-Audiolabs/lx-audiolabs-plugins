@@ -480,7 +480,30 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 ui.set_gain(PluginContextReadF32::get_param(state, P::Gain));
                 ui.set_bypass(PluginContextReadF32::get_param(state, P::Bypass) > 0.5);
 
-                let plain = |p: P| PluginContextReadF32::get_param_plain(state, p);
+                let plain = |p: P| -> f32 {
+                    match p {
+                        P::Eq1Freq => state.params().eq1_freq.raw_target() as f32,
+                        P::Eq1Gain => state.params().eq1_gain.raw_target() as f32,
+                        P::Eq1Q => state.params().eq1_q.raw_target() as f32,
+                        P::Eq2Freq => state.params().eq2_freq.raw_target() as f32,
+                        P::Eq2Gain => state.params().eq2_gain.raw_target() as f32,
+                        P::Eq2Q => state.params().eq2_q.raw_target() as f32,
+                        P::Eq3Freq => state.params().eq3_freq.raw_target() as f32,
+                        P::Eq3Gain => state.params().eq3_gain.raw_target() as f32,
+                        P::Eq3Q => state.params().eq3_q.raw_target() as f32,
+                        P::Eq4Freq => state.params().eq4_freq.raw_target() as f32,
+                        P::Eq4Gain => state.params().eq4_gain.raw_target() as f32,
+                        P::Eq4Q => state.params().eq4_q.raw_target() as f32,
+                        P::Eq5Freq => state.params().eq5_freq.raw_target() as f32,
+                        P::Eq5Gain => state.params().eq5_gain.raw_target() as f32,
+                        P::Eq5Q => state.params().eq5_q.raw_target() as f32,
+                        P::Blend => state.params().blend.raw_target() as f32,
+                        P::CfAngle => state.params().cf_angle.raw_target() as f32,
+                        P::CfAmount => state.params().cf_amount.raw_target() as f32,
+                        P::Gain => state.params().gain.raw_target() as f32,
+                        _ => 0.0,
+                    }
+                };
                 ui.set_eq1_freq_text(SharedString::from(format!("{:.0}", plain(P::Eq1Freq))));
                 ui.set_eq1_gain_text(SharedString::from(format!("{:.1}", plain(P::Eq1Gain))));
                 ui.set_eq1_q_text(SharedString::from(format!("{:.2}", plain(P::Eq1Q))));
