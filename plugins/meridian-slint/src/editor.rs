@@ -163,23 +163,21 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
             let save_params = params.clone();
             let save_shared = shared.clone();
             ui.on_save_clicked(move || {
-                // Minimal preset save: store current parameter values in a JSON file
+                // Minimal preset save: store current parameter values in a plain text file
                 // under the plugin's local presets directory.
                 let dir = shared_analysis::get_plugin_dir("Meridian").join("presets");
                 let _ = std::fs::create_dir_all(&dir);
-                let name = format!("meridian_preset_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
-                let fp = dir.join(format!("{name}.json"));
-                // Build a simple JSON with all float/int/bool param values
-                let mut map = serde_json::Map::new();
-                // Float params
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let name = format!("meridian_preset_{now}");
+                let fp = dir.join(format!("{name}.txt"));
+                // Build a simple text representation
+                let mut lines = Vec::new();
                 macro_rules! store_float {
                     ($p:ident) => {
-                        map.insert(
-                            stringify!($p).to_string(),
-                            serde_json::Value::Number(
-                                serde_json::Number::from_f64(save_params.$p.raw_target()).unwrap_or(0.into()),
-                            ),
-                        );
+                        lines.push(format!("{}={}", stringify!($p), save_params.$p.raw_target()));
                     };
                 }
                 store_float!(hpf_freq);
@@ -211,15 +209,9 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 store_float!(stereo_width);
                 store_float!(pan);
                 store_float!(output_gain);
-                // Int params
                 macro_rules! store_int {
                     ($p:ident) => {
-                        map.insert(
-                            stringify!($p).to_string(),
-                            serde_json::Value::Number(
-                                serde_json::Number::from(save_params.$p.value()).unwrap_or(0.into()),
-                            ),
-                        );
+                        lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
                     };
                 }
                 store_int!(cut_slope);
@@ -228,13 +220,9 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 store_int!(mid_slope);
                 store_int!(high_slope);
                 store_int!(excite_slope);
-                // Bool params
                 macro_rules! store_bool {
                     ($p:ident) => {
-                        map.insert(
-                            stringify!($p).to_string(),
-                            serde_json::Value::Bool(save_params.$p.value()),
-                        );
+                        lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
                     };
                 }
                 store_bool!(mono_active);
@@ -242,9 +230,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 store_bool!(bypass_active);
                 store_bool!(inflate_band_split);
                 store_bool!(inflate_clip);
-                let json = serde_json::Value::Object(map);
-                if let Ok(content) = serde_json::to_string_pretty(&json) {
-                    let _ = std::fs::write(&fp, content);
+                let content = lines.join("\n");
+                if std::fs::write(&fp, content).is_ok() {
                     tracing::info!("SAVE preset to {}", fp.display());
                 }
             });
@@ -266,9 +253,9 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     cfg.vault_path = new_vp.clone();
                     let _ = shared_analysis::save_config("Meridian", &cfg);
                     let scan_gen = vs.pending.bump_generation();
-                    if let Some(ref vp) = new_vp {
-                        vs.scanning_for = Some(vp.clone());
-                        spawn_vault_scan(vp.clone(), vs.pending.clone(), scan_gen);
+                    if let Some(ref _vp) = new_vp {
+                        vs.scanning_for = Some(_vp.clone());
+                        spawn_vault_scan(_vp.clone(), vs.pending.clone(), scan_gen);
                     } else {
                         vs.names = Vec::new();
                         vs.cache.clear();
@@ -280,13 +267,6 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
             let reset_state = state.clone();
             ui.on_reset_clicked(move || {
                 // Reset all parameters to their defaults (as defined in MeridianParams)
-                // Float params
-                macro_rules! reset_float {
-                    ($p:ident, $default:expr) => {
-                        let norm = ((($default as f64) - $p.info.range.min) / ($p.info.range.max - $p.info.range.min)).clamp(0.0, 1.0);
-                        reset_state.automate(P::$p, norm);
-                    };
-                }
                 // We need the param info, but we can't access it here easily.
                 // Instead, we use the known default values from the struct definition.
                 // For simplicity, we set the normalized value to the default normalized value.
