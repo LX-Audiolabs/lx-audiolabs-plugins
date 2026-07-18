@@ -1,0 +1,124 @@
+import {
+    Lx, LxShellHeader, LxShellBody, LxShellMain, LxShellRight,
+    LxKnob, LxToggleBtn, LxLineEdit, LxSpectrum, LxSegmentedButton,
+} from "../../../crates/lx-ui-slint/ui/lx.slint";
+
+export component LucentUi inherits Window {
+    preferred-width: 990px;
+    preferred-height: 550px;
+    title: "Lucent";
+    background: Lx.window;
+
+    in-out property <string> display_name: "";
+    callback display_name_changed(string);
+
+    in-out property <float> analyze_mode: 0.0; // 0 Own, 1 Relays, 2 Both
+    callback analyze_mode_changed(float);
+
+    in-out property <bool> resonance_active: true;
+    callback resonance_active_changed(bool);
+    in-out property <bool> masking_active: true;
+    callback masking_active_changed(bool);
+    in-out property <bool> bypass_active: false;
+    callback bypass_active_changed(bool);
+
+    in-out property <float> sensitivity: 0.5;
+    in property <string> sensitivity_text: "50%";
+    callback sensitivity_changed(float);
+
+    in property <string> spectrum_cmds: "";
+    in property <string> status_line: "";
+    in property <string> version: "0.3.6";
+
+    VerticalLayout {
+        padding: 0;
+        spacing: 0;
+
+        LxShellHeader {
+            plugin-name: "Lucent";
+            version: root.version;
+        }
+
+        LxShellBody {
+            LxShellMain {
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: center;
+                        Text {
+                            text: "Name";
+                            color: Lx.text-secondary;
+                            font-size: Lx.font-sm;
+                            vertical-alignment: center;
+                        }
+                        LxLineEdit {
+                            text <=> root.display_name;
+                            light: true;
+                            accepted => { root.display_name_changed(self.text); }
+                            committed => { root.display_name_changed(self.text); }
+                        }
+                    }
+
+                    LxSpectrum {
+                        horizontal-stretch: 1;
+                        vertical-stretch: 1;
+                        commands: root.spectrum_cmds;
+                        path-w: 900;
+                        path-h: 360;
+                    }
+
+                    Text {
+                        text: root.status_line;
+                        color: Lx.text-secondary;
+                        font-size: Lx.font-sm;
+                    }
+                }
+            }
+
+            LxShellRight {
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 10px;
+                    alignment: start;
+
+                    Text {
+                        text: "Mode";
+                        color: Lx.text-secondary;
+                        font-size: Lx.font-xs;
+                    }
+                    LxSegmentedButton {
+                        choices: ["Own", "Relay", "Both"];
+                        index <=> root.analyze_mode;
+                        changed => { root.analyze_mode_changed(self.index); }
+                    }
+
+                    LxToggleBtn {
+                        label: "Resonance";
+                        active <=> root.resonance_active;
+                        toggled => { root.resonance_active_changed(self.active); }
+                    }
+                    LxToggleBtn {
+                        label: "Masking";
+                        active <=> root.masking_active;
+                        toggled => { root.masking_active_changed(self.active); }
+                    }
+                    LxToggleBtn {
+                        label: "Bypass";
+                        active <=> root.bypass_active;
+                        toggled => { root.bypass_active_changed(self.active); }
+                    }
+
+                    LxKnob {
+                        label: "Sensitivity";
+                        value <=> root.sensitivity;
+                        value-text: root.sensitivity_text;
+                        changed => { root.sensitivity_changed(self.value); }
+                    }
+                }
+            }
+        }
+    }
+}

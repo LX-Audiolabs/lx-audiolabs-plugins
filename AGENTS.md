@@ -22,12 +22,9 @@ Github AUTH always as github.user "lxndrbe"
 
 ## UI direction (2026-07)
 - Full Vizia rebuild = hard to maintain (truce-vizia + vizia-audio + femtovg forks).
-- New path: **Slint** + **FemtoVG OpenGL** via local **`lx-slint-editor`** (baseview + GL), **not** `truce-slint` (software + wgpu).
-- Build: **`lx-slint-build`** materializes `@truce` widgets + JetBrains Mono (slint-build 1.17).
-- Runtime: `lx_slint_editor::SlintEditor` — same setup API as truce-slint (`PluginContext` / `SyncFn`).
-- Prototypes live in sibling repo: `C:\Users\lxndr\Documents\LX-AudioLabs\lx-audiolabs-slint`
-- Layout: **`crates/`** = all libs (`lx-slint-editor`, `lx-slint-build`, `lx-dsp`, `lx-analysis`, `lx-vault`, `lx-shm`, `lx-ui-slint`); **`plugins/`** = products only.
-- Shared audio libs live under `crates/` in this repo (path-deps); keep in sync with vizia tree when DSP changes — no divergent fork intent.
-- **When rebuilding a plugin in Slint, use `crates/lx-ui-slint`.** Header = `LxShellHeader` (branding left only) + custom actions as children; body = `LxShellBody` + `LxShellLeft` / `LxShellMain` / `LxShellRight`. No old `LxShell`. Reuse `LxKnob`, `LxLineEdit`, `LxButton`, etc. — don't hand-roll plugin-specific styling.
-- Status: **Aether/Meridian** on `lx-slint-editor` (FemtoVG-GL). **Aurum** still Vizia in `lx-audiolabs-dev` until bridge proven in DAW.
-- This repo (`lx-audiolabs-dev`) remains production Vizia plugins until a cutover decision.
+- Path: **Slint** via **`truce-slint`** (software renderer + wgpu present). Build: **`lx-slint-build`** (`@truce` widgets, Slint **1.15.1** matching truce-slint).
+- Runtime: `truce_slint::SlintEditor` (`PluginContext` / `SyncFn`). No local FemtoVG bridge; if GPU later: Slint **`renderer-skia`**.
+- Layout: **`crates/`** = libs (`lx-slint-build`, `lx-dsp`, `lx-analysis`, `lx-vault`, `lx-shm`, `lx-ui-slint`); **`plugins/`** = products.
+- **UI shell:** `LxShellHeader` + `LxShellBody` / Left / Main / Right; reuse `LxKnob`, `LxLineEdit`, `LxButton`, etc.
+- **Slint release track:** Lucent Relay, Lucent, Aurum, Equilibrium. **Later polish / still in tree:** Meridian, Aether (earlier ports).
+- Status: new plugins DSP full; UI v0 shells where noted.

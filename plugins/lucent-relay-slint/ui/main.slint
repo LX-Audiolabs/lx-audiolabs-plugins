@@ -1,0 +1,95 @@
+import { ComboBox } from "std-widgets.slint";
+import {
+    Lx, LxShellHeader, LxShellBody, LxShellMain, LxLineEdit,
+} from "../../../crates/lx-ui-slint/ui/lx.slint";
+
+export component LucentRelayUi inherits Window {
+    preferred-width: 260px;
+    preferred-height: 160px;
+    title: "Lucent Relay";
+    background: Lx.window;
+
+    in-out property <string> relay_name: "";
+    callback relay_name_changed(string);
+
+    in-out property <int> target_index: 0;
+    in property <[string]> target_names: ["(broadcast)"];
+    callback target_index_changed(int);
+
+    in property <string> status_text: "—";
+    in property <bool> connected: false;
+    in property <string> version: "0.3.6";
+
+    VerticalLayout {
+        padding: 0;
+        spacing: 0;
+
+        LxShellHeader {
+            plugin-name: "Lucent-Relay";
+            version: root.version;
+        }
+
+        LxShellBody {
+            LxShellMain {
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: center;
+                        Text {
+                            text: "Name";
+                            color: Lx.text-secondary;
+                            font-size: Lx.font-sm;
+                            vertical-alignment: center;
+                            min-width: 48px;
+                        }
+                        LxLineEdit {
+                            text <=> root.relay_name;
+                            light: true;
+                            accepted => { root.relay_name_changed(self.text); }
+                            committed => { root.relay_name_changed(self.text); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: center;
+                        Text {
+                            text: "Target";
+                            color: Lx.text-secondary;
+                            font-size: Lx.font-sm;
+                            vertical-alignment: center;
+                            min-width: 48px;
+                        }
+                        ComboBox {
+                            model: root.target_names;
+                            current-index <=> root.target_index;
+                            horizontal-stretch: 1;
+                            min-height: 24px;
+                            selected => { root.target_index_changed(self.current-index); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: center;
+                        Rectangle {
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            background: root.connected ? Lx.amber : Lx.text-secondary;
+                        }
+                        Text {
+                            text: root.status_text;
+                            color: Lx.text-secondary;
+                            font-size: Lx.font-sm;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

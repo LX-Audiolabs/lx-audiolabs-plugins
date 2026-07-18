@@ -7,5 +7,5 @@ description = "Build helper: @truce widgets + JetBrains Mono with slint-build 1.
 publish = false
 
 [dependencies]
-slint-build = "=1.17.1"
+slint-build = "=1.15.1"
 truce-font = { path = "../../../truce-dev/crates/truce-font" }

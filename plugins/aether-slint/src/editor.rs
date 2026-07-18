@@ -6,7 +6,7 @@ use slint::{ModelRc, SharedString, VecModel};
 use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
-use lx_slint_editor::{PluginContext, SlintEditor, SyncFn};
+use truce_slint::{PluginContext, SlintEditor, SyncFn};
 
 use crate::presets::{
     apply_profile, build_profile_md, default_preset_names, find_profile, load_cached_last_profile,

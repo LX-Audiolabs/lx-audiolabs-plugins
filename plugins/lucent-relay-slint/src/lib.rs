@@ -1,0 +1,440 @@
+#![allow(unsafe_op_in_unsafe_fn)]
+
+use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
+use std::sync::{Arc, RwLock};
+use truce::prelude::*;
+use truce_core::editor::Editor;
+
+use lx_analysis::{
+    compute_spectrum_bins, SPECTRUM_BINS, SharedState, relay_hub, resolve_relay_target,
+};
+use lx_dsp::FtzDazGuard;
+
+mod editor;
+
+const FFT_SIZE: usize = 2048;
+#[allow(dead_code)]
+const WINDOW_W: u32 = 260;
+#[allow(dead_code)]
+const WINDOW_H: u32 = 160;
+
+// ─── Parameters ──────────────────────────────────────────────────────────────
+// Truce requires at least one Param field. `process()` always copies input to
+// output regardless of bypass state (pure pass-through analyzer), so a visible
+// Bypass control is a no-op from the user's perspective - hidden per user request.
+// ponytail: _flush_sentinel FloatParam works around truce flush edge-case
+// with single-BoolParam plugins (clap-validator state-reproducibility-flush).
+// Hidden per user request - re-check clap-validator after this change; if the
+// edge-case resurfaces (validator only tests non-hidden params), un-hide this one.
+
+#[derive(Params)]
+pub struct LucentRelayParams {
+    #[param(name = "Bypass", default = 0, flags = "bypass|hidden")]
+    pub bypass: BoolParam,
+    #[param(
+        name = "_flush_sentinel",
+        default = 0.0,
+        range = "linear(0.0, 1.0)",
+        flags = "hidden"
+    )]
+    pub _flush_sentinel: FloatParam,
+    #[persist]
+    pub name: RwLock<String>,
+    #[persist]
+    pub target: RwLock<String>,
+    /// Live (name, target) mirror for the liveness thread — same Arc the
+    /// editor and audio thread share via Truce's `Arc<LucentRelayParams>`.
+    /// Updated from `process()` / `state_changed()` / editor edits so
+    /// `touch()` keeps working when transport is stopped.
+    #[skip]
+    pub live: Arc<RwLock<(String, String)>>,
+    /// SHM publisher slot + generation — shared with the editor so claim/touch
+    /// work before `reset()` runs (transport stopped).
+    #[skip]
+    pub shm: Arc<SharedState>,
+}
+
+fn read_persisted(params: &LucentRelayParams) -> (String, String) {
+    let name = params.name.read().map(|s| s.clone()).unwrap_or_default();
+    let target = params.target.read().map(|s| s.clone()).unwrap_or_default();
+    (name, target)
+}
+
+pub(crate) fn sync_live(params: &LucentRelayParams) {
+    let pair = read_persisted(params);
+    if let Ok(mut live) = params.live.write() {
+        *live = pair;
+    }
+}
+
+/// Clear a persisted target that no longer matches any live Lucent consumer.
+fn reconcile_stale_target(params: &LucentRelayParams, cached_target: &mut String) {
+    let Some(hub) = relay_hub() else {
+        return;
+    };
+    let now_ms = lx_analysis::shm::now_ms();
+    if cached_target.is_empty() {
+        return;
+    }
+    let lucents = hub.read_consumers(now_ms);
+    if lucents.iter().any(|n| n == cached_target) {
+        return;
+    }
+    let resolved = resolve_relay_target(hub, cached_target, now_ms).unwrap_or_default();
+    if resolved == *cached_target {
+        return;
+    }
+    *cached_target = resolved.clone();
+    if let Ok(mut t) = params.target.write() {
+        *t = resolved;
+    }
+    sync_live(params);
+}
+
+/// Editor tick path — claim publisher slot and refresh heartbeat without transport.
+pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
+    use std::sync::atomic::Ordering;
+    let now_ms = lx_analysis::shm::now_ms();
+    let Some(hub) = relay_hub() else {
+        return;
+    };
+
+    let mut slot = params.shm.shm_slot.load(Ordering::Acquire);
+    let mut generation = params.shm.shm_generation.load(Ordering::Acquire);
+    if slot < 0 {
+        let Some((s, g)) = hub.claim_slot(now_ms) else {
+            return;
+        };
+        slot = s as i32;
+        generation = g;
+        params.shm.shm_slot.store(slot, Ordering::Release);
+        params.shm.shm_generation.store(generation, Ordering::Release);
+    }
+
+    let mut cached_target = params
+        .target
+        .read()
+        .map(|s| s.clone())
+        .unwrap_or_default();
+    reconcile_stale_target(params, &mut cached_target);
+
+    let (raw, sel) = read_persisted(params);
+    let target = resolve_relay_target(hub, &sel, now_ms).unwrap_or_default();
+    let label = if raw.is_empty() {
+        format!("Relay {}", slot as u8 + 1)
+    } else {
+        raw
+    };
+    let _ = hub.touch(slot as u8, generation, &label, &target, now_ms);
+}
+
+// ─── Plugin ───────────────────────────────────────────────────────────────────
+
+pub struct LucentRelay;
+
+pub struct LucentRelayDspState {
+    shm_state: Arc<SharedState>,
+    fft_fwd: Arc<dyn RealToComplex<f32>>,
+    fft_input: Vec<f32>,
+    fft_write_pos: usize,
+    fft_hann: Vec<f32>,
+    fft_windowed: Vec<f32>,
+    fft_output: Vec<Complex<f32>>,
+    fft_bins: Vec<f32>,
+    sample_rate: f32,
+    claimed_slot: Option<u8>,
+    claimed_generation: u32,
+    cached_name: String,
+    fallback_label: String,
+    cached_target: String,
+    #[allow(dead_code)]
+    target_buf: [u8; lx_analysis::shm::MAX_NAME_LEN],
+    liveness: Option<Arc<std::sync::atomic::AtomicBool>>,
+    instance_key: usize,
+}
+
+impl LucentRelayDspState {
+    fn build_fft() -> (Arc<dyn RealToComplex<f32>>, Vec<Complex<f32>>) {
+        let mut planner = RealFftPlanner::<f32>::new();
+        let fft_fwd = planner.plan_fft_forward(FFT_SIZE);
+        let fft_output = fft_fwd.make_output_vec();
+        (fft_fwd, fft_output)
+    }
+}
+
+impl Default for LucentRelayDspState {
+    fn default() -> Self {
+        let hann: Vec<f32> = (0..FFT_SIZE)
+            .map(|i| {
+                let x = i as f32 / (FFT_SIZE - 1) as f32;
+                0.5 * (1.0 - (2.0 * std::f32::consts::PI * x).cos())
+            })
+            .collect();
+        let (fft_fwd, fft_output) = Self::build_fft();
+        Self {
+            shm_state: Arc::new(SharedState::default()),
+            fft_fwd,
+            fft_input: vec![0.0; FFT_SIZE],
+            fft_write_pos: 0,
+            fft_hann: hann,
+            fft_windowed: vec![0.0; FFT_SIZE],
+            fft_output,
+            fft_bins: vec![-90.0; SPECTRUM_BINS],
+            sample_rate: 48000.0,
+            claimed_slot: None,
+            claimed_generation: 0,
+            cached_name: String::new(),
+            fallback_label: String::from("Relay"),
+            cached_target: String::new(),
+            target_buf: [0u8; lx_analysis::shm::MAX_NAME_LEN],
+            liveness: None,
+            instance_key: 0,
+        }
+    }
+}
+
+impl LucentRelayDspState {
+    fn claim_slot(&mut self) {
+        use std::sync::atomic::Ordering;
+        if self.claimed_slot.is_none() {
+            let adopted = self.shm_state.shm_slot.load(Ordering::Acquire);
+            if adopted >= 0 {
+                self.claimed_slot = Some(adopted as u8);
+                self.claimed_generation = self.shm_state.shm_generation.load(Ordering::Acquire);
+                self.fallback_label = format!("Relay {}", adopted as u8 + 1);
+            } else if let Some(hub) = relay_hub()
+                && let Some((slot, generation)) = hub.claim_slot(lx_analysis::shm::now_ms())
+            {
+                self.claimed_slot = Some(slot);
+                self.claimed_generation = generation;
+                self.fallback_label = format!("Relay {}", slot + 1);
+            }
+        }
+        self.shm_state.shm_slot.store(
+            self.claimed_slot.map(|s| s as i32).unwrap_or(-1),
+            Ordering::Release,
+        );
+        self.shm_state.shm_generation.store(
+            self.claimed_generation,
+            Ordering::Release,
+        );
+    }
+
+    fn spawn_liveness_thread(&mut self, params: &LucentRelayParams) {
+        use std::sync::atomic::Ordering;
+        if let Some(alive) = self.liveness.take() {
+            alive.store(false, Ordering::Release);
+        }
+        let alive = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        self.liveness = Some(alive.clone());
+        let ss = self.shm_state.clone();
+        let live = params.live.clone();
+        std::thread::spawn(move || {
+            while alive.load(Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let slot = ss.shm_slot.load(Ordering::Acquire);
+                if slot < 0 {
+                    continue;
+                }
+                let generation = ss.shm_generation.load(Ordering::Acquire);
+                if let Some(hub) = relay_hub() {
+                    let now = lx_analysis::shm::now_ms();
+                    let (raw, sel) = live.read().map(|g| g.clone()).unwrap_or_default();
+                    if let Some(target) = resolve_relay_target(hub, &sel, now) {
+                        let label = if raw.is_empty() {
+                            format!("Relay {}", slot + 1)
+                        } else {
+                            raw
+                        };
+                        let _touched = hub.touch(slot as u8, generation, &label, &target, now);
+                    }
+                }
+            }
+        });
+    }
+
+    fn publish_fft(&mut self, now_ms: u64) {
+        let Some(slot) = self.claimed_slot else {
+            return;
+        };
+        let Some(hub) = relay_hub() else { return };
+        let label: &str = if self.cached_name.is_empty() {
+            &self.fallback_label
+        } else {
+            &self.cached_name
+        };
+        let Some(target) = resolve_relay_target(hub, &self.cached_target, now_ms) else {
+            return;
+        };
+        {
+            let ok = hub.write(
+                slot,
+                self.claimed_generation,
+                label,
+                &target,
+                &self.fft_bins,
+                &[-90.0f32; 5],
+                now_ms,
+            );
+            if !ok {
+                self.claimed_slot = None;
+            }
+        }
+    }
+}
+
+impl PluginLogic for LucentRelay {
+    type Params = LucentRelayParams;
+    type DspState = LucentRelayDspState;
+
+    fn bus_layouts() -> Vec<BusLayout> {
+        vec![BusLayout::stereo()]
+    }
+
+    fn init(params: &Self::Params, _cx: &InitContext) -> Self::DspState {
+        let mut state = LucentRelayDspState::default();
+        state.shm_state = params.shm.clone();
+        state.instance_key = params as *const _ as usize;
+        let (name, target) = read_persisted(params);
+        state.cached_name = name;
+        state.cached_target = target;
+        sync_live(params);
+        state.claim_slot();
+        state.spawn_liveness_thread(params);
+        state
+    }
+
+    fn reset(state: &mut LucentRelayDspState, params: &LucentRelayParams, config: &AudioConfig) {
+        state.sample_rate = config.sample_rate as f32;
+        sync_live(params);
+        state.claim_slot();
+        state.spawn_liveness_thread(params);
+    }
+
+    fn process(
+        state: &mut LucentRelayDspState,
+        params: &LucentRelayParams,
+        buffer: &mut AudioBuffer,
+        _events: &EventList,
+        _ctx: &mut ProcessContext,
+    ) -> ProcessStatus {
+        let _ftz = FtzDazGuard::new();
+
+        let now_ms = lx_analysis::shm::now_ms();
+        if state.claimed_slot.is_none() {
+            state.claim_slot();
+        }
+
+        let (n, t) = read_persisted(params);
+        if n != state.cached_name {
+            state.cached_name = n;
+        }
+        if t != state.cached_target {
+            state.cached_target = t;
+        }
+        reconcile_stale_target(params, &mut state.cached_target);
+        sync_live(params);
+
+        // Pass-through (copy input → output per channel)
+        for ch in 0..buffer.channels() {
+            let (inp, out) = buffer.io(ch);
+            out.copy_from_slice(inp);
+        }
+
+        // FFT: read inputs via &self method to avoid double &mut borrow
+        let n_samples = buffer.num_samples();
+        for i in 0..n_samples {
+            let l = buffer.input(0)[i];
+            let r = if buffer.num_input_channels() > 1 {
+                buffer.input(1)[i]
+            } else {
+                l
+            };
+            state.fft_input[state.fft_write_pos] = (l + r) * 0.5;
+            state.fft_write_pos += 1;
+
+            if state.fft_write_pos >= FFT_SIZE {
+                state.fft_write_pos = 0;
+                for (d, (s, w)) in state
+                    .fft_windowed
+                    .iter_mut()
+                    .zip(state.fft_input.iter().zip(state.fft_hann.iter()))
+                {
+                    *d = s * w;
+                }
+                if state
+                    .fft_fwd
+                    .process(&mut state.fft_windowed, &mut state.fft_output)
+                    .is_ok()
+                {
+                    compute_spectrum_bins(
+                        &state.fft_output,
+                        &mut state.fft_bins,
+                        FFT_SIZE,
+                        state.sample_rate,
+                    );
+                    state.publish_fft(now_ms);
+                }
+            }
+        }
+        ProcessStatus::Normal
+    }
+
+    fn snapshot_into(_state: &LucentRelayDspState, _buf: &mut Vec<u8>) -> bool {
+        false
+    }
+    fn load_state(_state: &mut LucentRelayDspState, _data: &[u8]) -> Result<(), StateLoadError> {
+        Ok(())
+    }
+
+    fn state_changed(state: &mut LucentRelayDspState, params: &LucentRelayParams) {
+        let (name, target) = read_persisted(params);
+        state.cached_name = name;
+        state.cached_target = target;
+        sync_live(params);
+    }
+
+    fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
+        editor::build_editor(params)
+    }
+}
+
+impl Drop for LucentRelayDspState {
+    fn drop(&mut self) {
+        if let Some(alive) = self.liveness.take() {
+            alive.store(false, std::sync::atomic::Ordering::Release);
+        }
+        if let Some(slot) = self.claimed_slot.take()
+            && let Some(hub) = relay_hub()
+        {
+            hub.release_slot(slot);
+        }
+    }
+}
+
+truce::plugin! {
+    logic: LucentRelay,
+    params: LucentRelayParams,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Plugin;
+    use std::time::Duration;
+
+    #[test]
+    fn renders_pass_through() {
+        use truce_test::{InputSource, assertions, driver};
+        let result = driver!(Plugin)
+            .duration(Duration::from_millis(50))
+            .input(InputSource::Constant(0.5))
+            .run();
+        assertions::assert_no_nans(&result);
+        assertions::assert_nonzero(&result);
+    }
+
+    #[test]
+    fn state_round_trips() {
+        truce_test::assert_state_round_trip::<Plugin>();
+    }
+}

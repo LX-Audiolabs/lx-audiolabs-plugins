@@ -5,18 +5,16 @@ Slint UI migration workspace for LX Audiolabs plugins.
 ## Layout
 
 ```
-crates/                 # all libraries
-  lx-slint-editor/      # truce Editor + FemtoVG OpenGL
+crates/                 # libraries
   lx-slint-build/       # @truce widgets + font (build)
-  lx-ui-slint/          # LX design system
-  lx-dsp/
-  lx-analysis/
-  lx-vault/
-  lx-shm/
-plugins/                # plugin products only
-  aether-slint/
-  meridian-slint/
+  lx-ui-slint/          # design system
+  lx-dsp/ lx-analysis/ lx-vault/ lx-shm/
+plugins/                # products (truce-slint software renderer)
+  lucent-relay-slint/ lucent-slint/
+  aurum-slint/ equilibrium-slint/
+  aether-slint/ meridian-slint/
 ```
+Runtime GUI: **truce-slint** (software + wgpu present). Future GPU path if needed: Slint `renderer-skia`, not a local FemtoVG bridge.
 
 ## Shared UI (`crates/lx-ui-slint`)
 

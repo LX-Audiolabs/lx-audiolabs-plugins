@@ -1,0 +1,206 @@
+import {
+    Lx, LxShellHeader, LxShellBody, LxShellMain, LxShellRight,
+    LxKnob, LxToggleBtn, LxGoniometer, LxStereoMeter,
+} from "../../../crates/lx-ui-slint/ui/lx.slint";
+
+// v0: 5-band gain/width/pan + monitor + output. Spectrum/preset polish later.
+export component EquilibriumUi inherits Window {
+    preferred-width: 990px;
+    preferred-height: 660px;
+    title: "Equilibrium";
+    background: Lx.window;
+
+    in property <string> version: "1.6.10";
+    in property <string> meter_line: "";
+    in property <string> gonio_cmds: "";
+
+    // Monitor
+    in-out property <bool> mono_active: false;
+    callback mono_active_changed(bool);
+    in-out property <bool> delta_active: false;
+    callback delta_active_changed(bool);
+    in-out property <bool> listen_active: false;
+    callback listen_active_changed(bool);
+    in-out property <bool> auto_gain_active: false;
+    callback auto_gain_active_changed(bool);
+    in-out property <bool> bypass_active: false;
+    callback bypass_active_changed(bool);
+    in-out property <bool> pre_master_active: false;
+    callback pre_master_active_changed(bool);
+
+    // Output
+    in-out property <float> output_gain: 0.5;
+    in property <string> output_gain_text: "0.0 dB";
+    callback output_gain_changed(float);
+    in-out property <float> mono_floor: 0.0;
+    in property <string> mono_floor_text: "off";
+    callback mono_floor_changed(float);
+    in-out property <float> pre_master_target_db: 0.5;
+    in property <string> pre_master_target_db_text: "-14";
+    callback pre_master_target_db_changed(float);
+
+    // Band gains (norm)
+    in-out property <float> low_gain: 0.5; in property <string> low_gain_text: "0 dB";
+    callback low_gain_changed(float);
+    in-out property <float> bass_gain: 0.5; in property <string> bass_gain_text: "0 dB";
+    callback bass_gain_changed(float);
+    in-out property <float> mid_gain: 0.5; in property <string> mid_gain_text: "0 dB";
+    callback mid_gain_changed(float);
+    in-out property <float> high_mid_gain: 0.5; in property <string> high_mid_gain_text: "0 dB";
+    callback high_mid_gain_changed(float);
+    in-out property <float> high_gain: 0.5; in property <string> high_gain_text: "0 dB";
+    callback high_gain_changed(float);
+
+    // Widths
+    in-out property <float> low_width: 0.666; in property <string> low_width_text: "100%";
+    callback low_width_changed(float);
+    in-out property <float> bass_width: 0.666; in property <string> bass_width_text: "100%";
+    callback bass_width_changed(float);
+    in-out property <float> mid_width: 0.666; in property <string> mid_width_text: "100%";
+    callback mid_width_changed(float);
+    in-out property <float> high_mid_width: 0.666; in property <string> high_mid_width_text: "100%";
+    callback high_mid_width_changed(float);
+    in-out property <float> high_width: 0.666; in property <string> high_width_text: "100%";
+    callback high_width_changed(float);
+
+    // Pans (norm 0..1 maps -1..1)
+    in-out property <float> low_pan: 0.5; in property <string> low_pan_text: "C";
+    callback low_pan_changed(float);
+    in-out property <float> bass_pan: 0.5; in property <string> bass_pan_text: "C";
+    callback bass_pan_changed(float);
+    in-out property <float> mid_pan: 0.5; in property <string> mid_pan_text: "C";
+    callback mid_pan_changed(float);
+    in-out property <float> high_mid_pan: 0.5; in property <string> high_mid_pan_text: "C";
+    callback high_mid_pan_changed(float);
+    in-out property <float> high_pan: 0.5; in property <string> high_pan_text: "C";
+    callback high_pan_changed(float);
+
+    // Solo
+    in-out property <bool> solo_low: false; callback solo_low_changed(bool);
+    in-out property <bool> solo_bass: false; callback solo_bass_changed(bool);
+    in-out property <bool> solo_mid: false; callback solo_mid_changed(bool);
+    in-out property <bool> solo_high_mid: false; callback solo_high_mid_changed(bool);
+    in-out property <bool> solo_high: false; callback solo_high_changed(bool);
+
+    VerticalLayout {
+        padding: 0;
+        spacing: 0;
+
+        LxShellHeader {
+            plugin-name: "Equilibrium";
+            version: root.version;
+            HorizontalLayout {
+                spacing: 4px;
+                LxToggleBtn { label: "MONO"; small: true; active <=> root.mono_active; toggled => { root.mono_active_changed(self.active); } }
+                LxToggleBtn { label: "DELTA"; small: true; active <=> root.delta_active; toggled => { root.delta_active_changed(self.active); } }
+                LxToggleBtn { label: "LISTEN"; small: true; active <=> root.listen_active; toggled => { root.listen_active_changed(self.active); } }
+                LxToggleBtn { label: "AUTO"; small: true; active <=> root.auto_gain_active; toggled => { root.auto_gain_active_changed(self.active); } }
+                LxToggleBtn { label: "PRE"; small: true; active <=> root.pre_master_active; toggled => { root.pre_master_active_changed(self.active); } }
+                LxToggleBtn { label: "BYPASS"; small: true; danger: true; active <=> root.bypass_active; toggled => { root.bypass_active_changed(self.active); } }
+            }
+        }
+
+        LxShellBody {
+            LxShellMain {
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 10px;
+
+                    Text {
+                        text: root.meter_line;
+                        color: Lx.text-secondary;
+                        font-size: Lx.font-sm;
+                    }
+
+                    // Gain row
+                    Text { text: "GAIN"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        LxKnob { label: "Sub"; value <=> root.low_gain; value-text: root.low_gain_text; changed => { root.low_gain_changed(self.value); } }
+                        LxKnob { label: "Bass"; value <=> root.bass_gain; value-text: root.bass_gain_text; changed => { root.bass_gain_changed(self.value); } }
+                        LxKnob { label: "Mid"; value <=> root.mid_gain; value-text: root.mid_gain_text; changed => { root.mid_gain_changed(self.value); } }
+                        LxKnob { label: "Pres"; value <=> root.high_mid_gain; value-text: root.high_mid_gain_text; changed => { root.high_mid_gain_changed(self.value); } }
+                        LxKnob { label: "Air"; value <=> root.high_gain; value-text: root.high_gain_text; changed => { root.high_gain_changed(self.value); } }
+                    }
+
+                    // Width row
+                    Text { text: "WIDTH"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        LxKnob { label: "Sub"; value <=> root.low_width; value-text: root.low_width_text; changed => { root.low_width_changed(self.value); } }
+                        LxKnob { label: "Bass"; value <=> root.bass_width; value-text: root.bass_width_text; changed => { root.bass_width_changed(self.value); } }
+                        LxKnob { label: "Mid"; value <=> root.mid_width; value-text: root.mid_width_text; changed => { root.mid_width_changed(self.value); } }
+                        LxKnob { label: "Pres"; value <=> root.high_mid_width; value-text: root.high_mid_width_text; changed => { root.high_mid_width_changed(self.value); } }
+                        LxKnob { label: "Air"; value <=> root.high_width; value-text: root.high_width_text; changed => { root.high_width_changed(self.value); } }
+                    }
+
+                    // Pan + solo
+                    Text { text: "PAN / SOLO"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; }
+                    HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            spacing: 4px;
+                            LxKnob { label: "Sub"; value <=> root.low_pan; value-text: root.low_pan_text; changed => { root.low_pan_changed(self.value); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_low; toggled => { root.solo_low_changed(self.active); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            LxKnob { label: "Bass"; value <=> root.bass_pan; value-text: root.bass_pan_text; changed => { root.bass_pan_changed(self.value); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_bass; toggled => { root.solo_bass_changed(self.active); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            LxKnob { label: "Mid"; value <=> root.mid_pan; value-text: root.mid_pan_text; changed => { root.mid_pan_changed(self.value); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_mid; toggled => { root.solo_mid_changed(self.active); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            LxKnob { label: "Pres"; value <=> root.high_mid_pan; value-text: root.high_mid_pan_text; changed => { root.high_mid_pan_changed(self.value); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high_mid; toggled => { root.solo_high_mid_changed(self.active); } }
+                        }
+                        VerticalLayout {
+                            spacing: 4px;
+                            LxKnob { label: "Air"; value <=> root.high_pan; value-text: root.high_pan_text; changed => { root.high_pan_changed(self.value); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high; toggled => { root.solo_high_changed(self.active); } }
+                        }
+                    }
+
+                    Text {
+                        text: "0–80 · 80–300 · 300–2k · 2–6k · >6k Hz";
+                        color: Lx.text-secondary;
+                        font-size: Lx.font-xs;
+                    }
+                }
+            }
+
+            LxShellRight {
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 10px;
+                    LxKnob {
+                        label: "Out";
+                        value <=> root.output_gain;
+                        value-text: root.output_gain_text;
+                        changed => { root.output_gain_changed(self.value); }
+                    }
+                    LxKnob {
+                        label: "Mono Floor";
+                        value <=> root.mono_floor;
+                        value-text: root.mono_floor_text;
+                        changed => { root.mono_floor_changed(self.value); }
+                    }
+                    LxKnob {
+                        label: "Pre tgt";
+                        value <=> root.pre_master_target_db;
+                        value-text: root.pre_master_target_db_text;
+                        changed => { root.pre_master_target_db_changed(self.value); }
+                    }
+                    LxGoniometer {
+                        min-height: 120px;
+                        commands: root.gonio_cmds;
+                    }
+                }
+            }
+        }
+    }
+}

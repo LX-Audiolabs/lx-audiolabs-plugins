@@ -5,7 +5,7 @@ use std::sync::Arc;
 use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
-use lx_slint_editor::{PluginContext, SlintEditor, SyncFn};
+use truce_slint::{PluginContext, SlintEditor, SyncFn};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -22,7 +22,7 @@ const WINDOW_H: u32 = 660;
 macro_rules! bind_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            truce_slint::paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
             }
@@ -33,7 +33,7 @@ macro_rules! bind_floats {
 macro_rules! bind_ints {
     ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            truce_slint::paste! {
                 let s = $state.clone();
                 let count = $count as usize;
                 $ui.[<on_ $name _changed>](move |v: f32| {
@@ -47,7 +47,7 @@ macro_rules! bind_ints {
 macro_rules! bind_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            truce_slint::paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v: bool| {
                     s.automate($p, if v { 1.0 } else { 0.0 });
@@ -60,7 +60,7 @@ macro_rules! bind_bools {
 macro_rules! sync_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            truce_slint::paste! {
                 $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p));
                 $ui.[<set_ $name _text>](slint::SharedString::from($state.format_param($p)));
             }
@@ -71,7 +71,7 @@ macro_rules! sync_floats {
 macro_rules! sync_ints {
     ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            truce_slint::paste! {
                 let idx = discrete_index(PluginContextReadF32::get_param($state, $p) as f64, $count) as f32;
                 $ui.[<set_ $name>](idx);
             }
@@ -82,7 +82,7 @@ macro_rules! sync_ints {
 macro_rules! sync_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            truce_slint::paste! {
                 $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p) > 0.5);
             }
         )*

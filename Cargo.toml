@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/lx-slint-build",
-    "crates/lx-slint-editor",
     "crates/lx-analysis",
     "crates/lx-dsp",
     "crates/lx-ui-slint",
@@ -9,6 +8,10 @@ members = [
     "crates/lx-shm",
     "plugins/aether-slint",
     "plugins/meridian-slint",
+    "plugins/lucent-relay-slint",
+    "plugins/lucent-slint",
+    "plugins/aurum-slint",
+    "plugins/equilibrium-slint",
 ]
 resolver = "3"
 
@@ -21,13 +24,15 @@ truce-vst3      = { path = "../truce-dev/crates/truce-vst3" }
 truce-lv2       = { path = "../truce-dev/crates/truce-lv2" }
 truce-loader    = { path = "../truce-dev/crates/truce-loader" }
 truce-test      = { path = "../truce-dev/crates/truce-test" }
+truce-slint     = { path = "../truce-dev/crates/truce-slint" }
+truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
+# keep for @truce widget materialize at Slint 1.15 (match truce-slint)
 lx-slint-build  = { path = "crates/lx-slint-build" }
-lx-slint-editor = { path = "crates/lx-slint-editor" }
 clap-sys        = "0.5"
-slint           = { version = "=1.17.1", default-features = false, features = [
+# MUST match truce-slint pin
+slint           = { version = "=1.15.1", default-features = false, features = [
     "compat-1-2",
-    "renderer-femtovg",
-    "raw-window-handle-06",
+    "renderer-software",
     "std",
 ] }
 
@@ -37,7 +42,6 @@ lto = true
 codegen-units = 1
 strip = true
 # MUST be unwind: truce fence host crashes with catch_unwind.
-# panic=abort turns any UI/setup panic into a hard REAPER kill on FX add.
 panic = "unwind"
 
 [profile.dbg]
@@ -45,8 +49,5 @@ inherits = "release"
 strip = false
 debug = "full"
 
-# ponytail: patch fontique to remove fontconfig dep, enabling
-# cross-compilation from Windows to Linux without a Linux sysroot.
-# Linux system font discovery is disabled; use bundled/embedded fonts.
 [patch.crates-io]
 fontique = { path = "patches/fontique" }

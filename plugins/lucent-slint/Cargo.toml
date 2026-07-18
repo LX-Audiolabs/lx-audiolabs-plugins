@@ -1,8 +1,8 @@
 [package]
-name = "aether-slint"
-version = "1.2.7"
+name = "lucent-slint"
+version = "0.3.6"
 edition = "2024"
-description = "LX Audiolabs — Aether (Slint UI test)"
+description = "LX Audiolabs — Lucent (Slint UI — FFT spectrum analyser / masking)"
 license = "GPL-3.0-or-later"
 authors = ["LX Audiolabs"]
 publish = false
@@ -28,12 +28,10 @@ truce-loader = { workspace = true }
 truce-slint  = { workspace = true }
 slint        = { workspace = true }
 clap-sys     = { workspace = true, optional = true }
-
 lx-dsp      = { path = "../../crates/lx-dsp" }
 lx-analysis = { path = "../../crates/lx-analysis" }
-serde           = { version = "1", features = ["derive"] }
-serde_json      = "1"
-tracing         = "0.1"
+realfft     = "3"
+tracing     = "0.1"
 
 [build-dependencies]
 lx-slint-build = { workspace = true }
