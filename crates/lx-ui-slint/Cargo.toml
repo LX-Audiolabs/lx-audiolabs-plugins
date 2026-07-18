@@ -1,5 +1,5 @@
 [package]
-name = "shared-ui-slint"
+name = "lx-ui-slint"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
@@ -9,4 +9,4 @@ publish = false
 slint = { workspace = true }
 
 [build-dependencies]
-truce-slint-build = { workspace = true }
+lx-slint-build = { workspace = true }

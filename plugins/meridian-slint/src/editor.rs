@@ -5,13 +5,11 @@ use std::sync::Arc;
 use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
-use truce_slint::{PluginContext, SlintEditor, SyncFn};
+use lx_slint_editor::{PluginContext, SlintEditor, SyncFn};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
-use shared_dsp::{Biquad, TiltEq};
-
-slint::include_modules!();
+use lx_dsp::{Biquad, TiltEq};
 
 slint::include_modules!();
 
@@ -24,7 +22,7 @@ const WINDOW_H: u32 = 660;
 macro_rules! bind_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
             }
@@ -35,7 +33,7 @@ macro_rules! bind_floats {
 macro_rules! bind_ints {
     ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let s = $state.clone();
                 let count = $count as usize;
                 $ui.[<on_ $name _changed>](move |v: f32| {
@@ -49,7 +47,7 @@ macro_rules! bind_ints {
 macro_rules! bind_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v: bool| {
                     s.automate($p, if v { 1.0 } else { 0.0 });
@@ -62,7 +60,7 @@ macro_rules! bind_bools {
 macro_rules! sync_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p));
                 $ui.[<set_ $name _text>](slint::SharedString::from($state.format_param($p)));
             }
@@ -73,7 +71,7 @@ macro_rules! sync_floats {
 macro_rules! sync_ints {
     ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let idx = discrete_index(PluginContextReadF32::get_param($state, $p) as f64, $count) as f32;
                 $ui.[<set_ $name>](idx);
             }
@@ -84,7 +82,7 @@ macro_rules! sync_ints {
 macro_rules! sync_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p) > 0.5);
             }
         )*
@@ -159,13 +157,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 tracing::info!("SNAP triggered");
             });
 
-            let save_state = state.clone();
+            let _save_state = state.clone();
             let save_params = params.clone();
-            let save_shared = shared.clone();
+            let _save_shared = shared.clone();
             ui.on_save_clicked(move || {
                 // Minimal preset save: store current parameter values in a plain text file
                 // under the plugin's local presets directory.
-                let dir = shared_analysis::get_plugin_dir("Meridian").join("presets");
+                let dir = lx_analysis::get_plugin_dir("Meridian").join("presets");
                 let _ = std::fs::create_dir_all(&dir);
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -249,9 +247,9 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let new_vp = if path.is_empty() { None } else { Some(path) };
                 if let Ok(mut vs) = vault_state_clone.lock() {
                     vs.vault_path = new_vp.clone();
-                    let mut cfg = shared_analysis::load_config("Meridian");
+                    let mut cfg = lx_analysis::load_config("Meridian");
                     cfg.vault_path = new_vp.clone();
-                    let _ = shared_analysis::save_config("Meridian", &cfg);
+                    let _ = lx_analysis::save_config("Meridian", &cfg);
                     let scan_gen = vs.pending.bump_generation();
                     if let Some(ref _vp) = new_vp {
                         vs.scanning_for = Some(_vp.clone());
@@ -384,7 +382,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     new
                 }
             }
-            fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets>, generation: u32) {
+            fn spawn_vault_scan(_vp: String, pending: Arc<PendingPresets>, generation: u32) {
                 std::thread::spawn(move || {
                     // Minimal scan: just mark ready
                     if let Ok(mut guard) = pending.presets.lock() {
@@ -555,8 +553,8 @@ fn db_to_gr(db: f32) -> f32 {
 // Y range matches vizia SpectrumConfig default: −70 … −18 dB.
 // X is log-frequency (20 Hz … 20 kHz), same as SpectrumView.
 
-fn spectrum_path(shared: &shared_analysis::SharedState, w: f32, h: f32) -> String {
-    use shared_analysis::SPECTRUM_BINS;
+fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
+    use lx_analysis::SPECTRUM_BINS;
     const MIN_DB: f32 = -70.0;
     const MAX_DB: f32 = -18.0;
 
@@ -642,8 +640,8 @@ fn gr_envelope_path(history: &[f32], current: f32, w: f32, h: f32) -> String {
 
 // --- goniometer path (M/S rotation — vault frozen spec) -------------------
 
-fn gonio_path(shared: &shared_analysis::SharedState, w: f32, h: f32) -> String {
-    use shared_analysis::SCOPE_BUFFER_LEN;
+fn gonio_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
+    use lx_analysis::SCOPE_BUFFER_LEN;
     let (samples, write_pos) = {
         let pos = shared.scope_write_pos.load(Ordering::Relaxed);
         let samples = match shared.scope_samples.try_lock() {

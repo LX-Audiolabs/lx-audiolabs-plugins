@@ -1,8 +1,8 @@
 import {
     Lx, LxShellHeader, LxShellBody, LxShellMain, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn, LxDangerBtn,
     LxLineEdit, LxEqCurve,
-} from "../../../shared-ui-slint/ui/lx.slint";
-import { LxVaultSetupPopup } from "../../../shared-ui-slint/ui/lx-dialogs.slint";
+} from "../../../crates/lx-ui-slint/ui/lx.slint";
+import { LxVaultSetupPopup } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
 // Aether window: 720 × 395 (do not grow canvas).
 export component AetherUi inherits Window {
@@ -241,7 +241,7 @@ export component AetherUi inherits Window {
                         width: 100%;
                         height: 100%;
                         spacing: 4px;
-                        padding: 2px;
+                        padding: 5px;
                         alignment: center;
 
                         Text {
@@ -328,24 +328,32 @@ export component AetherUi inherits Window {
                         width: 100%;
                         height: 100%;
                         spacing: 4px;
+                        padding: 5px;
                         alignment: center;
 
                         Text {
                             text: "HARMAN BLEND";
-                            font-size: Lx.font-xs;
+                            font-size: Lx.font-sm;
                             color: Lx.text-secondary;
                             horizontal-alignment: center;
                             vertical-stretch: 0;
                         }
 
-                        LxKnob {
+                        HorizontalLayout {
+                            spacing: 0px;
+                            alignment: center;
                             horizontal-stretch: 0;
                             vertical-stretch: 0;
-                            label: "";
-                            small: true;
-                            value <=> root.blend;
-                            value-text: root.blend_text;
-                            changed(v) => { root.blend_changed(v); }
+
+                            LxKnob {
+                                horizontal-stretch: 0;
+                                vertical-stretch: 0;
+                                label: "BLEND";
+                                small: true;
+                                value <=> root.blend;
+                                value-text: root.blend_text;
+                                changed(v) => { root.blend_changed(v); }
+                            }
                         }
 
                         Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
@@ -371,6 +379,7 @@ export component AetherUi inherits Window {
                         width: 100%;
                         height: 100%;
                         spacing: 4px;
+                        padding: 5px;
                         alignment: center;
 
                         Text {
@@ -430,11 +439,12 @@ export component AetherUi inherits Window {
                         width: 100%;
                         height: 100%;
                         spacing: 4px;
+                        padding: 5px;
                         alignment: center;
 
                         Text {
                             text: "INPUT";
-                            font-size: Lx.font-xs;
+                            font-size: Lx.font-sm;
                             color: Lx.text-secondary;
                             horizontal-alignment: center;
                             vertical-stretch: 0;
@@ -456,22 +466,21 @@ export component AetherUi inherits Window {
 
                         Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
 
-                        Text {
-                            text: "GAIN";
-                            font-size: Lx.font-lg;
-                            color: Lx.text-secondary;
-                            horizontal-alignment: center;
-                            vertical-stretch: 0;
-                        }
-
-                        LxKnob {
+                        HorizontalLayout {
+                            spacing: 0px;
+                            alignment: center;
                             horizontal-stretch: 0;
                             vertical-stretch: 0;
-                            label: "";
-                            small: true;
-                            value <=> root.gain;
-                            value-text: root.gain_text;
-                            changed(v) => { root.gain_changed(v); }
+
+                            LxKnob {
+                                horizontal-stretch: 0;
+                                vertical-stretch: 0;
+                                label: "GAIN";
+                                small: true;
+                                value <=> root.gain;
+                                value-text: root.gain_text;
+                                changed(v) => { root.gain_changed(v); }
+                            }
                         }
                     }
                 }

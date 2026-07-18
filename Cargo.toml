@@ -1,5 +1,15 @@
 [workspace]
-members = ["plugins/aether-slint", "plugins/meridian-slint", "shared-ui-slint"]
+members = [
+    "crates/lx-slint-build",
+    "crates/lx-slint-editor",
+    "crates/lx-analysis",
+    "crates/lx-dsp",
+    "crates/lx-ui-slint",
+    "crates/lx-vault",
+    "crates/lx-shm",
+    "plugins/aether-slint",
+    "plugins/meridian-slint",
+]
 resolver = "3"
 
 [workspace.dependencies]
@@ -11,17 +21,22 @@ truce-vst3      = { path = "../truce-dev/crates/truce-vst3" }
 truce-lv2       = { path = "../truce-dev/crates/truce-lv2" }
 truce-loader    = { path = "../truce-dev/crates/truce-loader" }
 truce-test      = { path = "../truce-dev/crates/truce-test" }
-truce-slint     = { path = "../truce-dev/crates/truce-slint" }
-truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
+lx-slint-build  = { path = "crates/lx-slint-build" }
+lx-slint-editor = { path = "crates/lx-slint-editor" }
 clap-sys        = "0.5"
-slint           = { version = "=1.17.1", default-features = false, features = ["compat-1-2", "renderer-software", "std"] }
+slint           = { version = "=1.17.1", default-features = false, features = [
+    "compat-1-2",
+    "renderer-femtovg",
+    "raw-window-handle-06",
+    "std",
+] }
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
-# MUST be unwind: truce-slint/truce-clap fence host crashes with catch_unwind.
+# MUST be unwind: truce fence host crashes with catch_unwind.
 # panic=abort turns any UI/setup panic into a hard REAPER kill on FX add.
 panic = "unwind"
 

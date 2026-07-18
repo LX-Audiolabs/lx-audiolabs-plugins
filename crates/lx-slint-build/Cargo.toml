@@ -1,0 +1,11 @@
+[package]
+name = "lx-slint-build"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+description = "Build helper: @truce widgets + JetBrains Mono with slint-build 1.17"
+publish = false
+
+[dependencies]
+slint-build = "=1.17.1"
+truce-font = { path = "../../../truce-dev/crates/truce-font" }

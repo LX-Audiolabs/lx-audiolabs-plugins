@@ -1,0 +1,35 @@
+// Click-to-open dropdown bound to an integer-index parameter.
+// Wraps slint's `ComboBox` for the popup behaviour.
+
+import { ComboBox } from "std-widgets.slint";
+
+export component Dropdown inherits Rectangle {
+    in-out property <int> index: 0;
+    in property <[string]> options: [];
+    in property <string> label: "";
+
+    in property <color> label-color: #8c8c99;
+
+    callback changed(int);
+
+    width: 120px;
+    height: 50px;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 4px;
+
+        ComboBox {
+            model: root.options;
+            current-index <=> root.index;
+            selected => { root.changed(root.index); }
+        }
+
+        Text {
+            text: root.label;
+            font-size: 10px;
+            color: root.label-color;
+            horizontal-alignment: center;
+        }
+    }
+}

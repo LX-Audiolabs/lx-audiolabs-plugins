@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use truce_core::cast::discrete_norm;
-use truce_slint::PluginContext;
+use lx_slint_editor::PluginContext;
 
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;
@@ -65,7 +65,7 @@ fn q_to_norm(v: f32) -> f64 {
 // ─── Parse / scan ────────────────────────────────────────────────────────────
 
 pub fn parse_aether_preset(content: &str) -> Option<AetherProfile> {
-    match shared_analysis::preset_plugin_name(content).as_deref() {
+    match lx_analysis::preset_plugin_name(content).as_deref() {
         Some("aether") => {}
         _ => return None,
     }
@@ -308,7 +308,7 @@ pub fn build_profile_md(params: &AetherParams) -> String {
 // ─── Config / cache ──────────────────────────────────────────────────────────
 
 fn last_profile_cache_path() -> PathBuf {
-    shared_analysis::get_plugin_dir("Aether").join("last_profile.json")
+    lx_analysis::get_plugin_dir("Aether").join("last_profile.json")
 }
 
 pub fn load_cached_last_profile() -> Option<AetherProfile> {
@@ -322,10 +322,10 @@ pub fn load_cached_last_profile() -> Option<AetherProfile> {
 }
 
 pub fn save_last_preset(vault_path: &Option<String>, profile: &AetherProfile) {
-    let mut cfg = shared_analysis::load_config("Aether");
+    let mut cfg = lx_analysis::load_config("Aether");
     cfg.vault_path = vault_path.clone();
     cfg.last_preset = Some(profile.name.clone());
-    let _ = shared_analysis::save_config("Aether", &cfg);
+    let _ = lx_analysis::save_config("Aether", &cfg);
     let path = last_profile_cache_path();
     let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
     if let Ok(content) = serde_json::to_string_pretty(profile) {
@@ -348,7 +348,7 @@ pub fn find_profile(
         return Some(p.clone());
     }
     // Single-file load by name under the local presets dir only (small, bounded).
-    let local = shared_analysis::get_plugin_dir("Aether").join("presets");
+    let local = lx_analysis::get_plugin_dir("Aether").join("presets");
     let candidate = local.join(format!("{name}.md"));
     if candidate.is_file()
         && let Ok(c) = std::fs::read_to_string(&candidate)
@@ -365,7 +365,7 @@ pub fn find_profile(
 pub fn preset_save_dir(vault_path: &Option<String>) -> PathBuf {
     match vault_path {
         Some(vp) if !vp.is_empty() => PathBuf::from(vp),
-        _ => shared_analysis::get_plugin_dir("Aether").join("presets"),
+        _ => lx_analysis::get_plugin_dir("Aether").join("presets"),
     }
 }
 
@@ -407,7 +407,7 @@ pub fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets>, generation: u3
     std::thread::spawn(move || {
         let mut scanned = scan_aether_presets(Path::new(&vp));
         // Also pick up local plugin presets that aren't in the vault.
-        let local = shared_analysis::get_plugin_dir("Aether").join("presets");
+        let local = lx_analysis::get_plugin_dir("Aether").join("presets");
         for entry in scan_aether_presets(&local) {
             if !scanned.iter().any(|(n, _, _)| n == &entry.0) {
                 scanned.push(entry);

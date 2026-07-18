@@ -22,9 +22,12 @@ Github AUTH always as github.user "lxndrbe"
 
 ## UI direction (2026-07)
 - Full Vizia rebuild = hard to maintain (truce-vizia + vizia-audio + femtovg forks).
-- New path: **Slint** via `truce-slint`, **Truce standard widgets** (`@truce`), **software renderer** (`renderer-software`). Goal: no special femtovg/truce forks.
+- New path: **Slint** + **FemtoVG OpenGL** via local **`lx-slint-editor`** (baseview + GL), **not** `truce-slint` (software + wgpu).
+- Build: **`lx-slint-build`** materializes `@truce` widgets + JetBrains Mono (slint-build 1.17).
+- Runtime: `lx_slint_editor::SlintEditor` — same setup API as truce-slint (`PluginContext` / `SyncFn`).
 - Prototypes live in sibling repo: `C:\Users\lxndr\Documents\LX-AudioLabs\lx-audiolabs-slint`
-- That workspace **path-deps only** shared crates from this vizia tree (`shared-dsp`, `shared-analysis`, `shared-vault`, `shm-hub`) — no DSP copy.
-- **When rebuilding a plugin in Slint, use shared-ui-slint.** Header = `LxShellHeader` (branding left only) + custom actions as children; body = `LxShellBody` + `LxShellLeft` / `LxShellMain` / `LxShellRight`. No old `LxShell`. Reuse `LxKnob`, `LxLineEdit`, `LxButton`, etc. — don't hand-roll plugin-specific styling.
-- Status: **Aether Slint** done. **Meridian Slint** done.
+- Layout: **`crates/`** = all libs (`lx-slint-editor`, `lx-slint-build`, `lx-dsp`, `lx-analysis`, `lx-vault`, `lx-shm`, `lx-ui-slint`); **`plugins/`** = products only.
+- Shared audio libs live under `crates/` in this repo (path-deps); keep in sync with vizia tree when DSP changes — no divergent fork intent.
+- **When rebuilding a plugin in Slint, use `crates/lx-ui-slint`.** Header = `LxShellHeader` (branding left only) + custom actions as children; body = `LxShellBody` + `LxShellLeft` / `LxShellMain` / `LxShellRight`. No old `LxShell`. Reuse `LxKnob`, `LxLineEdit`, `LxButton`, etc. — don't hand-roll plugin-specific styling.
+- Status: **Aether/Meridian** on `lx-slint-editor` (FemtoVG-GL). **Aurum** still Vizia in `lx-audiolabs-dev` until bridge proven in DAW.
 - This repo (`lx-audiolabs-dev`) remains production Vizia plugins until a cutover decision.

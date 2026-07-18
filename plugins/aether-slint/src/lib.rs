@@ -11,8 +11,8 @@
 // The Harman EQ is a plain per-channel-identical linear EQ (no M/S, no L/R diff),
 // so it commutes with the crossfeed — order is conceptual, not sonic.
 
-use shared_analysis::SharedState;
-use shared_dsp::{Biquad, FtzDazGuard, state_migration};
+use lx_analysis::SharedState;
+use lx_dsp::{Biquad, FtzDazGuard, state_migration};
 use std::sync::Arc;
 use truce::prelude::*;
 use truce_core::editor::Editor;

@@ -22,7 +22,7 @@ pub struct Biquad {
     s2: f64,
 }
 
-/// Single-sample audio filter. Every filter type in shared-dsp implements this,
+/// Single-sample audio filter. Every filter type in lx-dsp implements this,
 /// so consumers can be generic over the filter implementation rather than
 /// coupling to the concrete `Biquad` type.
 pub trait Filter {

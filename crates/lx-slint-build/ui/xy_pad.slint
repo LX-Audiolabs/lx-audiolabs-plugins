@@ -1,0 +1,97 @@
+// XY pad - 2D control for two parameters.
+// Drag anywhere to set both X and Y values simultaneously.
+
+export component XYPad inherits VerticalLayout {
+    in-out property <float> value-x: 0.5;
+    in-out property <float> value-y: 0.5;
+    in property <string> label: "";
+
+    callback changed-x(float);
+    callback changed-y(float);
+
+    // `preferred-*` lets a parent layout stretch the pad in both
+    // axes. `min-*` keeps the pad usable when the editor window
+    // shrinks to its minimum size.
+    min-width: 80px;
+    min-height: 90px;
+    preferred-width: 120px;
+    preferred-height: 132px;
+    spacing: 2px;
+
+    pad := Rectangle {
+        // No explicit `width`/`height` - the parent
+        // `VerticalLayout` gives the pad the full width and any
+        // vertical space the label below doesn't claim, which
+        // lets the pad grow with the editor window. The
+        // `vertical-stretch: 1` makes the pad the one item that
+        // absorbs extra height (the label keeps its text
+        // height).
+        vertical-stretch: 1;
+        background: #2e2e38;
+        border-color: #737373;
+        border-width: 1px;
+
+        property <length> dot-x: pad.width * root.value-x;
+        property <length> dot-y: pad.height * (1.0 - root.value-y);
+
+        // Crosshair lines (30% opacity accent)
+        Rectangle {
+            x: pad.dot-x - 0.5px;
+            y: 0px;
+            width: 1px;
+            height: pad.height;
+            background: rgba(77, 153, 242, 0.3);
+        }
+        Rectangle {
+            x: 0px;
+            y: pad.dot-y - 0.5px;
+            width: pad.width;
+            height: 1px;
+            background: rgba(77, 153, 242, 0.3);
+        }
+
+        // Dot
+        Rectangle {
+            x: pad.dot-x - 5px;
+            y: pad.dot-y - 5px;
+            width: 10px;
+            height: 10px;
+            border-radius: 5px;
+            background: #4d99f2;
+        }
+
+        // Drag interaction
+        touch := TouchArea {
+            width: pad.width;
+            height: pad.height;
+
+            moved => {
+                if self.pressed {
+                    root.value-x = clamp(touch.mouse-x / pad.width, 0.0, 1.0);
+                    root.value-y = clamp(1.0 - touch.mouse-y / pad.height, 0.0, 1.0);
+                    root.changed-x(root.value-x);
+                    root.changed-y(root.value-y);
+                }
+            }
+
+            pointer-event(ev) => {
+                if ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left {
+                    root.value-x = clamp(touch.mouse-x / pad.width, 0.0, 1.0);
+                    root.value-y = clamp(1.0 - touch.mouse-y / pad.height, 0.0, 1.0);
+                    root.changed-x(root.value-x);
+                    root.changed-y(root.value-y);
+                }
+            }
+        }
+    }
+
+    // Label - `VerticalLayout` already takes the row's full
+    // width, so an explicit `width: root.width` would form a
+    // binding loop (width <-> layout-info).
+    Text {
+        text: root.label;
+        font-size: 10px;
+        color: #8c8c99;
+        horizontal-alignment: center;
+    }
+}

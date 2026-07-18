@@ -6,7 +6,7 @@ use slint::{ModelRc, SharedString, VecModel};
 use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
-use truce_slint::{PluginContext, SlintEditor, SyncFn};
+use lx_slint_editor::{PluginContext, SlintEditor, SyncFn};
 
 use crate::presets::{
     apply_profile, build_profile_md, default_preset_names, find_profile, load_cached_last_profile,
@@ -111,7 +111,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             let ui = &session.ui;
 
             // Labels only — never automate host params on open.
-            let cfg = shared_analysis::load_config("Aether");
+            let cfg = lx_analysis::load_config("Aether");
             let vault_path = cfg.vault_path.clone();
             if let Some(ref vp) = vault_path {
                 ui.set_vault_path(SharedString::from(vp.as_str()));
@@ -144,7 +144,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                     .filter(|p| !p.is_empty())
                     .cloned()
                     .or_else(|| {
-                        let local = shared_analysis::get_plugin_dir("Aether").join("presets");
+                        let local = lx_analysis::get_plugin_dir("Aether").join("presets");
                         local.is_dir().then(|| local.to_string_lossy().into_owned())
                     });
                 if let Some(vp) = scan_path {
@@ -354,9 +354,9 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 let new_vp = if path.is_empty() { None } else { Some(path) };
                 if let Ok(mut vs) = vs_path.lock() {
                     vs.vault_path = new_vp.clone();
-                    let mut cfg = shared_analysis::load_config("Aether");
+                    let mut cfg = lx_analysis::load_config("Aether");
                     cfg.vault_path = new_vp.clone();
-                    let _ = shared_analysis::save_config("Aether", &cfg);
+                    let _ = lx_analysis::save_config("Aether", &cfg);
                     let scan_gen = vs.pending.bump_generation();
                     if let Some(ref vp) = new_vp {
                         vs.scanning_for = Some(vp.clone());
@@ -368,7 +368,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                         if let Some(ui) = ui_weak_path.upgrade() {
                             ui.set_preset_names(names_model(&vs.names));
                         }
-                        let local = shared_analysis::get_plugin_dir("Aether").join("presets");
+                        let local = lx_analysis::get_plugin_dir("Aether").join("presets");
                         if local.is_dir() {
                             let scan_gen = vs.pending.bump_generation();
                             spawn_vault_scan(

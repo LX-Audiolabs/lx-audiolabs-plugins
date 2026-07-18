@@ -6,15 +6,15 @@ pub mod dev_log;
 pub mod snap_fft;
 pub use snap_fft::{SnapFFT, SnapMode};
 
-// Re-export shm-hub transparently so existing callers keep working
-pub use shm_hub as shm;
-pub use shm_hub::{
+// Re-export lx-shm transparently so existing callers keep working
+pub use lx_shm as shm;
+pub use lx_shm::{
     display_name, now_ms, relay_hub, resolve_relay_target, RelayHub, EQ_BANDS, MAX_CONSUMERS,
     MAX_NAME_LEN, MAX_SLOTS, SPECTRUM_BINS, STALE_MS,
 };
 
 // Re-export vault/preset/config types so existing callers don't need to change imports
-pub use shared_vault::{
+pub use lx_vault::{
     export_preset_to_markdown, get_plugin_dir, list_custom_presets, load_config,
     parse_preset_from_markdown, preset_plugin_name, save_config, PluginConfig, Profile,
     DEFAULT_TOLERANCES,

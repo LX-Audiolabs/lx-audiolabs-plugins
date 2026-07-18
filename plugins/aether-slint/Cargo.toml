@@ -24,19 +24,19 @@ truce-params = { workspace = true }
 truce-clap   = { workspace = true, optional = true }
 truce-vst3   = { workspace = true, optional = true }
 truce-lv2    = { workspace = true, optional = true }
-truce-loader = { workspace = true }
-truce-slint  = { workspace = true }
-slint        = { workspace = true }
+truce-loader     = { workspace = true }
+lx-slint-editor  = { workspace = true }
+slint            = { workspace = true }
 clap-sys     = { workspace = true, optional = true }
 
-shared-dsp      = { path = "../../shared-dsp" }
-shared-analysis = { path = "../../shared-analysis" }
+lx-dsp      = { path = "../../crates/lx-dsp" }
+lx-analysis = { path = "../../crates/lx-analysis" }
 serde           = { version = "1", features = ["derive"] }
 serde_json      = "1"
 tracing         = "0.1"
 
 [build-dependencies]
-truce-slint-build = { workspace = true }
+lx-slint-build = { workspace = true }
 
 [dev-dependencies]
 truce-test = { workspace = true }

@@ -2,7 +2,23 @@
 
 Slint UI migration workspace for LX Audiolabs plugins.
 
-## Shared UI (`shared-ui-slint`)
+## Layout
+
+```
+crates/                 # all libraries
+  lx-slint-editor/      # truce Editor + FemtoVG OpenGL
+  lx-slint-build/       # @truce widgets + font (build)
+  lx-ui-slint/          # LX design system
+  lx-dsp/
+  lx-analysis/
+  lx-vault/
+  lx-shm/
+plugins/                # plugin products only
+  aether-slint/
+  meridian-slint/
+```
+
+## Shared UI (`crates/lx-ui-slint`)
 
 Brand CI design system for all Slint plugins:
 
@@ -21,7 +37,7 @@ Import from a plugin:
 // path relative to the plugin's ui/main.slint
 import {
     Lx, LxHeader, LxKnob, LxSpectrum, LxGoniometer, LxLevelPanel,
-} from "../../../shared-ui-slint/ui/lx.slint";
+} from "../../../crates/lx-ui-slint/ui/lx.slint";
 ```
 
 ## Plugins

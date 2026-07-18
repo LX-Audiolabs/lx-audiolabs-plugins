@@ -164,7 +164,7 @@ const _: () = {
 /// # Example
 ///
 /// ```ignore
-/// let now_ms = shm_hub::now_ms();
+/// let now_ms = lx_shm::now_ms();
 /// hub.write(slot, "my-label", "target-name", &bins, &band_energy, now_ms);
 /// ```
 pub fn now_ms() -> u64 {
@@ -190,8 +190,8 @@ pub fn now_ms() -> u64 {
 /// # Example
 ///
 /// ```ignore
-/// let name = shm_hub::display_name("My Analyzer", 0);  // "My Analyzer"
-/// let name = shm_hub::display_name("", 0);              // "Hub 1"
+/// let name = lx_shm::display_name("My Analyzer", 0);  // "My Analyzer"
+/// let name = lx_shm::display_name("", 0);              // "Hub 1"
 /// ```
 pub fn display_name(name: &str, slot: u8) -> String {
     if name.trim().is_empty() {
@@ -382,7 +382,7 @@ impl RelayHub {
     /// # Example
     ///
     /// ```ignore
-    /// if let Some((slot, generation)) = hub.claim_slot(shm_hub::now_ms()) {
+    /// if let Some((slot, generation)) = hub.claim_slot(lx_shm::now_ms()) {
     ///     // Store slot + generation, use both to publish data
     /// }
     /// ```
@@ -855,8 +855,8 @@ impl RelayHub {
     /// # Example
     ///
     /// ```ignore
-    /// if let Some(slot) = hub.claim_consumer_slot(shm_hub::now_ms()) {
-    ///     hub.write_consumer_name(slot, "My Analyzer", shm_hub::now_ms());
+    /// if let Some(slot) = hub.claim_consumer_slot(lx_shm::now_ms()) {
+    ///     hub.write_consumer_name(slot, "My Analyzer", lx_shm::now_ms());
     /// }
     /// ```
     pub fn claim_consumer_slot(&self, now_ms: u64) -> Option<u8> {
@@ -912,7 +912,7 @@ impl RelayHub {
     /// ```ignore
     /// // In a regular update loop:
     /// if let Some(slot) = my_consumer_slot {
-    ///     hub.write_consumer_name(slot, "My Analyzer", shm_hub::now_ms());
+    ///     hub.write_consumer_name(slot, "My Analyzer", lx_shm::now_ms());
     /// }
     /// ```
     pub fn write_consumer_name(&self, slot: u8, name: &str, now_ms: u64) {
@@ -1010,8 +1010,8 @@ impl RelayHub {
     /// # Example
     ///
     /// ```ignore
-    /// let mut name_buf = [0u8; shm_hub::MAX_NAME_LEN];
-    /// if let Some(len) = hub.single_consumer_name(shm_hub::now_ms(), &mut name_buf) {
+    /// let mut name_buf = [0u8; lx_shm::MAX_NAME_LEN];
+    /// if let Some(len) = hub.single_consumer_name(lx_shm::now_ms(), &mut name_buf) {
     ///     let name = std::str::from_utf8(&name_buf[..len]).unwrap_or("invalid");
     ///     // Auto-target to the single consumer
     /// }
@@ -1047,7 +1047,7 @@ impl RelayHub {
     /// # Example
     ///
     /// ```ignore
-    /// let targets = hub.read_consumers(shm_hub::now_ms());
+    /// let targets = hub.read_consumers(lx_shm::now_ms());
     /// if targets.is_empty() {
     ///     println!("No consumers available");
     /// } else {
@@ -1111,8 +1111,8 @@ impl RelayHub {
 /// # Example
 ///
 /// ```ignore
-/// if let Some(hub) = shm_hub::relay_hub() {
-///     if let Some(slot) = hub.claim_slot(shm_hub::now_ms()) {
+/// if let Some(hub) = lx_shm::relay_hub() {
+///     if let Some(slot) = hub.claim_slot(lx_shm::now_ms()) {
 ///         // Use the slot
 ///     }
 /// }

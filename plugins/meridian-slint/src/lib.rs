@@ -17,8 +17,8 @@ use truce::prelude::*;
 use truce_core::editor::Editor;
 use truce_core::state::StateLoadError;
 
-use shared_analysis::{SCOPE_BUFFER_LEN, SPECTRUM_BINS, SharedState, SnapFFT, SnapMode};
-use shared_dsp::{
+use lx_analysis::{SCOPE_BUFFER_LEN, SPECTRUM_BINS, SharedState, SnapFFT, SnapMode};
+use lx_dsp::{
     AutoLoudMeter, Biquad, Compressor, DBTP_CEILING, FtzDazGuard, LR2Crossover, TiltEq,
 };
 
@@ -1438,7 +1438,7 @@ impl PluginLogic for Meridian {
                 // Snapshot bins under one lock, then EMA under the other (UI may hold avg).
                 let frame_bins = {
                     if let Ok(mut spectrum_frame) = params.shared.spectrum_bins.try_lock() {
-                        shared_analysis::compute_spectrum_bins(
+                        lx_analysis::compute_spectrum_bins(
                             &state.fft_output_cache,
                             &mut spectrum_frame,
                             fft_size,
