@@ -14,7 +14,7 @@ truce-test      = { path = "../truce-dev/crates/truce-test" }
 truce-slint     = { path = "../truce-dev/crates/truce-slint" }
 truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
 clap-sys        = "0.5"
-slint           = { version = "=1.15.1", default-features = false, features = ["compat-1-2", "renderer-software", "std"] }
+slint           = { version = "=1.17.1", default-features = false, features = ["compat-1-2", "renderer-software", "std"] }
 
 [profile.release]
 opt-level = 3
