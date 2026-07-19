@@ -22,7 +22,7 @@ export component LxSpectrum inherits LxPanel {
     in property <string> freq-mid: "1 kHz";
     in property <string> freq-hi: "20 kHz";
 
-    surface: #0f0f14;
+    surface: Lx.stage;
     clip: true;
 
     // Horizontal grid lines
@@ -135,7 +135,7 @@ export component LxEqCurve inherits LxPanel {
     in property <string> freq-mid: "1 kHz";
     in property <string> freq-hi: "20 kHz";
 
-    surface: #0f0f14;
+    surface: Lx.stage;
     clip: true;
 
     // 0 dB line
@@ -237,7 +237,7 @@ export component LxGoniometer inherits LxPanel {
     in property <float> path-h: 100;
     in property <bool> show-grid: true;
 
-    surface: #0f0f10;
+    surface: Lx.stage;
     clip: true;
 
     // Crosshair + diagonals (static chrome) — brighter so it stays readable.

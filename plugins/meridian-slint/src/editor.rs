@@ -520,8 +520,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
 
                 // --- spectrum & goniometer paths ---
-                // Main spectrum ≈ 990 − 180 − 155 − pad ≈ 620 × 170
-                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 170.0)));
+                // Main spectrum ≈ 990 − 180 − 155 − pad ≈ 620 × 120 (FFT card fixed height)
+                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 120.0)));
                 // Right-bar gonio is square ~139×139
                 ui.set_gonio_path(slint::SharedString::from(gonio_path(shared, 139.0, 139.0)));
             })
@@ -771,7 +771,7 @@ fn eq_curve_path(params: &MeridianParams, sr: f32) -> String {
     // Match vizia compute_eq_curve: ±24 dB overlay scale (not spectrum −70…−18).
     const N: usize = 256;
     const W: f32 = 620.0;
-    const H: f32 = 170.0;
+    const H: f32 = 120.0; // matches FFT card path-h
     const DB_MIN: f32 = -24.0;
     const DB_MAX: f32 = 24.0;
     let db_range = DB_MAX - DB_MIN;

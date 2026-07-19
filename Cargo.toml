@@ -26,11 +26,11 @@ truce-loader    = { path = "../truce-dev/crates/truce-loader" }
 truce-test      = { path = "../truce-dev/crates/truce-test" }
 truce-slint     = { path = "../truce-dev/crates/truce-slint" }
 truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
-# keep for @truce widget materialize at Slint 1.15 (match truce-slint)
+# keep for @truce widget materialize at Slint 1.17.1 (match truce-slint)
 lx-slint-build  = { path = "crates/lx-slint-build" }
 clap-sys        = "0.5"
 # MUST match truce-slint pin
-slint           = { version = "=1.15.1", default-features = false, features = [
+slint           = { version = "=1.17.1", default-features = false, features = [
     "compat-1-2",
     "renderer-software",
     "std",
@@ -48,6 +48,3 @@ panic = "unwind"
 inherits = "release"
 strip = false
 debug = "full"
-
-[patch.crates-io]
-fontique = { path = "patches/fontique" }

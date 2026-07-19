@@ -60,7 +60,9 @@ export component LxKnob inherits VerticalLayout {
         vertical-stretch: 0;
     }
 
-    // Knob graphic.
+    // Soft-3D knob — software-renderer safe:
+    // Slint software renderer does NOT implement gradients on rounded rects
+    // (slint#4176) → gradient draws as AABB square. Use solid layered discs only.
     Rectangle {
         width: root.diameter;
         height: root.diameter;
@@ -68,42 +70,119 @@ export component LxKnob inherits VerticalLayout {
         vertical-stretch: 0;
         horizontal-stretch: 0;
 
-        // Track arc (always shows the full 270° travel range).
+        // Outer rim (dark)
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            border-radius: root.diameter / 2;
+            background: Lx.metal-lo;
+        }
+
+        // Metal bezel ring body
+        Rectangle {
+            x: 1px;
+            y: 1px;
+            width: parent.width - 2px;
+            height: parent.height - 2px;
+            border-radius: (root.diameter - 2px) / 2;
+            background: Lx.metal-mid;
+        }
+
+        // Bezel top glint (only upper half-disc, solid alpha — not a full cover)
+        Rectangle {
+            x: 2px;
+            y: 2px;
+            width: parent.width - 4px;
+            height: (parent.height - 4px) * 0.48;
+            border-radius: (root.diameter - 4px) / 2;
+            background: #ffffff18;
+        }
+
+        // Recess well (dark ring between bezel and face)
+        Rectangle {
+            x: root.diameter * 0.10;
+            y: root.diameter * 0.10;
+            width: root.diameter * 0.80;
+            height: root.diameter * 0.80;
+            border-radius: self.width / 2;
+            background: Lx.metal-lo;
+        }
+
+        // Face base
+        Rectangle {
+            x: root.diameter * 0.12;
+            y: root.diameter * 0.12;
+            width: root.diameter * 0.76;
+            height: root.diameter * 0.76;
+            border-radius: self.width / 2;
+            background: Lx.face-mid;
+        }
+
+        // Face upper highlight
+        Rectangle {
+            x: root.diameter * 0.20;
+            y: root.diameter * 0.16;
+            width: root.diameter * 0.60;
+            height: root.diameter * 0.32;
+            border-radius: self.height / 2;
+            background: #ffffff20;
+        }
+
+        // Face center core
+        Rectangle {
+            x: root.diameter * 0.24;
+            y: root.diameter * 0.24;
+            width: root.diameter * 0.52;
+            height: root.diameter * 0.52;
+            border-radius: self.width / 2;
+            background: Lx.face-lo;
+        }
+
+        // Track arc (full 270° range)
         Path {
             width: parent.width;
             height: parent.height;
             viewbox-x: 0; viewbox-y: 0;
             viewbox-width: 100; viewbox-height: 100;
-            commands: root.knob_arc_commands(50, 50, 42, 1.0);
+            commands: root.knob_arc_commands(50, 50, 44, 1.0);
             stroke: Lx.steel;
             stroke-width: Lx.knob-stroke;
             fill: transparent;
         }
 
-        // Value arc.
+        // Value arc
         Path {
             width: parent.width;
             height: parent.height;
             viewbox-x: 0; viewbox-y: 0;
             viewbox-width: 100; viewbox-height: 100;
-            commands: root.knob_arc_commands(50, 50, 42, root.norm);
+            commands: root.knob_arc_commands(50, 50, 44, root.norm);
             stroke: ta.pressed ? Lx.amber-hot : (ta.has-hover ? Lx.amber-soft : Lx.amber);
             stroke-width: Lx.knob-stroke;
             fill: transparent;
         }
 
-        // Pointer dot at the current value position.
+        // Pointer cap — solid discs only
         Rectangle {
             property <angle> angle_rad: (135 + root.norm * 270) * 1deg;
-            // Pointer sits inside the arc so it stays visible against the amber value stroke.
-            property <length> orbit_r: root.diameter * 28 / 100;
+            property <length> orbit_r: root.diameter * 0.26;
+            property <length> pd: Lx.knob-pointer;
 
-            x: root.diameter / 2 + orbit_r * cos(angle_rad) - Lx.knob-pointer / 2;
-            y: root.diameter / 2 + orbit_r * sin(angle_rad) - Lx.knob-pointer / 2;
-            width: Lx.knob-pointer;
-            height: self.width;
-            border-radius: self.width / 2;
-            background: Lx.text;
+            x: root.diameter / 2 + orbit_r * cos(angle_rad) - pd / 2;
+            y: root.diameter / 2 + orbit_r * sin(angle_rad) - pd / 2;
+            width: pd;
+            height: pd;
+            border-radius: pd / 2;
+            background: Lx.metal-lo;
+
+            Rectangle {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+                border-radius: (pd - 2px) / 2;
+                background: #d8d8e0;
+            }
         }
 
         ta := TouchArea {
@@ -165,10 +244,12 @@ export component LxLineEdit inherits Rectangle {
     min-width: root.field-width > 0px ? root.field-width : 40px;
     max-width: root.field-width > 0px ? root.field-width : 9999px;
     horizontal-stretch: root.field-width > 0px ? 0 : 1;
-    background: root.light ? #e6e6e6 : Lx.control;
+    background: root.light
+        ? @linear-gradient(180deg, #f0f0f0 0%, #d8d8d8 100%)
+        : @linear-gradient(180deg, Lx.well-lo 0%, Lx.well-hi 100%);
     border-radius: Lx.radius-sm;
-    border-width: ti.has-focus ? 1px : (root.light ? 1px : 0px);
-    border-color: ti.has-focus ? Lx.amber : (root.light ? #8c8c8c : transparent);
+    border-width: 1px;
+    border-color: ti.has-focus ? Lx.amber : (root.light ? #8c8c8c : Lx.edge-dark);
 
     property <bool> was-focused: false;
     // Set false from host before destroying the UI if possible; also
@@ -287,7 +368,10 @@ export component LxCycleBtn inherits Rectangle {
     width: root.btn-width;
     height: root.btn-height;
     border-radius: Lx.radius-sm;
-    background: root.active ? Lx.amber : Lx.control;
+    // No border-width: software renderer AABB stroke.
+    background: root.active
+        ? @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 45%, Lx.amber-lo 100%)
+        : @linear-gradient(180deg, Lx.raise-hi 0%, Lx.control 50%, Lx.raise-lo 100%);
     horizontal-stretch: 0;
     vertical-stretch: 0;
 
@@ -312,16 +396,25 @@ export component LxCycleBtn inherits Rectangle {
     }
 
     states [
-        hover when ta.has-hover && root.active: { background: Lx.amber-soft; }
-        pressed when ta.pressed && root.active: { background: Lx.amber-hot; }
-        hover when ta.has-hover && !root.active: { background: Lx.control-hover; }
-        pressed when ta.pressed && !root.active: { background: Lx.control-active; }
+        hover when ta.has-hover && root.active: {
+            background: @linear-gradient(180deg, Lx.amber-soft 0%, Lx.amber 50%, Lx.amber-lo 100%);
+        }
+        pressed when ta.pressed && root.active: {
+            background: @linear-gradient(180deg, Lx.amber-lo 0%, Lx.amber 60%, Lx.amber-hi 100%);
+        }
+        hover when ta.has-hover && !root.active: {
+            background: @linear-gradient(180deg, Lx.control-hover 0%, Lx.control 55%, Lx.raise-lo 100%);
+        }
+        pressed when ta.pressed && !root.active: {
+            background: @linear-gradient(180deg, Lx.raise-lo 0%, Lx.control-active 100%);
+        }
     ]
 }
 
 // ─── 3-state segmented button (A/B/C style) ──────────────────────────────────
 
 // Segmented exclusive buttons. Horizontal by default; `vertical: true` stacks.
+// Soft-3D: recessed tray + raised active pill.
 export component LxSegmentedButton inherits Rectangle {
     in-out property <float> index: 0.0;
     in property <[string]> choices: ["A", "B", "C"];
@@ -331,7 +424,9 @@ export component LxSegmentedButton inherits Rectangle {
 
     callback changed(float);
 
-    background: transparent;
+    background: @linear-gradient(180deg, Lx.well-hi 0%, Lx.well-lo 100%);
+    border-radius: Lx.radius-md;
+    // No border-width: software renderer AABB stroke.
     horizontal-stretch: root.compact ? 0 : 1;
     vertical-stretch: 0;
     // Compact ABC fixed width; vertical 12/24 needs a bit more.
@@ -340,15 +435,16 @@ export component LxSegmentedButton inherits Rectangle {
 
     property <length> seg-h: root.compact ? 16px : Lx.button-h-sm;
     property <length> gap: root.compact ? 1px : 2px;
+    property <length> tray-pad: root.compact ? 1px : 2px;
     // Vertical stack height for 2–3 segments (Filter 12/24, etc.).
     height: root.vertical
-        ? (root.choices.length >= 3 ? root.seg-h * 3 + root.gap * 2
-            : root.seg-h * 2 + root.gap)
-        : root.seg-h;
+        ? (root.choices.length >= 3 ? root.seg-h * 3 + root.gap * 2 + root.tray-pad * 2
+            : root.seg-h * 2 + root.gap + root.tray-pad * 2)
+        : root.seg-h + root.tray-pad * 2;
 
     if !root.vertical: HorizontalLayout {
         spacing: root.gap;
-        padding: 0;
+        padding: root.tray-pad;
         width: 100%;
         height: 100%;
         alignment: center;
@@ -358,8 +454,11 @@ export component LxSegmentedButton inherits Rectangle {
             horizontal-stretch: 1;
             min-width: root.compact ? 20px : 28px;
             height: 100%;
-            background: active ? Lx.amber : Lx.control;
             border-radius: Lx.radius-sm;
+            // No border-width: software renderer AABB stroke.
+            background: active
+                ? @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 50%, Lx.amber-lo 100%)
+                : transparent;
 
             Text {
                 width: 100%;
@@ -380,15 +479,19 @@ export component LxSegmentedButton inherits Rectangle {
             }
 
             states [
-                hover when ta_h.has-hover && !active: { background: Lx.control-hover; }
-                pressed when ta_h.pressed && !active: { background: Lx.control-active; }
+                hover when ta_h.has-hover && !active: {
+                    background: #ffffff10;
+                }
+                pressed when ta_h.pressed && !active: {
+                    background: #00000030;
+                }
             ]
         }
     }
 
     if root.vertical: VerticalLayout {
         spacing: root.gap;
-        padding: 0;
+        padding: root.tray-pad;
         width: 100%;
         height: 100%;
         alignment: center;
@@ -398,8 +501,11 @@ export component LxSegmentedButton inherits Rectangle {
             horizontal-stretch: 1;
             height: root.seg-h;
             vertical-stretch: 0;
-            background: active ? Lx.amber : Lx.control;
             border-radius: Lx.radius-sm;
+            // No border-width: software renderer AABB stroke.
+            background: active
+                ? @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 50%, Lx.amber-lo 100%)
+                : transparent;
 
             Text {
                 width: 100%;
@@ -420,8 +526,12 @@ export component LxSegmentedButton inherits Rectangle {
             }
 
             states [
-                hover when ta_v.has-hover && !active: { background: Lx.control-hover; }
-                pressed when ta_v.pressed && !active: { background: Lx.control-active; }
+                hover when ta_v.has-hover && !active: {
+                    background: #ffffff10;
+                }
+                pressed when ta_v.pressed && !active: {
+                    background: #00000030;
+                }
             ]
         }
     }
@@ -464,40 +574,49 @@ export component LxSlider inherits VerticalLayout {
         overflow: elide;
     }
 
-    // Track + thumb.
+    // Track + thumb (recessed well + raised metal thumb).
     Rectangle {
         horizontal-stretch: 1;
         height: root.thumb-d;
         background: transparent;
         vertical-stretch: 0;
 
-        // Inactive track.
+        // Inactive track well. No border-width (software AABB stroke on pill ends).
         Rectangle {
             y: (parent.height - root.track-h) / 2;
             height: root.track-h;
             width: 100%;
-            background: Lx.steel;
+            background: @linear-gradient(180deg, Lx.well-hi 0%, Lx.steel 100%);
             border-radius: root.track-h / 2;
         }
 
-        // Active (amber) fill.
+        // Active (amber) fill with soft bevel.
         Rectangle {
             x: 0;
             y: (parent.height - root.track-h) / 2;
             height: root.track-h;
             width: root.norm * (parent.width - root.thumb-d) + root.thumb-d / 2;
-            background: Lx.amber;
+            background: @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 55%, Lx.amber-lo 100%);
             border-radius: root.track-h / 2;
         }
 
-        // White thumb.
+        // Raised thumb — solid discs (no gradient on round; software AABB).
         Rectangle {
             x: root.norm * (parent.width - root.thumb-d);
             y: (parent.height - root.thumb-d) / 2;
             width: root.thumb-d;
             height: root.thumb-d;
             border-radius: root.thumb-d / 2;
-            background: Lx.text;
+            background: Lx.metal-lo;
+
+            Rectangle {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+                border-radius: (root.thumb-d - 2px) / 2;
+                background: #d0d0d8;
+            }
         }
 
         ta := TouchArea {
@@ -573,7 +692,8 @@ export component LxEqBandColumn inherits Rectangle {
     horizontal-stretch: 1;
     min-width: 70px;
     preferred-height: 118px;
-    vertical-stretch: 0;
+    // Parent LxSection can grow; columns fill leftover EQ card height.
+    vertical-stretch: 1;
     background: transparent;
     clip: true;
 

@@ -2,38 +2,179 @@
 
 import { Lx } from "lx-theme.slint";
 
-// Flat dark panel surface.
-export component LxPanel inherits Rectangle {
-    in property <color> surface: Lx.panel;
-    background: root.surface;
-    border-radius: Lx.radius-md;
+// ─── Page tabs (SHAPE / COLOR / LIMIT …) ─────────────────────────────────────
+// Navigation between full main-panel pages — NOT for in-module enums
+// (use LxSegmentedButton for 12/24 dB, A/B/C, Own/Relay).
+//
+// Look: folder-style tabs on a rail. Active tab is raised, amber underline,
+// and sits flush with the content area below (soft-3D, software-safe).
+
+export component LxTabs inherits Rectangle {
+    // Page index is int — avoids float compare bugs with content `if root.tab == N`.
+    in-out property <int> index: 0;
+    in property <[string]> pages: ["PAGE"];
+    // Optional trailing status area via @children (LUFS line, etc.).
+    in property <bool> stretch-tabs: false; // true = tabs fill width equally
+
+    callback changed(int);
+
+    vertical-stretch: 0;
+    horizontal-stretch: 1;
+    height: 34px;
+    background: @linear-gradient(180deg, Lx.section 0%, Lx.well-hi 55%, Lx.void 100%);
+
+    // Bottom seam — active tab “opens” into content
+    Rectangle {
+        y: parent.height - 1px;
+        width: 100%;
+        height: 1px;
+        background: Lx.stage-rim;
+    }
+
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        padding-left: 8px;
+        padding-right: 10px;
+        spacing: 0;
+        alignment: stretch;
+
+        // Tab strip (left)
+        HorizontalLayout {
+            spacing: 2px;
+            alignment: stretch;
+            horizontal-stretch: root.stretch-tabs ? 1 : 0;
+            vertical-stretch: 1;
+            padding-top: 4px;
+
+            for page[i] in root.pages: Rectangle {
+                property <bool> active: root.index == i;
+                horizontal-stretch: root.stretch-tabs ? 1 : 0;
+                min-width: root.stretch-tabs ? 64px : 88px;
+                preferred-width: root.stretch-tabs ? 80px : 100px;
+                vertical-stretch: 1;
+
+                border-radius: 5px;
+                background: active
+                    ? @linear-gradient(180deg, Lx.face-hi 0%, Lx.section 40%, Lx.panel 100%)
+                    : transparent;
+                border-width: active ? 1px : 0px;
+                border-color: active ? Lx.stage-rim : transparent;
+
+                // Cover bottom border so active tab merges with content
+                if active: Rectangle {
+                    y: parent.height - 1px;
+                    height: 2px;
+                    width: 100%;
+                    background: Lx.panel;
+                }
+
+                // Amber underline on active
+                if active: Rectangle {
+                    y: parent.height - 3px;
+                    x: 10px;
+                    width: parent.width - 20px;
+                    height: 2px;
+                    border-radius: 1px;
+                    background: @linear-gradient(90deg, Lx.amber-lo 0%, Lx.amber-hi 50%, Lx.amber-lo 100%);
+                }
+
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    text: page;
+                    font-size: Lx.font-sm;
+                    font-weight: active ? 700 : 600;
+                    color: active ? Lx.amber-hot : Lx.text-muted;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                ta := TouchArea {
+                    clicked => {
+                        if root.index != i {
+                            root.index = i;
+                            root.changed(i);
+                        }
+                    }
+                }
+
+                states [
+                    hover when ta.has-hover && !active: {
+                        background: #ffffff0a;
+                    }
+                    pressed when ta.pressed && !active: {
+                        background: #00000028;
+                    }
+                ]
+            }
+        }
+
+        // Spacer + optional trailing children (status / GR / LUFS)
+        Rectangle {
+            horizontal-stretch: 1;
+            min-width: 8px;
+            background: transparent;
+        }
+
+        HorizontalLayout {
+            spacing: 10px;
+            alignment: center;
+            horizontal-stretch: 0;
+            vertical-stretch: 0;
+            @children
+        }
+    }
 }
 
-// Card with optional amber section title.
+// Soft raised panel surface.
+export component LxPanel inherits Rectangle {
+    in property <color> surface: Lx.panel;
+    background: @linear-gradient(180deg, root.surface 0%, Lx.well-hi 100%);
+    border-radius: Lx.radius-md;
+    border-width: 1px;
+    border-color: Lx.edge-dark;
+}
+
+// Card with optional amber section title — recessed tray look.
 export component LxSection inherits Rectangle {
     in property <string> title: "";
     in property <bool> show-title: true;
 
-    background: Lx.section;
+    background: @linear-gradient(180deg, Lx.section 0%, Lx.well-hi 100%);
     border-radius: Lx.radius-md;
+    border-width: 1px;
+    border-color: Lx.stage-rim;
 
     VerticalLayout {
         padding: Lx.pad-md;
         spacing: Lx.gap-sm;
 
-        if root.show-title && root.title != "": Text {
-            text: root.title;
-            font-size: Lx.font-md;
-            font-weight: 700;
-            color: Lx.amber-hot;
+        if root.show-title && root.title != "": HorizontalLayout {
+            spacing: 6px;
             vertical-stretch: 0;
+            // Amber index bar (hardware module label)
+            Rectangle {
+                width: 3px;
+                height: 12px;
+                border-radius: 1px;
+                background: @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber-lo 100%);
+                vertical-stretch: 0;
+            }
+            Text {
+                text: root.title;
+                font-size: Lx.font-md;
+                font-weight: 700;
+                color: Lx.amber-hot;
+                vertical-alignment: center;
+            }
         }
 
         @children
     }
 }
 
-// Amber-when-active toggle button (MONO / DELTA / BYPASS / modes).
+// Amber-when-active toggle button (MONO / DELTA / BYPASS / modes). Soft-3D bevel.
 export component LxToggleBtn inherits Rectangle {
     in property <string> label: "";
     in-out property <bool> active: false;
@@ -45,9 +186,14 @@ export component LxToggleBtn inherits Rectangle {
     height: root.small ? Lx.button-h-sm : Lx.button-h;
     min-width: root.small ? 36px : 56px;
     border-radius: Lx.radius-sm;
+    // No border-width: software renderer strokes AABB (square frame around rounded pill).
     background: root.active
-        ? (root.danger ? Lx.crimson : Lx.amber)
-        : (root.danger ? Lx.danger-bg : Lx.control);
+        ? (root.danger
+            ? @linear-gradient(180deg, Lx.crimson-hi 0%, Lx.crimson 50%, Lx.crimson-lo 100%)
+            : @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 50%, Lx.amber-lo 100%))
+        : (root.danger
+            ? @linear-gradient(180deg, #4a2020 0%, Lx.danger-bg 100%)
+            : @linear-gradient(180deg, Lx.raise-hi 0%, Lx.control 50%, Lx.raise-lo 100%));
 
     Text {
         width: 100%;
@@ -71,10 +217,21 @@ export component LxToggleBtn inherits Rectangle {
 
     states [
         hover when ta.has-hover && !root.active: {
-            background: root.danger ? #4a1c1c : Lx.control-hover;
+            background: root.danger
+                ? @linear-gradient(180deg, #5c2828 0%, #3a1818 100%)
+                : @linear-gradient(180deg, Lx.control-hover 0%, Lx.control 55%, Lx.raise-lo 100%);
         }
         hover-active when ta.has-hover && root.active: {
-            background: root.danger ? #dd3333 : Lx.amber-soft;
+            background: root.danger
+                ? @linear-gradient(180deg, #ff7070 0%, Lx.crimson 55%, Lx.crimson-lo 100%)
+                : @linear-gradient(180deg, Lx.amber-soft 0%, Lx.amber 55%, Lx.amber-lo 100%);
+        }
+        pressed when ta.pressed: {
+            background: root.active
+                ? (root.danger
+                    ? @linear-gradient(180deg, Lx.crimson-lo 0%, Lx.crimson 100%)
+                    : @linear-gradient(180deg, Lx.amber-lo 0%, Lx.amber 100%))
+                : @linear-gradient(180deg, Lx.raise-lo 0%, Lx.control-active 100%);
         }
     ]
 }
@@ -88,7 +245,10 @@ export component LxButton inherits Rectangle {
     height: Lx.button-h;
     min-width: 56px;
     border-radius: Lx.radius-sm;
-    background: root.primary ? Lx.amber : Lx.control;
+    // No border-width: software renderer AABB stroke.
+    background: root.primary
+        ? @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 50%, Lx.amber-lo 100%)
+        : @linear-gradient(180deg, Lx.raise-hi 0%, Lx.control 50%, Lx.raise-lo 100%);
 
     Text {
         width: 100%;
@@ -106,10 +266,18 @@ export component LxButton inherits Rectangle {
     }
 
     states [
-        hover when ta.has-hover && root.primary: { background: Lx.amber-soft; }
-        pressed when ta.pressed && root.primary: { background: Lx.amber-hot; }
-        hover when ta.has-hover && !root.primary: { background: Lx.control-hover; }
-        pressed when ta.pressed && !root.primary: { background: Lx.control-active; }
+        hover when ta.has-hover && root.primary: {
+            background: @linear-gradient(180deg, Lx.amber-soft 0%, Lx.amber 55%, Lx.amber-lo 100%);
+        }
+        pressed when ta.pressed && root.primary: {
+            background: @linear-gradient(180deg, Lx.amber-lo 0%, Lx.amber 100%);
+        }
+        hover when ta.has-hover && !root.primary: {
+            background: @linear-gradient(180deg, Lx.control-hover 0%, Lx.control 55%, Lx.raise-lo 100%);
+        }
+        pressed when ta.pressed && !root.primary: {
+            background: @linear-gradient(180deg, Lx.raise-lo 0%, Lx.control-active 100%);
+        }
     ]
 }
 
@@ -121,7 +289,8 @@ export component LxDangerBtn inherits Rectangle {
     height: Lx.button-h;
     min-width: 56px;
     border-radius: Lx.radius-sm;
-    background: Lx.danger-bg;
+    // No border-width: software renderer AABB stroke.
+    background: @linear-gradient(180deg, #4a2020 0%, Lx.danger-bg 100%);
 
     Text {
         width: 100%;
@@ -139,8 +308,12 @@ export component LxDangerBtn inherits Rectangle {
     }
 
     states [
-        hover when ta.has-hover: { background: #4a1c1c; }
-        pressed when ta.pressed: { background: #5c2020; }
+        hover when ta.has-hover: {
+            background: @linear-gradient(180deg, #5c2828 0%, #3a1818 100%);
+        }
+        pressed when ta.pressed: {
+            background: @linear-gradient(180deg, #2a1010 0%, #5c2020 100%);
+        }
     ]
 }
 

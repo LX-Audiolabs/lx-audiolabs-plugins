@@ -1,7 +1,7 @@
 import { Palette } from "std-widgets.slint";
 import {
     Lx, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
-    LxKnob, LxSlider, LxEqBandColumn, LxSegmentedButton, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
+    LxSection, LxKnob, LxSlider, LxEqBandColumn, LxSegmentedButton, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
     LxSpectrum, LxEqCurve, LxGoniometer, LxStereoMeter, LxGrMeter, LxCorrelation, LxCompDisplay,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 import { LxVaultSetupPopup } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
@@ -217,7 +217,7 @@ export component MeridianUi inherits Window {
                 // Preset list placeholder
                 Rectangle {
                     vertical-stretch: 1;
-                    background: #0c0c0e;
+                    background: Lx.void;
                     border-radius: Lx.radius-sm;
 
                     VerticalLayout {
@@ -251,255 +251,274 @@ export component MeridianUi inherits Window {
                 }
             }
 
-            // ── MAIN PANEL: 3 rows like original Meridian ─────────────
-            //   1) Filter / Warmth / Exciter / Tilt  (small knobs)
-            //   2) FFT spectrum + EQ curve
-            //   3) 5-band EQ: gain slider + freq slider + A/B/C Q
+            // ── MAIN PANEL: Option A — 3× LxSection ──────────────────
+            //   1) Tone: Filter / Warmth / Exciter / Tilt (no section title)
+            //   2) FFT spectrum + EQ curve (no title, fixed height)
+            //   3) 5-band EQ (section title; takes leftover stretch)
             LxShellMain {
                 VerticalLayout {
                     spacing: 4px;
                     padding: 0;
 
-                    // ── Row 1: color groups, small knobs ──────────────
-                    HorizontalLayout {
-                        spacing: 0;
-                        alignment: stretch;
+                    // ── Card 1: tone groups (module labels stay, no LxSection title)
+                    LxSection {
+                        show-title: false;
                         vertical-stretch: 0;
 
-                        // FILTER
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            padding-left: 4px;
-                            padding-right: 4px;
-                            horizontal-stretch: 1;
+                        HorizontalLayout {
+                            spacing: 0;
+                            alignment: stretch;
+                            vertical-stretch: 0;
 
-                            Text {
-                                text: "FILTER";
-                                font-size: Lx.font-xs;
-                                font-weight: 700;
-                                color: Lx.amber-hot;
-                                horizontal-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 4px;
-                                alignment: center;
-                                LxKnob { small: true; label: "LOW CUT"; value <=> root.hpf_freq; value-text: root.hpf_freq_text; default-value: root.hpf_freq_default; changed(v) => { root.hpf_freq_changed(v); } }
-                                LxSegmentedButton {
-                                    vertical: true;
-                                    choices: ["12 dB", "24 dB"];
-                                    index <=> root.cut_slope;
-                                    changed(v) => { root.cut_slope_changed(v); }
+                            // FILTER
+                            VerticalLayout {
+                                spacing: 2px;
+                                alignment: start;
+                                padding-left: 4px;
+                                padding-right: 4px;
+                                horizontal-stretch: 1;
+
+                                Text {
+                                    text: "FILTER";
+                                    font-size: Lx.font-xs;
+                                    font-weight: 700;
+                                    color: Lx.amber-hot;
+                                    horizontal-alignment: center;
                                 }
-                                LxKnob { small: true; label: "HIGH CUT"; value <=> root.lpf_freq; value-text: root.lpf_freq_text; default-value: root.lpf_freq_default; changed(v) => { root.lpf_freq_changed(v); } }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    alignment: center;
+                                    LxKnob { small: true; label: "LOW CUT"; value <=> root.hpf_freq; value-text: root.hpf_freq_text; default-value: root.hpf_freq_default; changed(v) => { root.hpf_freq_changed(v); } }
+                                    LxSegmentedButton {
+                                        vertical: true;
+                                        choices: ["12 dB", "24 dB"];
+                                        index <=> root.cut_slope;
+                                        changed(v) => { root.cut_slope_changed(v); }
+                                    }
+                                    LxKnob { small: true; label: "HIGH CUT"; value <=> root.lpf_freq; value-text: root.lpf_freq_text; default-value: root.lpf_freq_default; changed(v) => { root.lpf_freq_changed(v); } }
+                                }
                             }
-                        }
 
-                        Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
+                            Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
 
-                        // WARMTH (saturator)
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            padding-left: 4px;
-                            padding-right: 4px;
-                            horizontal-stretch: 1;
+                            // WARMTH (saturator)
+                            VerticalLayout {
+                                spacing: 2px;
+                                alignment: start;
+                                padding-left: 4px;
+                                padding-right: 4px;
+                                horizontal-stretch: 1;
 
-                            Text {
-                                text: "WARMTH";
-                                font-size: Lx.font-xs;
-                                font-weight: 700;
-                                color: Lx.amber-hot;
-                                horizontal-alignment: center;
+                                Text {
+                                    text: "WARMTH";
+                                    font-size: Lx.font-xs;
+                                    font-weight: 700;
+                                    color: Lx.amber-hot;
+                                    horizontal-alignment: center;
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    alignment: center;
+                                    LxKnob { small: true; label: "DRIVE"; value <=> root.warmth_drive; value-text: root.warmth_drive_text; default-value: root.warmth_drive_default; changed(v) => { root.warmth_drive_changed(v); } }
+                                    LxKnob { small: true; label: "W/MIX"; value <=> root.warmth_mix; value-text: root.warmth_mix_text; default-value: root.warmth_mix_default; changed(v) => { root.warmth_mix_changed(v); } }
+                                }
                             }
-                            HorizontalLayout {
-                                spacing: 4px;
-                                alignment: center;
-                                LxKnob { small: true; label: "DRIVE"; value <=> root.warmth_drive; value-text: root.warmth_drive_text; default-value: root.warmth_drive_default; changed(v) => { root.warmth_drive_changed(v); } }
-                                LxKnob { small: true; label: "W/MIX"; value <=> root.warmth_mix; value-text: root.warmth_mix_text; default-value: root.warmth_mix_default; changed(v) => { root.warmth_mix_changed(v); } }
+
+                            Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
+
+                            // EXCITER
+                            VerticalLayout {
+                                spacing: 2px;
+                                alignment: start;
+                                padding-left: 4px;
+                                padding-right: 4px;
+                                horizontal-stretch: 1;
+
+                                Text {
+                                    text: "EXCITER";
+                                    font-size: Lx.font-xs;
+                                    font-weight: 700;
+                                    color: Lx.amber-hot;
+                                    horizontal-alignment: center;
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    alignment: center;
+                                    LxKnob { small: true; label: "AMT"; value <=> root.excite_amount; value-text: root.excite_amount_text; default-value: root.excite_amount_default; changed(v) => { root.excite_amount_changed(v); } }
+                                    LxKnob { small: true; label: "BLEND"; value <=> root.excite_blend; value-text: root.excite_blend_text; default-value: root.excite_blend_default; changed(v) => { root.excite_blend_changed(v); } }
+                                    LxKnob { small: true; label: "FREQ"; value <=> root.excite_freq; value-text: root.excite_freq_text; default-value: root.excite_freq_default; changed(v) => { root.excite_freq_changed(v); } }
+                                }
                             }
-                        }
 
-                        Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
+                            Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
 
-                        // EXCITER
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            padding-left: 4px;
-                            padding-right: 4px;
-                            horizontal-stretch: 1;
+                            // TILT
+                            VerticalLayout {
+                                spacing: 2px;
+                                alignment: start;
+                                padding-left: 4px;
+                                padding-right: 4px;
+                                horizontal-stretch: 1;
 
-                            Text {
-                                text: "EXCITER";
-                                font-size: Lx.font-xs;
-                                font-weight: 700;
-                                color: Lx.amber-hot;
-                                horizontal-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 4px;
-                                alignment: center;
-                                LxKnob { small: true; label: "AMT"; value <=> root.excite_amount; value-text: root.excite_amount_text; default-value: root.excite_amount_default; changed(v) => { root.excite_amount_changed(v); } }
-                                LxKnob { small: true; label: "BLEND"; value <=> root.excite_blend; value-text: root.excite_blend_text; default-value: root.excite_blend_default; changed(v) => { root.excite_blend_changed(v); } }
-                                LxKnob { small: true; label: "FREQ"; value <=> root.excite_freq; value-text: root.excite_freq_text; default-value: root.excite_freq_default; changed(v) => { root.excite_freq_changed(v); } }
-                            }
-                        }
-
-                        Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
-
-                        // TILT
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: start;
-                            padding-left: 4px;
-                            padding-right: 4px;
-                            horizontal-stretch: 1;
-
-                            Text {
-                                text: "TILT EQ";
-                                font-size: Lx.font-xs;
-                                font-weight: 700;
-                                color: Lx.amber-hot;
-                                horizontal-alignment: center;
-                            }
-                            HorizontalLayout {
-                                spacing: 4px;
-                                alignment: center;
-                                LxKnob { small: true; label: "SLOPE"; value <=> root.tilt_gain; value-text: root.tilt_gain_text; default-value: root.tilt_gain_default; changed(v) => { root.tilt_gain_changed(v); } }
+                                Text {
+                                    text: "TILT EQ";
+                                    font-size: Lx.font-xs;
+                                    font-weight: 700;
+                                    color: Lx.amber-hot;
+                                    horizontal-alignment: center;
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    alignment: center;
+                                    LxKnob { small: true; label: "SLOPE"; value <=> root.tilt_gain; value-text: root.tilt_gain_text; default-value: root.tilt_gain_default; changed(v) => { root.tilt_gain_changed(v); } }
+                                }
                             }
                         }
                     }
 
-                    // ── Row 2: FFT ────────────────────────────────────
-                    Rectangle {
-                        // preferred height; stretch fills leftover main-panel space
-                        min-height: 120px;
-                        preferred-height: 170px;
-                        vertical-stretch: 1;
-                        background: Lx.void;
-                        border-radius: Lx.radius-md;
-                        clip: true;
-
-                        // Spectrum Y = −70…−18 dB (vizia SpectrumConfig default).
-                        // EQ curve Y = ±24 dB (separate overlay axis, labels-right).
-                        LxSpectrum {
-                            width: 100%;
-                            height: 100%;
-                            commands: root.spectrum_path;
-                            path-w: 620;
-                            path-h: 170;
-                            // Teal fill like original Meridian SpectrumCurve
-                            fill-color: #19e6802e;
-                            stroke-color: #19e6b3;
-                            db-top: "-18";
-                            db-mid: "-44";
-                            db-bot: "-70";
-                            freq-lo: "20 Hz";
-                            freq-mid: "1 kHz";
-                            freq-hi: "20 kHz";
-                        }
-
-                        // Transparent overlay — LxEqCurve defaults to opaque surface
-                        // and was fully covering the spectrum fill underneath.
-                        LxEqCurve {
-                            width: 100%;
-                            height: 100%;
-                            commands: root.curve_cmds;
-                            path-w: 620;
-                            path-h: 170;
-                            surface: transparent;
-                            show-grid: false;
-                            show-labels: true;
-                            labels-right: true;
-                            db-top: "+24";
-                            db-mid: "0";
-                            db-bot: "-24";
-                        }
-                    }
-
-                    // ── Row 3: 5 equal EQ columns
-                    HorizontalLayout {
-                        spacing: 4px;
-                        alignment: stretch;
+                    // ── Card 2: FFT — no title, fixed height (no stretch hog)
+                    LxSection {
+                        show-title: false;
                         vertical-stretch: 0;
-                        min-width: 0px;
-                        horizontal-stretch: 1;
 
-                        LxEqBandColumn {
-                            title: "Sub";
-                            subtitle: "LO SHELF";
-                            q-label: "Shelf Slope";
-                            gain <=> root.bass_gain;
-                            gain-text: root.bass_gain_text;
-                            gain-default: root.bass_gain_default;
-                            gain_changed(v) => { root.bass_gain_changed(v); }
-                            freq <=> root.eq_freq_1;
-                            freq-text: root.eq_freq_1_text;
-                            freq-default: root.eq_freq_1_default;
-                            freq_changed(v) => { root.eq_freq_1_changed(v); }
-                            slope <=> root.bass_slope;
-                            slope_changed(v) => { root.bass_slope_changed(v); }
+                        Rectangle {
+                            min-height: 100px;
+                            preferred-height: 120px;
+                            max-height: 130px;
+                            vertical-stretch: 0;
+                            background: Lx.void;
+                            border-radius: Lx.radius-sm;
+                            clip: true;
+
+                            // Spectrum Y = −70…−18 dB (vizia SpectrumConfig default).
+                            // EQ curve Y = ±24 dB (separate overlay axis, labels-right).
+                            LxSpectrum {
+                                width: 100%;
+                                height: 100%;
+                                commands: root.spectrum_path;
+                                path-w: 620;
+                                path-h: 120;
+                                fill-color: #19e6802e;
+                                stroke-color: #19e6b3;
+                                db-top: "-18";
+                                db-mid: "-44";
+                                db-bot: "-70";
+                                freq-lo: "20 Hz";
+                                freq-mid: "1 kHz";
+                                freq-hi: "20 kHz";
+                            }
+
+                            LxEqCurve {
+                                width: 100%;
+                                height: 100%;
+                                commands: root.curve_cmds;
+                                path-w: 620;
+                                path-h: 120;
+                                surface: transparent;
+                                show-grid: false;
+                                show-labels: true;
+                                labels-right: true;
+                                db-top: "+24";
+                                db-mid: "0";
+                                db-bot: "-24";
+                            }
                         }
-                        LxEqBandColumn {
-                            title: "Bass";
-                            subtitle: "LO-MID";
-                            q-label: "Filter Q";
-                            gain <=> root.lo_mid_gain;
-                            gain-text: root.lo_mid_gain_text;
-                            gain-default: root.lo_mid_gain_default;
-                            gain_changed(v) => { root.lo_mid_gain_changed(v); }
-                            freq <=> root.eq_freq_2;
-                            freq-text: root.eq_freq_2_text;
-                            freq-default: root.eq_freq_2_default;
-                            freq_changed(v) => { root.eq_freq_2_changed(v); }
-                            slope <=> root.lo_mid_slope;
-                            slope_changed(v) => { root.lo_mid_slope_changed(v); }
-                        }
-                        LxEqBandColumn {
-                            title: "Mid";
-                            subtitle: "MID";
-                            q-label: "Filter Q";
-                            gain <=> root.mid_gain;
-                            gain-text: root.mid_gain_text;
-                            gain-default: root.mid_gain_default;
-                            gain_changed(v) => { root.mid_gain_changed(v); }
-                            freq <=> root.eq_freq_3;
-                            freq-text: root.eq_freq_3_text;
-                            freq-default: root.eq_freq_3_default;
-                            freq_changed(v) => { root.eq_freq_3_changed(v); }
-                            slope <=> root.mid_slope;
-                            slope_changed(v) => { root.mid_slope_changed(v); }
-                        }
-                        LxEqBandColumn {
-                            title: "Presence";
-                            subtitle: "HI-MID";
-                            q-label: "Filter Q";
-                            gain <=> root.high_gain;
-                            gain-text: root.high_gain_text;
-                            gain-default: root.high_gain_default;
-                            gain_changed(v) => { root.high_gain_changed(v); }
-                            freq <=> root.eq_freq_4;
-                            freq-text: root.eq_freq_4_text;
-                            freq-default: root.eq_freq_4_default;
-                            freq_changed(v) => { root.eq_freq_4_changed(v); }
-                            slope <=> root.high_slope;
-                            slope_changed(v) => { root.high_slope_changed(v); }
-                        }
-                        LxEqBandColumn {
-                            title: "Air";
-                            subtitle: "HI SHELF";
-                            q-label: "Shelf Slope";
-                            gain <=> root.excite_gain;
-                            gain-text: root.excite_gain_text;
-                            gain-default: root.excite_gain_default;
-                            gain_changed(v) => { root.excite_gain_changed(v); }
-                            freq <=> root.eq_freq_5;
-                            freq-text: root.eq_freq_5_text;
-                            freq-default: root.eq_freq_5_default;
-                            freq_changed(v) => { root.eq_freq_5_changed(v); }
-                            slope <=> root.excite_slope;
-                            slope_changed(v) => { root.excite_slope_changed(v); }
+                    }
+
+                    // ── Card 3: 5-band EQ (title + leftover vertical space)
+                    LxSection {
+                        title: "EQ";
+                        show-title: true;
+                        vertical-stretch: 1;
+                        min-height: 140px;
+
+                        HorizontalLayout {
+                            spacing: 4px;
+                            alignment: stretch;
+                            vertical-stretch: 1;
+                            min-width: 0px;
+                            horizontal-stretch: 1;
+
+                            LxEqBandColumn {
+                                title: "Sub";
+                                subtitle: "LO SHELF";
+                                q-label: "Shelf Slope";
+                                vertical-stretch: 1;
+                                gain <=> root.bass_gain;
+                                gain-text: root.bass_gain_text;
+                                gain-default: root.bass_gain_default;
+                                gain_changed(v) => { root.bass_gain_changed(v); }
+                                freq <=> root.eq_freq_1;
+                                freq-text: root.eq_freq_1_text;
+                                freq-default: root.eq_freq_1_default;
+                                freq_changed(v) => { root.eq_freq_1_changed(v); }
+                                slope <=> root.bass_slope;
+                                slope_changed(v) => { root.bass_slope_changed(v); }
+                            }
+                            LxEqBandColumn {
+                                title: "Bass";
+                                subtitle: "LO-MID";
+                                q-label: "Filter Q";
+                                vertical-stretch: 1;
+                                gain <=> root.lo_mid_gain;
+                                gain-text: root.lo_mid_gain_text;
+                                gain-default: root.lo_mid_gain_default;
+                                gain_changed(v) => { root.lo_mid_gain_changed(v); }
+                                freq <=> root.eq_freq_2;
+                                freq-text: root.eq_freq_2_text;
+                                freq-default: root.eq_freq_2_default;
+                                freq_changed(v) => { root.eq_freq_2_changed(v); }
+                                slope <=> root.lo_mid_slope;
+                                slope_changed(v) => { root.lo_mid_slope_changed(v); }
+                            }
+                            LxEqBandColumn {
+                                title: "Mid";
+                                subtitle: "MID";
+                                q-label: "Filter Q";
+                                vertical-stretch: 1;
+                                gain <=> root.mid_gain;
+                                gain-text: root.mid_gain_text;
+                                gain-default: root.mid_gain_default;
+                                gain_changed(v) => { root.mid_gain_changed(v); }
+                                freq <=> root.eq_freq_3;
+                                freq-text: root.eq_freq_3_text;
+                                freq-default: root.eq_freq_3_default;
+                                freq_changed(v) => { root.eq_freq_3_changed(v); }
+                                slope <=> root.mid_slope;
+                                slope_changed(v) => { root.mid_slope_changed(v); }
+                            }
+                            LxEqBandColumn {
+                                title: "Presence";
+                                subtitle: "HI-MID";
+                                q-label: "Filter Q";
+                                vertical-stretch: 1;
+                                gain <=> root.high_gain;
+                                gain-text: root.high_gain_text;
+                                gain-default: root.high_gain_default;
+                                gain_changed(v) => { root.high_gain_changed(v); }
+                                freq <=> root.eq_freq_4;
+                                freq-text: root.eq_freq_4_text;
+                                freq-default: root.eq_freq_4_default;
+                                freq_changed(v) => { root.eq_freq_4_changed(v); }
+                                slope <=> root.high_slope;
+                                slope_changed(v) => { root.high_slope_changed(v); }
+                            }
+                            LxEqBandColumn {
+                                title: "Air";
+                                subtitle: "HI SHELF";
+                                q-label: "Shelf Slope";
+                                vertical-stretch: 1;
+                                gain <=> root.excite_gain;
+                                gain-text: root.excite_gain_text;
+                                gain-default: root.excite_gain_default;
+                                gain_changed(v) => { root.excite_gain_changed(v); }
+                                freq <=> root.eq_freq_5;
+                                freq-text: root.eq_freq_5_text;
+                                freq-default: root.eq_freq_5_default;
+                                freq_changed(v) => { root.eq_freq_5_changed(v); }
+                                slope <=> root.excite_slope;
+                                slope_changed(v) => { root.excite_slope_changed(v); }
+                            }
                         }
                     }
                 }
@@ -605,21 +624,14 @@ export component MeridianUi inherits Window {
             }
         }
 
-        // ── FOOTER: COMP | INFLATE | STEREO | RESET — equal columns ──
+        // ── FOOTER: 3 cards (COMP | INFLATE | STEREO) + bare RESET ──
         LxShellFooter {
-            // COMPRESSOR
-            VerticalLayout {
-                spacing: 2px;
+            // COMPRESSOR card
+            LxSection {
+                title: "COMPRESSOR";
                 horizontal-stretch: 3;
-                alignment: center;
+                vertical-stretch: 1;
 
-                Text {
-                    text: "COMPRESSOR";
-                    font-size: Lx.font-xs;
-                    font-weight: 700;
-                    color: Lx.amber-hot;
-                    horizontal-alignment: center;
-                }
                 HorizontalLayout {
                     spacing: 4px;
                     alignment: center;
@@ -638,21 +650,12 @@ export component MeridianUi inherits Window {
                 }
             }
 
-            Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
-
-            // INFLATE
-            VerticalLayout {
-                spacing: 2px;
+            // INFLATE card
+            LxSection {
+                title: "INFLATE";
                 horizontal-stretch: 1;
-                alignment: center;
+                vertical-stretch: 1;
 
-                Text {
-                    text: "INFLATE";
-                    font-size: Lx.font-xs;
-                    font-weight: 700;
-                    color: Lx.amber-hot;
-                    horizontal-alignment: center;
-                }
                 HorizontalLayout {
                     spacing: 4px;
                     alignment: center;
@@ -678,21 +681,12 @@ export component MeridianUi inherits Window {
                 }
             }
 
-            Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
-
-            // STEREO
-            VerticalLayout {
-                spacing: 2px;
+            // STEREO card
+            LxSection {
+                title: "STEREO";
                 horizontal-stretch: 1;
-                alignment: center;
+                vertical-stretch: 1;
 
-                Text {
-                    text: "STEREO";
-                    font-size: Lx.font-xs;
-                    font-weight: 700;
-                    color: Lx.amber-hot;
-                    horizontal-alignment: center;
-                }
                 HorizontalLayout {
                     spacing: 4px;
                     alignment: center;
@@ -701,26 +695,16 @@ export component MeridianUi inherits Window {
                 }
             }
 
-            Rectangle { width: 1px; background: Lx.steel; horizontal-stretch: 0; }
-
-            // RESET
+            // RESET — bare, no card
             VerticalLayout {
-                spacing: 2px;
+                spacing: 0;
                 horizontal-stretch: 0;
                 alignment: center;
                 min-width: 72px;
 
-                Text {
-                    text: " ";
-                    font-size: Lx.font-xs;
-                    vertical-stretch: 0;
-                }
-                HorizontalLayout {
-                    alignment: center;
-                    LxDangerBtn {
-                        label: "RESET";
-                        clicked => { root.reset_clicked(); }
-                    }
+                LxDangerBtn {
+                    label: "RESET";
+                    clicked => { root.reset_clicked(); }
                 }
             }
         }

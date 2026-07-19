@@ -21,10 +21,10 @@ Commits always as user.name="lxndrbe" & user.email="ardvinnamoon@gmail.com"
 Github AUTH always as github.user "lxndrbe"
 
 ## UI direction (2026-07)
-- Full Vizia rebuild = hard to maintain (truce-vizia + vizia-audio + femtovg forks).
-- Path: **Slint** via **`truce-slint`** (software renderer + wgpu present). Build: **`lx-slint-build`** (`@truce` widgets, Slint **1.15.1** matching truce-slint).
+- Path: **Slint** via **`truce-slint`** (software renderer + wgpu present). Build: **`lx-slint-build`** (`@truce` widgets, Slint **1.17.1** matching truce-slint).
 - Runtime: `truce_slint::SlintEditor` (`PluginContext` / `SyncFn`). No local FemtoVG bridge; if GPU later: Slint **`renderer-skia`**.
 - Layout: **`crates/`** = libs (`lx-slint-build`, `lx-dsp`, `lx-analysis`, `lx-vault`, `lx-shm`, `lx-ui-slint`); **`plugins/`** = products.
 - **UI shell:** `LxShellHeader` + `LxShellBody` / Left / Main / Right; reuse `LxKnob`, `LxLineEdit`, `LxButton`, etc.
-- **Slint release track:** Lucent Relay, Lucent, Aurum, Equilibrium. **Later polish / still in tree:** Meridian, Aether (earlier ports).
-- Status: new plugins DSP full; UI v0 shells where noted.
+- **Slint-native redesign track:** Lucent + Aurum (full UI rebuild, not Vizia clone) — candidates to drop from `lx-audiolabs-dev` once shipped.
+- Also in tree: Lucent Relay, Equilibrium, Aether, Meridian (Slint ports).
+- Dev repo Vizia: keep remaining plugins; Lucent/Aurum can leave when Slint variants are release-ready.

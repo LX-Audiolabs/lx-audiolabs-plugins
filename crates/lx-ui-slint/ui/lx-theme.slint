@@ -1,37 +1,67 @@
-// LX Audiolabs design tokens — single source of truth for brand CI.
-// Inspired by Deep Hypnotic Techno / Bitwig dark palette + Vizia shared-ui amber.
+// LX Audiolabs design tokens — brand CI + soft-3D (software-renderer safe).
+// Depth via gradients / layered rects / path arcs — no drop-shadow / GPU shading.
 
 export global Lx {
-    // Surfaces
-    out property <color> void: #0a0a0a;
-    out property <color> window: #0d0d0f;
-    out property <color> panel: #14141a;
-    out property <color> section: #1a1a22;
+    // Surfaces — neutral gray ladder (classic LX / Aether), not pure black.
+    // #141414 < #171717 < #191919 < #1c1c1c … readable steps under soft-3D.
+    out property <color> void: #141414;          // deepest pit / spectrum floor
+    out property <color> window: #171717;        // main chrome (Aether base)
+    out property <color> panel: #191919;         // sidebars / shell zones
+    out property <color> section: #1c1c1c;       // LxSection cards / trays
     out property <color> control: #262626;
     out property <color> control-hover: #404040;
     out property <color> control-active: #555555;
+
+    // Soft-3D surface stops (buttons, well, knob face) — gray family
+    out property <color> raise-hi: #3a3a3a;       // top edge of raised control
+    out property <color> raise-lo: #1a1a1a;       // bottom of raised control
+    out property <color> well-hi: #141414;        // top of recessed well (darker)
+    out property <color> well-lo: #1e1e1e;        // bottom of recessed well
+    out property <color> edge-light: #ffffff22;   // 1px highlight rim
+    out property <color> edge-dark: #00000055;    // 1px shadow rim (softer)
+    out property <color> metal-hi: #4a4a4a;       // bezel / ring highlight
+    out property <color> metal-mid: #2a2a2a;
+    out property <color> metal-lo: #141414;
+    out property <color> face-hi: #323232;        // knob face highlight
+    out property <color> face-mid: #1e1e1e;
+    out property <color> face-lo: #171717;
+    out property <color> stage: #141414;          // analyzer / spectrum pit
+    out property <color> stage-rim: #2a2a2a;
 
     // Brand / accent
     out property <color> amber: #ff731a;
     out property <color> amber-hot: #ff8c1a;
     out property <color> amber-soft: #ff8c3f;
     out property <color> amber-dim: #ff731a55;
+    out property <color> amber-hi: #ffb06a;       // amber bevel top
+    out property <color> amber-lo: #c45010;       // amber bevel bottom
 
     // Status / levels
     out property <color> green: #00bf4d;
     out property <color> green-soft: #00d959;
+    out property <color> green-hi: #33e070;
+    out property <color> green-lo: #008a38;
     out property <color> crimson: #e04545;
+    out property <color> crimson-hi: #ff6a6a;
+    out property <color> crimson-lo: #a02828;
     out property <color> danger-bg: #331414;
     out property <color> danger-text: #e68080;
     out property <color> gold: #be9614;
     out property <color> gonio: #19e680;
     out property <color> spectrum: #4d99f2;
     out property <color> spectrum-fill: #4d99f24d;
+    out property <color> spectrum-glow: #6ab0ff66;
     out property <color> eq-curve: #ff8c1a;
     out property <color> gr: #e04545;
 
+    // LED meter segment palette (Slint-native hardware look)
+    out property <color> led-off: #1a1a1e;
+    out property <color> led-green: #18c45a;
+    out property <color> led-amber: #f0a020;
+    out property <color> led-red: #e04040;
+
     // Structure
-    out property <color> steel: #2e2e2e;
+    out property <color> steel: #2e2e2e;        // dividers (reads on #1717–#1c1c)
     out property <color> grid: #ffffff14;
     out property <color> grid-strong: #ffffff20;
     out property <color> tick: #ffffff73;
@@ -44,9 +74,9 @@ export global Lx {
     out property <color> text-label: #8c8c99;
 
     // Radii
-    out property <length> radius-sm: 2px;
-    out property <length> radius-md: 4px;
-    out property <length> radius-lg: 6px;
+    out property <length> radius-sm: 3px;
+    out property <length> radius-md: 5px;
+    out property <length> radius-lg: 8px;
 
     // Spacing
     out property <length> pad-sm: 6px;
@@ -81,8 +111,7 @@ export global Lx {
     // Knobs — compact LX sizes (42px matches original Meridian).
     out property <length> knob-d: 42px;         // default knob diameter
     out property <length> knob-d-sm: 38px;      // small variant for dense footer rows
-    out property <length> knob-stroke: 4px;     // arc / track thickness
-    out property <length> knob-pointer: 5px;    // pointer dot diameter
+    out property <length> knob-stroke: 3.5px;   // arc / track thickness
+    out property <length> knob-pointer: 5px;    // pointer cap diameter
     out property <length> knob-gap: 2px;        // gap between knob graphic and labels
-
 }
