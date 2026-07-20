@@ -61,9 +61,9 @@ fn mask_bars_path(mask: &[(usize, f32, Vec<String>)]) -> String {
     s
 }
 
+/// Map peak dB → 0..1 over −60..+6 dB (LxLedPeakMeter / LxStereoMeter range).
 fn peak_norm(db: f32) -> f32 {
-    // map -60..0 dB → 0..1 for meter
-    ((db + 60.0) / 60.0).clamp(0.0, 1.0)
+    ((db + 60.0) / 66.0).clamp(0.0, 1.0)
 }
 
 pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {

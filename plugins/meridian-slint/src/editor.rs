@@ -5,6 +5,7 @@ use std::sync::Arc;
 use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
+use truce_params::FloatParam;
 use truce_slint::{PluginContext, SlintEditor, SyncFn};
 
 use crate::MeridianParams;
@@ -17,6 +18,11 @@ slint::include_modules!();
 const WINDOW_W: u32 = 990;
 const WINDOW_H: u32 = 660;
 
+/// Normalized default for a FloatParam (log/linear/skew — matches host).
+fn float_default_norm(p: &FloatParam) -> f32 {
+    p.info.range.normalize(p.info.default_plain) as f32
+}
+
 // --- binding macros ---------------------------------------------------------
 
 macro_rules! bind_floats {
@@ -26,6 +32,26 @@ macro_rules! bind_floats {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
             }
+        )*
+    };
+}
+
+/// Right-click knob/slider reset targets (`*_default` properties).
+macro_rules! set_float_defaults {
+    ($ui:expr, $params:expr, $($name:ident),* $(,)?) => {
+        $(
+            truce_slint::paste! {
+                $ui.[<set_ $name _default>](float_default_norm(&$params.$name));
+            }
+        )*
+    };
+}
+
+/// Full RESET + per-control right-click: automate each float to its param default.
+macro_rules! reset_floats {
+    ($state:expr, $params:expr, $($p:expr => $name:ident),* $(,)?) => {
+        $(
+            $state.automate($p, float_default_norm(&$params.$name) as f64);
         )*
     };
 }
@@ -97,6 +123,42 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
         move |state: PluginContext<MeridianParams>| -> SyncFn<MeridianParams> {
             let ui = MeridianUi::new().unwrap();
 
+            // Right-click reset targets: real defaults via range.normalize
+            // (Slint `*_default` props were stubbed at 0.5 → mid-position jumps).
+            set_float_defaults!(
+                ui,
+                params,
+                hpf_freq,
+                lpf_freq,
+                bass_gain,
+                lo_mid_gain,
+                mid_gain,
+                high_gain,
+                excite_gain,
+                eq_freq_1,
+                eq_freq_2,
+                eq_freq_3,
+                eq_freq_4,
+                eq_freq_5,
+                tilt_gain,
+                warmth_drive,
+                warmth_mix,
+                excite_amount,
+                excite_blend,
+                excite_freq,
+                comp_threshold,
+                comp_mix,
+                comp_attack,
+                comp_release,
+                comp_character,
+                comp_makeup,
+                inflate_effect,
+                inflate_curve,
+                stereo_width,
+                pan,
+                output_gain,
+            );
+
             // --- UI → host callbacks ---
             bind_floats!(ui, state,
                 P::HpfFreq => hpf_freq,
@@ -130,8 +192,12 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 P::OutputGain => output_gain,
             );
 
+            // CutSlope = discrete(0,1) → 2 choices (12/24 dB).
+            // EQ band slopes = discrete(0,2) → 3 choices (A/B/C).
+            // Wrong count breaks amber: index 1 → discrete_norm(1,3)=0.5 →
+            // sync discrete_index(1,3)=2 → no segment matches.
+            bind_ints!(ui, state, 2, P::CutSlope => cut_slope);
             bind_ints!(ui, state, 3,
-                P::CutSlope => cut_slope,
                 P::BassSlope => bass_slope,
                 P::LoMidSlope => lo_mid_slope,
                 P::MidSlope => mid_slope,
@@ -263,71 +329,54 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
             });
 
             let reset_state = state.clone();
+            let reset_params = params.clone();
             ui.on_reset_clicked(move || {
-                // Reset all parameters to their defaults (as defined in MeridianParams)
-                // We need the param info, but we can't access it here easily.
-                // Instead, we use the known default values from the struct definition.
-                // For simplicity, we set the normalized value to the default normalized value.
-                // Since we don't have the param info, we'll use a helper function.
-                fn reset_float_param(state: &PluginContext<MeridianParams>, pid: P, default_plain: f32, min: f32, max: f32) {
-                    let norm = ((default_plain - min) / (max - min)).clamp(0.0, 1.0) as f64;
-                    state.automate(pid, norm);
-                }
-                fn reset_int_param(state: &PluginContext<MeridianParams>, pid: P, default_val: i64, count: usize) {
-                    state.automate(pid, discrete_norm(default_val as usize, count));
-                }
-                fn reset_bool_param(state: &PluginContext<MeridianParams>, pid: P, default_val: bool) {
-                    state.automate(pid, if default_val { 1.0 } else { 0.0 });
-                }
-                // HPF/LPF
-                reset_float_param(&reset_state, P::HpfFreq, 2.0, 2.0, 2000.0);
-                reset_float_param(&reset_state, P::LpfFreq, 35000.0, 200.0, 35000.0);
-                reset_int_param(&reset_state, P::CutSlope, 0, 2);
-                // EQ bands
-                reset_float_param(&reset_state, P::BassGain, 0.0, -12.0, 12.0);
-                reset_int_param(&reset_state, P::BassSlope, 1, 3);
-                reset_float_param(&reset_state, P::LoMidGain, 0.0, -12.0, 12.0);
-                reset_int_param(&reset_state, P::LoMidSlope, 1, 3);
-                reset_float_param(&reset_state, P::MidGain, 0.0, -12.0, 12.0);
-                reset_int_param(&reset_state, P::MidSlope, 1, 3);
-                reset_float_param(&reset_state, P::HighGain, 0.0, -12.0, 12.0);
-                reset_int_param(&reset_state, P::HighSlope, 1, 3);
-                reset_float_param(&reset_state, P::ExciteGain, 0.0, -12.0, 12.0);
-                reset_int_param(&reset_state, P::ExciteSlope, 1, 3);
-                // EQ frequencies
-                reset_float_param(&reset_state, P::EqFreq1, 80.0, 40.0, 200.0);
-                reset_float_param(&reset_state, P::EqFreq2, 300.0, 150.0, 800.0);
-                reset_float_param(&reset_state, P::EqFreq3, 1000.0, 500.0, 3000.0);
-                reset_float_param(&reset_state, P::EqFreq4, 4000.0, 2000.0, 10000.0);
-                reset_float_param(&reset_state, P::EqFreq5, 12000.0, 6000.0, 20000.0);
-                // Tilt
-                reset_float_param(&reset_state, P::TiltGain, 0.0, -1.5, 1.5);
-                // Warmth
-                reset_float_param(&reset_state, P::WarmthDrive, 0.0, 0.0, 12.0);
-                reset_float_param(&reset_state, P::WarmthMix, 0.0, 0.0, 100.0);
-                // Exciter
-                reset_float_param(&reset_state, P::ExciteAmount, 0.0, 0.0, 30.0);
-                reset_float_param(&reset_state, P::ExciteBlend, 0.0, 0.0, 100.0);
-                reset_float_param(&reset_state, P::ExciteFreq, 8000.0, 6000.0, 12000.0);
-                // Compressor
-                reset_float_param(&reset_state, P::CompThreshold, 0.0, -30.0, 0.0);
-                reset_float_param(&reset_state, P::CompMix, 0.0, 0.0, 100.0);
-                reset_float_param(&reset_state, P::CompAttack, 15.0, 5.0, 50.0);
-                reset_float_param(&reset_state, P::CompRelease, 120.0, 50.0, 300.0);
-                reset_float_param(&reset_state, P::CompCharacter, 2.0, 1.5, 4.0);
-                reset_float_param(&reset_state, P::CompMakeup, 0.0, 0.0, 12.0);
-                // Inflate
-                reset_float_param(&reset_state, P::InflateEffect, 0.0, 0.0, 100.0);
-                reset_float_param(&reset_state, P::InflateCurve, 0.0, -50.0, 50.0);
-                reset_bool_param(&reset_state, P::InflateBandSplit, false);
-                reset_bool_param(&reset_state, P::InflateClip, false);
-                // Stereo/Routing
-                reset_float_param(&reset_state, P::StereoWidth, 100.0, 0.0, 200.0);
-                reset_float_param(&reset_state, P::Pan, 0.0, -1.0, 1.0);
-                reset_float_param(&reset_state, P::OutputGain, 0.0, -12.0, 12.0);
-                reset_bool_param(&reset_state, P::MonoActive, false);
-                reset_bool_param(&reset_state, P::DeltaActive, false);
-                reset_bool_param(&reset_state, P::BypassActive, false);
+                // Same path as right-click: ParamRange::normalize(default_plain).
+                // Old linear (default-min)/(max-min) broke log freqs (HPF/LPF/EQ).
+                reset_floats!(
+                    reset_state,
+                    reset_params,
+                    P::HpfFreq => hpf_freq,
+                    P::LpfFreq => lpf_freq,
+                    P::BassGain => bass_gain,
+                    P::LoMidGain => lo_mid_gain,
+                    P::MidGain => mid_gain,
+                    P::HighGain => high_gain,
+                    P::ExciteGain => excite_gain,
+                    P::EqFreq1 => eq_freq_1,
+                    P::EqFreq2 => eq_freq_2,
+                    P::EqFreq3 => eq_freq_3,
+                    P::EqFreq4 => eq_freq_4,
+                    P::EqFreq5 => eq_freq_5,
+                    P::TiltGain => tilt_gain,
+                    P::WarmthDrive => warmth_drive,
+                    P::WarmthMix => warmth_mix,
+                    P::ExciteAmount => excite_amount,
+                    P::ExciteBlend => excite_blend,
+                    P::ExciteFreq => excite_freq,
+                    P::CompThreshold => comp_threshold,
+                    P::CompMix => comp_mix,
+                    P::CompAttack => comp_attack,
+                    P::CompRelease => comp_release,
+                    P::CompCharacter => comp_character,
+                    P::CompMakeup => comp_makeup,
+                    P::InflateEffect => inflate_effect,
+                    P::InflateCurve => inflate_curve,
+                    P::StereoWidth => stereo_width,
+                    P::Pan => pan,
+                    P::OutputGain => output_gain,
+                );
+                reset_state.automate(P::CutSlope, discrete_norm(0, 2));
+                reset_state.automate(P::BassSlope, discrete_norm(1, 3));
+                reset_state.automate(P::LoMidSlope, discrete_norm(1, 3));
+                reset_state.automate(P::MidSlope, discrete_norm(1, 3));
+                reset_state.automate(P::HighSlope, discrete_norm(1, 3));
+                reset_state.automate(P::ExciteSlope, discrete_norm(1, 3));
+                reset_state.automate(P::InflateBandSplit, 0.0);
+                reset_state.automate(P::InflateClip, 0.0);
+                reset_state.automate(P::MonoActive, 0.0);
+                reset_state.automate(P::DeltaActive, 0.0);
+                reset_state.automate(P::BypassActive, 0.0);
                 tracing::info!("RESET clicked");
             });
 
@@ -429,8 +478,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     P::OutputGain => output_gain,
                 );
 
+                sync_ints!(ui, state, 2, P::CutSlope => cut_slope);
                 sync_ints!(ui, state, 3,
-                    P::CutSlope => cut_slope,
                     P::BassSlope => bass_slope,
                     P::LoMidSlope => lo_mid_slope,
                     P::MidSlope => mid_slope,
@@ -520,8 +569,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
 
                 // --- spectrum & goniometer paths ---
-                // Main spectrum ≈ 990 − 180 − 155 − pad ≈ 620 × 120 (FFT card fixed height)
-                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 120.0)));
+                // Main spectrum ≈ 990 − 180 − 155 − pad ≈ 620 × 140 (FFT card fixed height)
+                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 140.0)));
                 // Right-bar gonio is square ~139×139
                 ui.set_gonio_path(slint::SharedString::from(gonio_path(shared, 139.0, 139.0)));
             })
@@ -771,7 +820,7 @@ fn eq_curve_path(params: &MeridianParams, sr: f32) -> String {
     // Match vizia compute_eq_curve: ±24 dB overlay scale (not spectrum −70…−18).
     const N: usize = 256;
     const W: f32 = 620.0;
-    const H: f32 = 120.0; // matches FFT card path-h
+    const H: f32 = 140.0; // matches FFT card path-h
     const DB_MIN: f32 = -24.0;
     const DB_MAX: f32 = 24.0;
     let db_range = DB_MAX - DB_MIN;

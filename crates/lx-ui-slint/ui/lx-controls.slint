@@ -450,7 +450,8 @@ export component LxSegmentedButton inherits Rectangle {
         alignment: center;
 
         for choice[i] in root.choices: Rectangle {
-            property <bool> active: root.index == i;
+            // Round float index — host/sync may not be exact int equality.
+            property <bool> active: Math.round(root.index) == i;
             horizontal-stretch: 1;
             min-width: root.compact ? 20px : 28px;
             height: 100%;
@@ -497,7 +498,7 @@ export component LxSegmentedButton inherits Rectangle {
         alignment: center;
 
         for choice[i] in root.choices: Rectangle {
-            property <bool> active: root.index == i;
+            property <bool> active: Math.round(root.index) == i;
             horizontal-stretch: 1;
             height: root.seg-h;
             vertical-stretch: 0;
@@ -691,7 +692,7 @@ export component LxEqBandColumn inherits Rectangle {
 
     horizontal-stretch: 1;
     min-width: 70px;
-    preferred-height: 118px;
+    preferred-height: 98px;
     // Parent LxSection can grow; columns fill leftover EQ card height.
     vertical-stretch: 1;
     background: transparent;

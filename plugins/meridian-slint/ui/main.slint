@@ -2,7 +2,7 @@ import { Palette } from "std-widgets.slint";
 import {
     Lx, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
     LxSection, LxKnob, LxSlider, LxEqBandColumn, LxSegmentedButton, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
-    LxSpectrum, LxEqCurve, LxGoniometer, LxStereoMeter, LxGrMeter, LxCorrelation, LxCompDisplay,
+    LxSpectrum, LxEqCurve, LxGoniometer, LxLedPeakMeter, LxGrMeter, LxCorrelation, LxCompDisplay,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 import { LxVaultSetupPopup } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
@@ -382,9 +382,9 @@ export component MeridianUi inherits Window {
                         vertical-stretch: 0;
 
                         Rectangle {
-                            min-height: 100px;
-                            preferred-height: 120px;
-                            max-height: 130px;
+                            min-height: 120px;
+                            preferred-height: 140px;
+                            max-height: 150px;
                             vertical-stretch: 0;
                             background: Lx.void;
                             border-radius: Lx.radius-sm;
@@ -397,8 +397,9 @@ export component MeridianUi inherits Window {
                                 height: 100%;
                                 commands: root.spectrum_path;
                                 path-w: 620;
-                                path-h: 120;
-                                fill-color: #19e6802e;
+                                path-h: 140;
+                                // Stroke only — fill shading hides EQ curve overlay.
+                                fill-color: transparent;
                                 stroke-color: #19e6b3;
                                 db-top: "-18";
                                 db-mid: "-44";
@@ -413,7 +414,7 @@ export component MeridianUi inherits Window {
                                 height: 100%;
                                 commands: root.curve_cmds;
                                 path-w: 620;
-                                path-h: 120;
+                                path-h: 140;
                                 surface: transparent;
                                 show-grid: false;
                                 show-labels: true;
@@ -425,12 +426,12 @@ export component MeridianUi inherits Window {
                         }
                     }
 
-                    // ── Card 3: 5-band EQ (title + leftover vertical space)
+                    // ── Card 3: 5-band EQ (title + leftover vertical space; −20px vs FFT gain)
                     LxSection {
                         title: "EQ";
                         show-title: true;
                         vertical-stretch: 1;
-                        min-height: 140px;
+                        min-height: 120px;
 
                         HorizontalLayout {
                             spacing: 4px;
@@ -560,14 +561,13 @@ export component MeridianUi inherits Window {
                     vertical-stretch: 0;
                 }
 
-                LxStereoMeter {
+                LxLedPeakMeter {
                     height: 160px;
                     vertical-stretch: 0;
                     level-l: root.meter_l;
                     level-r: root.meter_r;
                     hold-l: root.peak_hold_l;
                     hold-r: root.peak_hold_r;
-                    balance: root.balance;
                     reset-peaks => { root.reset_peaks(); }
                 }
 
