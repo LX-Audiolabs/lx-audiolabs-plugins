@@ -13,6 +13,9 @@ Not lazy: input validation, error handling preventing data loss, security, acces
 ## graphify
 When `graphify-out/graph.json` exists, query/path/explain first before raw grep or source reads. `/graphify` to build/update.
 
+## Slint
+When writing, editing, or debugging `.slint` files, ALWAYS consult `SLINT_SKILL.md` first — it covers language rules, layout/sizing, common compile errors, truce-slint interop, and widget reference. Slint version: **1.17.1**, software renderer only.
+
 ## truce
 building with the truce framework is `cargo truce install --clap -p <pluginname>` this already is release.
 
