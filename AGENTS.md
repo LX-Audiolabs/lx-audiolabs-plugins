@@ -13,6 +13,9 @@ Not lazy: input validation, error handling preventing data loss, security, acces
 ## graphify
 When `graphify-out/graph.json` exists, query/path/explain first before raw grep or source reads. `/graphify` to build/update.
 
+## truce
+When writing, editing, or debugging truce plugin code (Params, PluginLogic, process, state, editor), consult `TRUCE_SKILL.md` in the sibling `lx-audiolabs-dev` repo — covers param macros, lifecycle, threading rules, common bugs, shared crates, and build workflow.
+
 ## Slint
 When writing, editing, or debugging `.slint` files, ALWAYS consult `SLINT_SKILL.md` first — it covers language rules, layout/sizing, common compile errors, truce-slint interop, and widget reference. Slint version: **1.17.1**, software renderer only.
 
