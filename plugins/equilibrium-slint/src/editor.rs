@@ -64,7 +64,12 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
 
             bind_float!(ui, state, P::OutputGain, on_output_gain_changed);
             bind_float!(ui, state, P::MonoFloor, on_mono_floor_changed);
-            bind_float!(ui, state, P::PreMasterTargetDb, on_pre_master_target_db_changed);
+            bind_float!(
+                ui,
+                state,
+                P::PreMasterTargetDb,
+                on_pre_master_target_db_changed
+            );
 
             bind_float!(ui, state, P::LowGain, on_low_gain_changed);
             bind_float!(ui, state, P::BassGain, on_bass_gain_changed);
@@ -145,12 +150,18 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     p.pre_master_target_db.raw_target()
                 )));
 
-                ui.set_low_gain_text(SharedString::from(format!("{:.1} dB", p.low_gain.raw_target())));
+                ui.set_low_gain_text(SharedString::from(format!(
+                    "{:.1} dB",
+                    p.low_gain.raw_target()
+                )));
                 ui.set_bass_gain_text(SharedString::from(format!(
                     "{:.1} dB",
                     p.bass_gain.raw_target()
                 )));
-                ui.set_mid_gain_text(SharedString::from(format!("{:.1} dB", p.mid_gain.raw_target())));
+                ui.set_mid_gain_text(SharedString::from(format!(
+                    "{:.1} dB",
+                    p.mid_gain.raw_target()
+                )));
                 ui.set_high_mid_gain_text(SharedString::from(format!(
                     "{:.1} dB",
                     p.high_mid_gain.raw_target()
@@ -181,11 +192,15 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     p.high_width.raw_target()
                 )));
 
-                ui.set_low_pan_text(SharedString::from(format_pan(p.low_pan.raw_target() as f32)));
+                ui.set_low_pan_text(SharedString::from(
+                    format_pan(p.low_pan.raw_target() as f32),
+                ));
                 ui.set_bass_pan_text(SharedString::from(format_pan(
                     p.bass_pan.raw_target() as f32
                 )));
-                ui.set_mid_pan_text(SharedString::from(format_pan(p.mid_pan.raw_target() as f32)));
+                ui.set_mid_pan_text(SharedString::from(
+                    format_pan(p.mid_pan.raw_target() as f32),
+                ));
                 ui.set_high_mid_pan_text(SharedString::from(format_pan(
                     p.high_mid_pan.raw_target() as f32,
                 )));

@@ -11,18 +11,18 @@
 //   → sum → Mono Floor (Side HPF) → Mono/Delta → Gain → Auto Gain → clamp
 
 use lx_dsp::state_migration;
-use std::f32::consts::FRAC_PI_4;
 use std::sync::Arc;
 use truce::prelude::*;
 use truce_core::editor::Editor;
 use truce_core::state::StateLoadError;
 
-use lx_analysis::{SCOPE_BUFFER_LEN, SharedState, SnapFFT, SnapMode};
-use lx_dsp::{AutoLoudMeter, Biquad, DBTP_CEILING, FtzDazGuard, LR2Crossover};
+use lx_analysis::{SharedState, SnapFFT};
+use lx_dsp::{AutoLoudMeter, Biquad, LR2Crossover};
 
 mod editor;
+mod process;
 
-const BAND_COUNT: usize = 5;
+pub(crate) const BAND_COUNT: usize = 5;
 #[allow(dead_code)]
 const WINDOW_W: u32 = 990;
 #[allow(dead_code)]
@@ -31,12 +31,12 @@ const WINDOW_H: u32 = 660;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 #[inline]
-fn db_to_gain(db: f32) -> f32 {
+pub(crate) fn db_to_gain(db: f32) -> f32 {
     10.0_f32.powf(db / 20.0)
 }
 
 #[inline]
-fn gain_to_db(gain: f32) -> f32 {
+pub(crate) fn gain_to_db(gain: f32) -> f32 {
     if gain < 1e-9 {
         -90.0
     } else {
@@ -44,7 +44,7 @@ fn gain_to_db(gain: f32) -> f32 {
     }
 }
 
-const MINUS_INF_DB: f32 = -90.0;
+pub(crate) const MINUS_INF_DB: f32 = -90.0;
 
 // ─── Params ──────────────────────────────────────────────────────────────────
 
@@ -261,75 +261,75 @@ pub struct Equilibrium;
 
 pub struct EquilibriumDspState {
     // Filters L
-    low_cut_l: Biquad,
-    high_cut_l: Biquad,
-    xo_bass_mid_l: LR2Crossover,
-    xo_low_bass_l: LR2Crossover,
-    xo_mid_high_l: LR2Crossover,
-    xo_highmid_high_l: LR2Crossover,
+    pub(crate) low_cut_l: Biquad,
+    pub(crate) high_cut_l: Biquad,
+    pub(crate) xo_bass_mid_l: LR2Crossover,
+    pub(crate) xo_low_bass_l: LR2Crossover,
+    pub(crate) xo_mid_high_l: LR2Crossover,
+    pub(crate) xo_highmid_high_l: LR2Crossover,
 
     // Filters R
-    low_cut_r: Biquad,
-    high_cut_r: Biquad,
-    xo_bass_mid_r: LR2Crossover,
-    xo_low_bass_r: LR2Crossover,
-    xo_mid_high_r: LR2Crossover,
-    xo_highmid_high_r: LR2Crossover,
+    pub(crate) low_cut_r: Biquad,
+    pub(crate) high_cut_r: Biquad,
+    pub(crate) xo_bass_mid_r: LR2Crossover,
+    pub(crate) xo_low_bass_r: LR2Crossover,
+    pub(crate) xo_mid_high_r: LR2Crossover,
+    pub(crate) xo_highmid_high_r: LR2Crossover,
 
     // Mono Floor filter (Side HPF)
-    mono_floor_filter: Biquad,
+    pub(crate) mono_floor_filter: Biquad,
 
     // Temporal smoothing
-    rms_decay_coef: f32,
-    correlation_decay_coef: f32,
+    pub(crate) rms_decay_coef: f32,
+    pub(crate) correlation_decay_coef: f32,
 
     // Smoothed states
-    smoothed_band_power: [f32; BAND_COUNT],
-    listen_band_power_sum: [f64; BAND_COUNT],
-    listen_sample_count: u64,
-    listen_lo_ema: [f64; BAND_COUNT],
-    listen_hi_ema: [f64; BAND_COUNT],
-    listen_ref_ema: [f64; BAND_COUNT],
-    listen_levels_ema: [f32; BAND_COUNT],
-    listen_min_ema: [f32; BAND_COUNT],
-    listen_max_ema: [f32; BAND_COUNT],
+    pub(crate) smoothed_band_power: [f32; BAND_COUNT],
+    pub(crate) listen_band_power_sum: [f64; BAND_COUNT],
+    pub(crate) listen_sample_count: u64,
+    pub(crate) listen_lo_ema: [f64; BAND_COUNT],
+    pub(crate) listen_hi_ema: [f64; BAND_COUNT],
+    pub(crate) listen_ref_ema: [f64; BAND_COUNT],
+    pub(crate) listen_levels_ema: [f32; BAND_COUNT],
+    pub(crate) listen_min_ema: [f32; BAND_COUNT],
+    pub(crate) listen_max_ema: [f32; BAND_COUNT],
 
     // Correlation
-    corr_avg_lr: f32,
-    corr_avg_l2: f32,
-    corr_avg_r2: f32,
+    pub(crate) corr_avg_lr: f32,
+    pub(crate) corr_avg_l2: f32,
+    pub(crate) corr_avg_r2: f32,
 
     // Peak hold
-    peak_hold_value: f32,
-    peak_hold_l_value: f32,
-    peak_hold_r_value: f32,
+    pub(crate) peak_hold_value: f32,
+    pub(crate) peak_hold_l_value: f32,
+    pub(crate) peak_hold_r_value: f32,
 
     // Stereo balance
-    smoothed_power_l: f32,
-    smoothed_power_r: f32,
+    pub(crate) smoothed_power_l: f32,
+    pub(crate) smoothed_power_r: f32,
 
     // Auto Gain
-    auto_gain_comp: f32,
+    pub(crate) auto_gain_comp: f32,
 
     // Pre-Master
-    pre_master_gain: f32,
-    pre_master_active_prev: bool,
-    pre_master_measure_peak: f32,
-    pre_master_measure_count: u32,
+    pub(crate) pre_master_gain: f32,
+    pub(crate) pre_master_active_prev: bool,
+    pub(crate) pre_master_measure_peak: f32,
+    pub(crate) pre_master_measure_count: u32,
 
     // Goniometer
-    scope_vis_envelope: f32,
+    pub(crate) scope_vis_envelope: f32,
 
     // AUTO LOUD
-    auto_loud_in: AutoLoudMeter,
-    auto_loud_out: AutoLoudMeter,
+    pub(crate) auto_loud_in: AutoLoudMeter,
+    pub(crate) auto_loud_out: AutoLoudMeter,
 
     // SNAP FFT
-    snap_fft: SnapFFT,
+    pub(crate) snap_fft: SnapFFT,
 
     // Cached parameters (dirty-flag optimization)
-    cached_mono_floor_freq: f32,
-    cached_sample_rate: f32,
+    pub(crate) cached_mono_floor_freq: f32,
+    pub(crate) cached_sample_rate: f32,
 }
 
 impl Default for EquilibriumDspState {
@@ -469,784 +469,7 @@ impl PluginLogic for Equilibrium {
         _events: &EventList,
         _ctx: &mut ProcessContext,
     ) -> ProcessStatus {
-        let _ftz = FtzDazGuard::new();
-
-        if buffer.num_input_channels() < 2 {
-            return ProcessStatus::Normal;
-        }
-
-        let sample_rate = params
-            .shared
-            .sample_rate
-            .load(std::sync::atomic::Ordering::Acquire);
-
-        // Dirty-flag for mono_floor
-        let mono_maker_freq = params.mono_floor.raw_target() as f32;
-        let coef_dirty = sample_rate != state.cached_sample_rate;
-        if coef_dirty {
-            state.cached_sample_rate = sample_rate;
-        }
-        if (mono_maker_freq != state.cached_mono_floor_freq || coef_dirty) && mono_maker_freq > 1.0 {
-            state.cached_mono_floor_freq = mono_maker_freq;
-            state.mono_floor_filter
-                .set_butterworth_hp(mono_maker_freq, sample_rate);
-        }
-
-        // Reset peak
-        if params
-            .shared
-            .reset_peak
-            .swap(false, std::sync::atomic::Ordering::Release)
-        {
-            state.peak_hold_value = MINUS_INF_DB;
-            state.peak_hold_l_value = MINUS_INF_DB;
-            state.peak_hold_r_value = MINUS_INF_DB;
-        }
-
-        // Reset analysis
-        if params
-            .shared
-            .reset_analysis
-            .swap(false, std::sync::atomic::Ordering::Release)
-        {
-            for b in 0..BAND_COUNT {
-                state.listen_band_power_sum[b] = 0.0;
-                state.listen_lo_ema[b] = f64::INFINITY;
-                state.listen_hi_ema[b] = f64::NEG_INFINITY;
-                state.listen_ref_ema[b] = 0.0;
-                state.listen_levels_ema[b] = -90.0;
-                state.listen_min_ema[b] = -90.0;
-                state.listen_max_ema[b] = -90.0;
-            }
-            state.listen_sample_count = 0;
-            state.low_cut_l.reset();
-            state.low_cut_r.reset();
-            state.high_cut_l.reset();
-            state.high_cut_r.reset();
-            state.xo_bass_mid_l.reset();
-            state.xo_bass_mid_r.reset();
-            state.xo_low_bass_l.reset();
-            state.xo_low_bass_r.reset();
-            state.xo_mid_high_l.reset();
-            state.xo_mid_high_r.reset();
-            state.xo_highmid_high_l.reset();
-            state.xo_highmid_high_r.reset();
-            state.mono_floor_filter.reset();
-        }
-
-        let any_solo = params.solo_low.value()
-            || params.solo_bass.value()
-            || params.solo_mid.value()
-            || params.solo_high_mid.value()
-            || params.solo_high.value();
-
-        let s_low = if any_solo {
-            params.solo_low.value()
-        } else {
-            true
-        };
-        let s_bass = if any_solo {
-            params.solo_bass.value()
-        } else {
-            true
-        };
-        let s_mid = if any_solo {
-            params.solo_mid.value()
-        } else {
-            true
-        };
-        let s_high_mid = if any_solo {
-            params.solo_high_mid.value()
-        } else {
-            true
-        };
-        let s_high = if any_solo {
-            params.solo_high.value()
-        } else {
-            true
-        };
-
-        let bypass = params.bypass_active.value();
-
-        let mut snap_phase = params
-            .shared
-            .snap_phase
-            .load(std::sync::atomic::Ordering::Acquire);
-        let mono = match snap_phase {
-            2 => true,
-            _ => params.mono_active.value(),
-        };
-        let delta = match snap_phase {
-            3 => true,
-            _ => params.delta_active.value(),
-        };
-        let listen = params.listen_active.value();
-        let auto_gain = params.auto_gain_active.value();
-
-        let mut max_out_peak = 0.0f32;
-        let mut max_out_peak_l = 0.0f32;
-        let mut max_out_peak_r = 0.0f32;
-        let mut sum_power_in = 0.0f32;
-        let mut sum_power_out = 0.0f32;
-        let mut sum_power_l = 0.0f32;
-        let mut sum_power_r = 0.0f32;
-        let mut count_samples: usize = 0;
-
-        let mut block_band_power = [0.0f32; 5];
-        let mut block_input_band_power = [0.0f32; 5];
-
-        // Raw pointers to output buffers — avoids borrow conflicts when both
-        // output channels are needed simultaneously (feed, scope, pre-master).
-        let num_samples = buffer.num_samples();
-        let (out0_ptr, out1_ptr): (*mut f32, *mut f32);
-        {
-            let (_, out0) = buffer.io(0);
-            out0_ptr = out0.as_mut_ptr();
-        }
-        {
-            let out1_slice = buffer.output(1);
-            out1_ptr = out1_slice.as_mut_ptr();
-        }
-        // SAFETY: both pointers are valid, non-aliasing output channels
-        #[allow(unsafe_code)]
-        let (out0, out1): (&mut [f32], &mut [f32]) = unsafe {
-            (
-                std::slice::from_raw_parts_mut(out0_ptr, num_samples),
-                std::slice::from_raw_parts_mut(out1_ptr, num_samples),
-            )
-        };
-
-        // Feed input to LUFS meter BEFORE we modify the buffer
-        let is_measuring = params
-            .shared
-            .auto_loud_measuring
-            .load(std::sync::atomic::Ordering::Acquire);
-        if is_measuring {
-            state.auto_loud_in.feed(buffer.input(0), buffer.input(1));
-        }
-
-        for i in 0..num_samples {
-            count_samples += 1;
-            let in_l = buffer.input(0)[i];
-            let in_r = buffer.input(1)[i];
-
-            sum_power_in += in_l * in_l + in_r * in_r;
-
-            // HP @8 Hz always, LP @35 kHz only at ≥ 88.2 kHz
-            let dc_l = state.low_cut_l.process(in_l);
-            let dc_r = state.low_cut_r.process(in_r);
-            let cut_l = if sample_rate >= 88_200.0 {
-                state.high_cut_l.process(dc_l)
-            } else {
-                dc_l
-            };
-            let cut_r = if sample_rate >= 88_200.0 {
-                state.high_cut_r.process(dc_r)
-            } else {
-                dc_r
-            };
-
-            // Crossover tree
-            let (low_group_l, high_group_l) = state.xo_bass_mid_l.process_transparent(cut_l);
-            let (band1_l, band2_l) = state.xo_low_bass_l.process_transparent(low_group_l);
-            let (mid_group_l, super_high_group_l) =
-                state.xo_mid_high_l.process_transparent(high_group_l);
-            let (band3_l, band4_l_pre) = (mid_group_l, super_high_group_l);
-            let (band4_l, band5_l) = state.xo_highmid_high_l.process_transparent(band4_l_pre);
-
-            let (low_group_r, high_group_r) = state.xo_bass_mid_r.process_transparent(cut_r);
-            let (band1_r, band2_r) = state.xo_low_bass_r.process_transparent(low_group_r);
-            let (mid_group_r, super_high_group_r) =
-                state.xo_mid_high_r.process_transparent(high_group_r);
-            let (band3_r, band4_r_pre) = (mid_group_r, super_high_group_r);
-            let (band4_r, band5_r) = state.xo_highmid_high_r.process_transparent(band4_r_pre);
-
-            let mut bands_l = [band1_l, band2_l, band3_l, band4_l, band5_l];
-            let mut bands_r = [band1_r, band2_r, band3_r, band4_r, band5_r];
-
-            let band_gains = [
-                db_to_gain(params.low_gain.value()),
-                db_to_gain(params.bass_gain.value()),
-                db_to_gain(params.mid_gain.value()),
-                db_to_gain(params.high_mid_gain.value()),
-                db_to_gain(params.high_gain.value()),
-            ];
-            let band_widths = [
-                params.low_width.value() / 100.0,
-                params.bass_width.value() / 100.0,
-                params.mid_width.value() / 100.0,
-                params.high_mid_width.value() / 100.0,
-                params.high_width.value() / 100.0,
-            ];
-            let band_pans = [
-                params.low_pan.value(),
-                params.bass_pan.value(),
-                params.mid_pan.value(),
-                params.high_mid_pan.value(),
-                params.high_pan.value(),
-            ];
-            let band_solos = [s_low, s_bass, s_mid, s_high_mid, s_high];
-
-            for b in 0..BAND_COUNT {
-                let bl = bands_l[b];
-                let br = bands_r[b];
-
-                // Pre-EQ input band power for LISTEN analysis
-                let input_power = (bl * bl + br * br) * 0.5;
-                block_input_band_power[b] += input_power;
-
-                let mut bl_g = bl * band_gains[b];
-                let mut br_g = br * band_gains[b];
-
-                // M/S Width
-                let mid = (bl_g + br_g) * 0.5;
-                let side = (bl_g - br_g) * 0.5;
-                let width_scale = if band_widths[b] > 1.0 {
-                    match b {
-                        0 => 1.0 + (band_widths[b] - 1.0) * 0.25,
-                        1 => 1.0 + (band_widths[b] - 1.0) * 0.65,
-                        _ => band_widths[b],
-                    }
-                } else {
-                    band_widths[b]
-                };
-                let side_w = side * width_scale;
-                let width_norm = 1.0 / (1.0 + (width_scale - 1.0).max(0.0) * 0.20);
-
-                // Constant-power pan with center normalization
-                let pan_val = band_pans[b].clamp(-1.0, 1.0);
-                let pan_angle = (pan_val + 1.0) * FRAC_PI_4;
-                let raw_l = pan_angle.cos();
-                let raw_r = pan_angle.sin();
-                let max_raw = raw_l.max(raw_r);
-                let pan_norm = if max_raw > 0.001 { 1.0 / max_raw } else { 1.0 };
-                let pan_l = raw_l * pan_norm;
-                let pan_r = raw_r * pan_norm;
-
-                bl_g = (mid + side_w) * pan_l * width_norm;
-                br_g = (mid - side_w) * pan_r * width_norm;
-
-                // Band power post-EQ (pre-solo)
-                let band_power = (bl_g * bl_g + br_g * br_g) * 0.5;
-                block_band_power[b] += band_power;
-
-                if !band_solos[b] {
-                    bl_g = 0.0;
-                    br_g = 0.0;
-                }
-
-                bands_l[b] = bl_g;
-                bands_r[b] = br_g;
-            }
-
-            let mut out_l = bands_l[0] + bands_l[1] + bands_l[2] + bands_l[3] + bands_l[4];
-            let mut out_r = bands_r[0] + bands_r[1] + bands_r[2] + bands_r[3] + bands_r[4];
-
-            // Mono Floor (Side HPF)
-            if mono_maker_freq > 1.0 {
-                let out_mid = (out_l + out_r) * 0.5;
-                let out_side = (out_l - out_r) * 0.5;
-                let out_side_filtered = state.mono_floor_filter.process(out_side);
-                out_l = out_mid + out_side_filtered;
-                out_r = out_mid - out_side_filtered;
-            }
-
-            if mono {
-                let m = (out_l + out_r) * 0.5;
-                out_l = m;
-                out_r = m;
-            }
-
-            let mut processed_l = out_l;
-            let mut processed_r = out_r;
-
-            if delta {
-                processed_l = out_l - cut_l;
-                processed_r = out_r - cut_r;
-            }
-
-            let out_gain = db_to_gain(params.output_gain.value());
-            processed_l *= out_gain;
-            processed_r *= out_gain;
-
-            if auto_gain {
-                processed_l *= state.auto_gain_comp;
-                processed_r *= state.auto_gain_comp;
-            }
-
-            // Safety clamp
-            processed_l = processed_l.clamp(-1.0, 1.0);
-            processed_r = processed_r.clamp(-1.0, 1.0);
-
-            sum_power_out += processed_l * processed_l + processed_r * processed_r;
-            sum_power_l += processed_l * processed_l;
-            sum_power_r += processed_r * processed_r;
-
-            if bypass {
-                out0[i] = in_l;
-                out1[i] = in_r;
-            } else {
-                max_out_peak = max_out_peak.max(processed_l.abs()).max(processed_r.abs());
-                max_out_peak_l = max_out_peak_l.max(processed_l.abs());
-                max_out_peak_r = max_out_peak_r.max(processed_r.abs());
-                out0[i] = processed_l;
-                out1[i] = processed_r;
-            }
-
-            let (output_l, output_r) = if bypass {
-                (in_l, in_r)
-            } else {
-                (processed_l, processed_r)
-            };
-
-            // Correlation
-            let corr_lr = output_l * output_r;
-            let corr_l2 = output_l * output_l;
-            let corr_r2 = output_r * output_r;
-            state.corr_avg_lr = (1.0 - state.correlation_decay_coef) * state.corr_avg_lr
-                + state.correlation_decay_coef * corr_lr;
-            state.corr_avg_l2 = (1.0 - state.correlation_decay_coef) * state.corr_avg_l2
-                + state.correlation_decay_coef * corr_l2;
-            state.corr_avg_r2 = (1.0 - state.correlation_decay_coef) * state.corr_avg_r2
-                + state.correlation_decay_coef * corr_r2;
-
-            // SNAP FFT capture
-            if snap_phase > 0 {
-                let sample = match snap_phase {
-                    1 | 2 => (output_l + output_r) * 0.5,
-                    3 => {
-                        let out_mono = (output_l + output_r) * 0.5;
-                        let in_mono = (in_l + in_r) * 0.5;
-                        out_mono - in_mono
-                    }
-                    _ => 0.0,
-                };
-
-                if state.snap_fft.push_sample(sample) {
-                    let frame = state.snap_fft.compute_fft(sample_rate);
-                    let threshold = if snap_phase == 2 || snap_phase == 3 {
-                        30
-                    } else {
-                        60
-                    };
-                    if state.snap_fft.accumulate_snap(&frame, snap_phase, threshold) {
-                        let mode = match snap_phase {
-                            1 => SnapMode::Stereo,
-                            2 => SnapMode::Mono,
-                            _ => SnapMode::Delta,
-                        };
-                        let snapshot = state.snap_fft.read_snapshot(mode);
-                        if let Ok(mut buf) = match mode {
-                            SnapMode::Stereo => params.shared.snap_stereo_snap.try_lock(),
-                            SnapMode::Mono => params.shared.snap_mono_snap.try_lock(),
-                            SnapMode::Delta => params.shared.snap_delta_snap.try_lock(),
-                        } {
-                            buf.copy_from_slice(&snapshot);
-                        }
-                        let next_phase = if snap_phase < 3 { snap_phase + 1 } else { 0 };
-                        if next_phase == 0 {
-                            params
-                                .shared
-                                .snap_active
-                                .store(false, std::sync::atomic::Ordering::Release);
-                        } else {
-                            state.snap_fft.reset_snapshots();
-                        }
-                        params
-                            .shared
-                            .snap_phase
-                            .store(next_phase, std::sync::atomic::Ordering::Release);
-                        snap_phase = next_phase;
-                    }
-                }
-            }
-        }
-
-        // Pink noise carries equal energy per octave, so a band's total power
-        // scales with its octave span — wider bands read hotter and the display
-        // stair-steps upward. Divide each band's power by its octave width so a
-        // pink-noise reference lands on a flat spectrum. Applied to both the
-        // post-EQ meter and the pre-EQ LISTEN power so every downstream reading
-        // (bars, listen, min/max, learned targets) stays per-octave consistent.
-        // ponytail: SUB_LO_HZ is the Sub band's lower edge — empirically the pink
-        // test source is band-limited near 20 Hz (not the 8 Hz DC highpass), so
-        // 20 lands Sub flat. Air's upper edge is Nyquist, so band 4 is
-        // sample-rate dependent. CAL_TRIM_DB is the residual per-band calibration
-        // left after the octave model: measured by feeding pink noise and reading
-        // the bars flat. Air runs ~1 dB hot from LR2 (12 dB/oct) skirt overlap.
-        // Retune both only if a pink reference no longer sits flat.
-        const SUB_LO_HZ: f32 = 20.0;
-        const CAL_TRIM_DB: [f32; 5] = [0.0, 0.0, 0.0, 0.0, -1.0];
-        let band_octaves = [
-            (80.0f32 / SUB_LO_HZ).log2(),
-            (300.0f32 / 80.0).log2(),
-            (2000.0f32 / 300.0).log2(),
-            (6000.0f32 / 2000.0).log2(),
-            (sample_rate * 0.5 / 6000.0).log2(),
-        ];
-        for b in 0..BAND_COUNT {
-            // Fold octave width + calibration trim into one power divisor.
-            // trim adds dB to the reading, so divide power by 10^(-trim/10).
-            let div = band_octaves[b] * 10f32.powf(-CAL_TRIM_DB[b] / 10.0);
-            block_band_power[b] /= div;
-            block_input_band_power[b] /= div;
-        }
-
-        let sample_weight = 1.0 / count_samples as f32;
-        let buf_coef = 1.0 - (-(num_samples as f32) / (0.1 * sample_rate)).exp();
-
-        // Stereo balance smoothing
-        let avg_power_l = sum_power_l * sample_weight;
-        let avg_power_r = sum_power_r * sample_weight;
-        state.smoothed_power_l = (1.0 - buf_coef) * state.smoothed_power_l + buf_coef * avg_power_l;
-        state.smoothed_power_r = (1.0 - buf_coef) * state.smoothed_power_r + buf_coef * avg_power_r;
-        let rms_l = state.smoothed_power_l.sqrt();
-        let rms_r = state.smoothed_power_r.sqrt();
-        let sum_rms = rms_l + rms_r;
-        let balance = if sum_rms > 1e-6 {
-            (rms_l - rms_r) / sum_rms
-        } else {
-            0.0
-        };
-        params
-            .shared
-            .balance
-            .store(balance, std::sync::atomic::Ordering::Release);
-
-        // Band power → dB
-        for b in 0..BAND_COUNT {
-            let average_band_power = block_band_power[b] * sample_weight;
-            state.smoothed_band_power[b] =
-                (1.0 - buf_coef) * state.smoothed_band_power[b] + buf_coef * average_band_power;
-            let band_db = gain_to_db(state.smoothed_band_power[b].sqrt());
-            params.shared.band_levels[b].store(band_db, std::sync::atomic::Ordering::Release);
-
-            if listen {
-                let pow = block_input_band_power[b] as f64;
-                state.listen_band_power_sum[b] += pow;
-
-                let input_avg_pow = block_input_band_power[b] * sample_weight;
-                let input_avg_f64 = input_avg_pow as f64;
-
-                state.listen_ref_ema[b] = 0.01 * input_avg_f64 + 0.99 * state.listen_ref_ema[b];
-                let gate = (state.listen_ref_ema[b] * 0.01).max(1e-6);
-
-                if input_avg_f64 > gate {
-                    if !state.listen_lo_ema[b].is_finite() {
-                        state.listen_lo_ema[b] = input_avg_f64;
-                        state.listen_hi_ema[b] = input_avg_f64;
-                    } else {
-                        if input_avg_f64 < state.listen_lo_ema[b] {
-                            state.listen_lo_ema[b] += 0.15 * (input_avg_f64 - state.listen_lo_ema[b]);
-                        } else {
-                            state.listen_lo_ema[b] += 0.02 * (input_avg_f64 - state.listen_lo_ema[b]);
-                        }
-                        if input_avg_f64 > state.listen_hi_ema[b] {
-                            state.listen_hi_ema[b] += 0.15 * (input_avg_f64 - state.listen_hi_ema[b]);
-                        } else {
-                            state.listen_hi_ema[b] += 0.02 * (input_avg_f64 - state.listen_hi_ema[b]);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Listen analysis post-processing
-        if listen {
-            state.listen_sample_count += count_samples as u64;
-            params.shared.listen_samples.store(
-                state.listen_sample_count as f32,
-                std::sync::atomic::Ordering::Release,
-            );
-
-            if state.listen_sample_count > 0 {
-                let div = 1.0 / state.listen_sample_count as f64;
-                for b in 0..BAND_COUNT {
-                    let avg_pow = state.listen_band_power_sum[b] * div;
-                    let lo_pow = if state.listen_lo_ema[b].is_finite() {
-                        state.listen_lo_ema[b]
-                    } else {
-                        avg_pow
-                    };
-                    let hi_pow = if state.listen_hi_ema[b].is_finite() {
-                        state.listen_hi_ema[b]
-                    } else {
-                        avg_pow
-                    };
-
-                    let avg_db = gain_to_db((avg_pow as f32).sqrt());
-                    let lo_db = gain_to_db((lo_pow.max(1e-10) as f32).sqrt());
-                    let hi_db = gain_to_db((hi_pow.max(1e-10) as f32).sqrt());
-
-                    const ALPHA: f32 = 0.2;
-                    state.listen_levels_ema[b] =
-                        ALPHA * avg_db + (1.0 - ALPHA) * state.listen_levels_ema[b];
-                    let listen_tolerance = (hi_db - lo_db) * 0.5;
-
-                    params.shared.listen_levels[b].store(
-                        state.listen_levels_ema[b],
-                        std::sync::atomic::Ordering::Release,
-                    );
-                    params.shared.listen_level_min[b]
-                        .store(lo_db, std::sync::atomic::Ordering::Release);
-                    params.shared.listen_level_max[b]
-                        .store(hi_db, std::sync::atomic::Ordering::Release);
-                    params.shared.listen_tolerances[b]
-                        .store(listen_tolerance, std::sync::atomic::Ordering::Release);
-                }
-            }
-        } else if state.listen_sample_count > 0 {
-            state.listen_sample_count = 0;
-            params
-                .shared
-                .listen_samples
-                .store(0.0, std::sync::atomic::Ordering::Release);
-            for b in 0..BAND_COUNT {
-                state.listen_band_power_sum[b] = 0.0;
-                state.listen_lo_ema[b] = f64::INFINITY;
-                state.listen_hi_ema[b] = f64::NEG_INFINITY;
-                state.listen_ref_ema[b] = 0.0;
-                params.shared.listen_tolerances[b]
-                    .store(0.0, std::sync::atomic::Ordering::Release);
-            }
-        }
-
-        // Correlation
-        let den = (state.corr_avg_l2 * state.corr_avg_r2).sqrt();
-        let correlation = if den > 1e-9 {
-            state.corr_avg_lr / den
-        } else {
-            1.0
-        };
-        params.shared.phase_correlation.store(
-            correlation.clamp(-1.0, 1.0),
-            std::sync::atomic::Ordering::Release,
-        );
-
-        // Peak meters
-        let block_peak_db = gain_to_db(max_out_peak);
-        params
-            .shared
-            .output_peak
-            .store(block_peak_db, std::sync::atomic::Ordering::Release);
-        if block_peak_db > state.peak_hold_value {
-            state.peak_hold_value = block_peak_db;
-        }
-        params
-            .shared
-            .peak_hold
-            .store(state.peak_hold_value, std::sync::atomic::Ordering::Release);
-
-        let peak_l_db = gain_to_db(max_out_peak_l);
-        let peak_r_db = gain_to_db(max_out_peak_r);
-        params
-            .shared
-            .output_peak_l
-            .store(peak_l_db, std::sync::atomic::Ordering::Release);
-        params
-            .shared
-            .output_peak_r
-            .store(peak_r_db, std::sync::atomic::Ordering::Release);
-        if peak_l_db > state.peak_hold_l_value {
-            state.peak_hold_l_value = peak_l_db;
-        }
-        if peak_r_db > state.peak_hold_r_value {
-            state.peak_hold_r_value = peak_r_db;
-        }
-        params
-            .shared
-            .peak_hold_l
-            .store(state.peak_hold_l_value, std::sync::atomic::Ordering::Release);
-        params
-            .shared
-            .peak_hold_r
-            .store(state.peak_hold_r_value, std::sync::atomic::Ordering::Release);
-
-        // Auto gain
-        if auto_gain && count_samples > 0 {
-            let avg_power_in = sum_power_in * sample_weight;
-            let avg_power_out = sum_power_out * sample_weight;
-            if avg_power_out > 1e-9 && avg_power_in > 1e-9 {
-                let ratio = (avg_power_in / avg_power_out).sqrt();
-                state.auto_gain_comp = 0.95 * state.auto_gain_comp + 0.05 * ratio;
-            } else {
-                state.auto_gain_comp = 1.0;
-            }
-        } else {
-            state.auto_gain_comp = 1.0;
-        }
-
-        // AUTO LOUD
-        if params
-            .shared
-            .auto_loud_trigger
-            .load(std::sync::atomic::Ordering::Acquire)
-        {
-            params
-                .shared
-                .auto_loud_trigger
-                .store(false, std::sync::atomic::Ordering::Release);
-            params
-                .shared
-                .auto_loud_measuring
-                .store(true, std::sync::atomic::Ordering::Release);
-            state.auto_loud_in.reset();
-            state.auto_loud_out.reset();
-        }
-        if is_measuring {
-            state.auto_loud_out.feed(out0, out1);
-            let target_samples = (5.0 * sample_rate as f64) as u64;
-            if state.auto_loud_out.sample_count() >= target_samples {
-                let in_lufs = state.auto_loud_in.loudness_db();
-                let out_lufs = state.auto_loud_out.loudness_db();
-                let out_tp = state.auto_loud_out.true_peak_db();
-                let lufs_offset = in_lufs - out_lufs;
-                let peak_limit = DBTP_CEILING - out_tp;
-                let offset_clamped = lufs_offset.clamp(-24.0, peak_limit);
-                params
-                    .shared
-                    .auto_loud_gain_offset
-                    .store(offset_clamped, std::sync::atomic::Ordering::Release);
-                params
-                    .shared
-                    .auto_loud_measuring
-                    .store(false, std::sync::atomic::Ordering::Release);
-            }
-        }
-
-        // PRE-MASTER
-        if params.pre_master_active.value() {
-            let target_linear = db_to_gain(params.pre_master_target_db.raw_target() as f32);
-            let n = out0.len().min(out1.len());
-            let sr_safe = if sample_rate > 0.0 {
-                sample_rate
-            } else {
-                48_000.0
-            };
-            let measure_samples = (0.200 * sr_safe) as u32;
-
-            if !state.pre_master_active_prev {
-                state.pre_master_measure_peak = 0.0;
-                state.pre_master_measure_count = 0;
-                state.pre_master_gain = 1.0;
-                state.pre_master_active_prev = true;
-            }
-
-            if state.pre_master_measure_count < measure_samples {
-                let mut block_peak = 0.0f32;
-                for i in 0..n {
-                    block_peak = block_peak.max(out0[i].abs()).max(out1[i].abs());
-                }
-                state.pre_master_measure_peak = state.pre_master_measure_peak.max(block_peak);
-                state.pre_master_measure_count += n as u32;
-            }
-
-            if state.pre_master_measure_count >= measure_samples && state.pre_master_gain == 1.0 {
-                let gate = db_to_gain(-50.0);
-                if state.pre_master_measure_peak > gate {
-                    let max_boost = db_to_gain(12.0);
-                    let max_cut = db_to_gain(-24.0);
-                    state.pre_master_gain =
-                        (target_linear / state.pre_master_measure_peak).clamp(max_cut, max_boost);
-                } else {
-                    state.pre_master_measure_count = 0;
-                    state.pre_master_measure_peak = 0.0;
-                }
-            }
-
-            for i in 0..n {
-                out0[i] *= state.pre_master_gain;
-                out1[i] *= state.pre_master_gain;
-            }
-
-            let mut post_peak = 0.0f32;
-            let mut post_peak_l = 0.0f32;
-            let mut post_peak_r = 0.0f32;
-            for i in 0..n {
-                let abs_l = out0[i].abs();
-                let abs_r = out1[i].abs();
-                post_peak = post_peak.max(abs_l).max(abs_r);
-                post_peak_l = post_peak_l.max(abs_l);
-                post_peak_r = post_peak_r.max(abs_r);
-            }
-            let post_db = gain_to_db(post_peak.max(1e-9));
-            params
-                .shared
-                .output_peak
-                .store(post_db, std::sync::atomic::Ordering::Release);
-            if post_db > state.peak_hold_value {
-                state.peak_hold_value = post_db;
-            }
-            params
-                .shared
-                .peak_hold
-                .store(state.peak_hold_value, std::sync::atomic::Ordering::Release);
-            let post_l_db = gain_to_db(post_peak_l.max(1e-9));
-            let post_r_db = gain_to_db(post_peak_r.max(1e-9));
-            params
-                .shared
-                .output_peak_l
-                .store(post_l_db, std::sync::atomic::Ordering::Release);
-            params
-                .shared
-                .output_peak_r
-                .store(post_r_db, std::sync::atomic::Ordering::Release);
-            if post_l_db > state.peak_hold_l_value {
-                state.peak_hold_l_value = post_l_db;
-            }
-            if post_r_db > state.peak_hold_r_value {
-                state.peak_hold_r_value = post_r_db;
-            }
-            params
-                .shared
-                .peak_hold_l
-                .store(state.peak_hold_l_value, std::sync::atomic::Ordering::Release);
-            params
-                .shared
-                .peak_hold_r
-                .store(state.peak_hold_r_value, std::sync::atomic::Ordering::Release);
-        } else {
-            state.pre_master_gain = 1.0;
-            state.pre_master_active_prev = false;
-        }
-
-        // Goniometer scope buffer
-        {
-            let start_pos = params
-                .shared
-                .scope_write_pos
-                .load(std::sync::atomic::Ordering::Acquire);
-            if let Ok(mut scope) = params.shared.scope_samples.try_lock() {
-                let buf_len = SCOPE_BUFFER_LEN;
-                let n = out0.len().min(out1.len());
-                let block_peak = (0..n)
-                    .map(|i| out0[i].abs().max(out1[i].abs()))
-                    .fold(0.0f32, f32::max)
-                    .max(1e-9);
-                let att = 1.0 - (-(n as f32) / (0.005 * sample_rate)).exp();
-                let rel = 1.0 - (-(n as f32) / (0.300 * sample_rate)).exp();
-                if block_peak > state.scope_vis_envelope {
-                    state.scope_vis_envelope += att * (block_peak - state.scope_vis_envelope);
-                } else {
-                    state.scope_vis_envelope += rel * (block_peak - state.scope_vis_envelope);
-                }
-                let vis_gain = if state.scope_vis_envelope > 1e-5 {
-                    (0.9 / state.scope_vis_envelope).min(20.0)
-                } else {
-                    0.0
-                };
-                for i in 0..n {
-                    let pos = (start_pos + i) % buf_len;
-                    scope[pos] = [out0[i] * vis_gain, out1[i] * vis_gain];
-                }
-                params.shared.scope_write_pos.store(
-                    (start_pos + n) % buf_len,
-                    std::sync::atomic::Ordering::Release,
-                );
-            }
-        }
-
-        ProcessStatus::Normal
+        process::run(state, params, buffer)
     }
 
     fn snapshot_into(_state: &EquilibriumDspState, _buf: &mut Vec<u8>) -> bool {
