@@ -7,8 +7,7 @@ use lx_analysis::compute_spectrum_bins;
 use lx_dsp::FtzDazGuard;
 
 use crate::{
-    read_persisted, reconcile_stale_target, sync_live, FFT_SIZE, LucentRelayDspState,
-    LucentRelayParams,
+    read_persisted, sync_live, FFT_SIZE, LucentRelayDspState, LucentRelayParams,
 };
 
 pub(crate) fn run(
@@ -24,16 +23,22 @@ pub(crate) fn run(
     }
 
     let (n, t) = read_persisted(params);
+    let mut changed = false;
     if n != state.cached_name {
         state.cached_name = n;
+        changed = true;
     }
-    if t != state.cached_target {
+    let target_changed = t != state.cached_target;
+    if target_changed {
         state.cached_target = t;
+        changed = true;
     }
-    reconcile_stale_target(params, &mut state.cached_target);
-    sync_live(params);
+    if changed {
+        sync_live(params);
+    }
+    state.resolve_target(params, now_ms, target_changed);
 
-    // Pass-through (copy input ÔåÆ output per channel)
+    // Pass-through (copy input → output per channel)
     for ch in 0..buffer.channels() {
         let (inp, out) = buffer.io(ch);
         out.copy_from_slice(inp);

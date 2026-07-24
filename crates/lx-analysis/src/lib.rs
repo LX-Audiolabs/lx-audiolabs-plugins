@@ -9,8 +9,8 @@ pub use snap_fft::{SnapFFT, SnapMode};
 // Re-export lx-shm transparently so existing callers keep working
 pub use lx_shm as shm;
 pub use lx_shm::{
-    display_name, now_ms, relay_hub, resolve_relay_target, RelayHub, EQ_BANDS, MAX_CONSUMERS,
-    MAX_NAME_LEN, MAX_SLOTS, SPECTRUM_BINS, STALE_MS,
+    display_name, now_ms, relay_hub, resolve_from_consumers, resolve_relay_target, RelayHub,
+    EQ_BANDS, MAX_CONSUMERS, MAX_NAME_LEN, MAX_SLOTS, SPECTRUM_BINS, STALE_MS,
 };
 
 // Re-export vault/preset/config types so existing callers don't need to change imports
@@ -23,8 +23,9 @@ pub use lx_vault::{
 pub const SCOPE_BUFFER_LEN: usize = 4096;
 
 /// Pre-clipper waveform ring (signed linear samples) — Aurum SHAPE clipper display.
-/// ~170 ms at 48 kHz — enough history for a scrolling waveform, not spectrum hops.
-pub const CLIP_WAVE_LEN: usize = 8192;
+/// ~340 ms at 48 kHz — longer window slows/stretches the scrolling waveform so
+/// clipping transients are easier to see and aim.
+pub const CLIP_WAVE_LEN: usize = 16384;
 
 /// Pixel columns in the clipper mini-display (min/max bucketed from the ring).
 pub const CLIP_WAVE_DISPLAY: usize = 320;
@@ -109,8 +110,9 @@ mod clip_wave_tests {
 }
 
 /// Raw dB above which display tilt is applied in [`compute_spectrum_bins`].
-/// Sub-threshold bins stay at the noise floor so silence is not boosted.
-pub const SPECTRUM_TILT_RAW_GATE_DB: f32 = -80.0;
+/// Bins at the -90 floor (true digital silence) stay un-tilted so silence is
+/// not boosted; everything above gets tilted, matching SPAN's slope behavior.
+pub const SPECTRUM_TILT_RAW_GATE_DB: f32 = -90.0;
 
 /// 4.5 dB/octave display tilt at `freq` (0 below 20 Hz).
 #[inline]
@@ -247,7 +249,8 @@ pub struct SharedState {
     pub auto_loud_gain_offset: Arc<AtomicF32>,
     /// FFT magnitude spectrum — Sum (L+R)*0.5, SPECTRUM_BINS bins, dB with tilt
     pub spectrum_bins: Arc<Mutex<Vec<f32>>>,
-    /// Exponential moving average of spectrum_bins (α=1/50, ~50-frame average)
+    /// Exponential moving average of spectrum_bins (α=1/6 per FFT hop,
+    /// ~250 ms at 48 kHz — fast enough to keep transient highs visible)
     pub spectrum_avg: Arc<Mutex<Vec<f32>>>,
     /// Ring buffer of [L, R] pairs for the goniometer/vectorscope display
     pub scope_samples: Arc<Mutex<Vec<[f32; 2]>>>,
@@ -282,6 +285,9 @@ pub struct SharedState {
     /// Per-relay enable mask keyed by SHM publisher slot (bit `i` = slot `i` active).
     /// `0` means "no UI preference — treat all relays as active" (editor closed).
     pub relay_active_mask: Arc<AtomicU32>,
+    /// UI-only display toggle: 1/3-octave smoothing on the spectrum view.
+    /// Read by the editor tick each frame; not persisted, not a plugin param.
+    pub spectrum_smooth: Arc<AtomicBool>,
 }
 
 impl Default for SharedState {
@@ -385,6 +391,7 @@ impl Default for SharedState {
             shm_slot: Arc::new(AtomicI32::new(-1)),
             shm_generation: Arc::new(AtomicU32::new(0)),
             relay_active_mask: Arc::new(AtomicU32::new(0)),
+            spectrum_smooth: Arc::new(AtomicBool::new(false)),
         }
     }
 }

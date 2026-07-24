@@ -8,7 +8,7 @@ use truce::prelude::*;
 use truce_core::{editor::Editor, state::StateLoadError};
 
 use lx_analysis::{
-    spectrum_physical_db, SPECTRUM_BINS, SharedState, SnapFFT, relay_hub, SPECTRUM_TILT_RAW_GATE_DB,
+    spectrum_physical_db, SPECTRUM_BINS, SharedState, relay_hub, SPECTRUM_TILT_RAW_GATE_DB,
 };
 
 /// Claim a consumer slot (if needed) and refresh the Lucent display name in SHM.
@@ -57,18 +57,21 @@ pub struct ResonanceLists {
 const CONTRIB_FLOOR_DB: f32 = -70.0;
 
 /// For each (bin, score) group-level peak, find which named Relay spectra
-/// are actually above the floor at that bin.
+/// are actually above the floor at that bin. `mask` filters relay slots
+/// (0 = all active), same semantics as `filter_relays_by_mask`.
 pub(crate) fn attribute_contributors(
     peaks: &[(usize, f32)],
-    relay_spectra: &[(String, Vec<f32>)],
+    relay_spectra: &[(u8, String, Vec<f32>)],
+    mask: u32,
 ) -> Vec<(usize, f32, Vec<String>)> {
     peaks
         .iter()
         .map(|(bin, score)| {
             let contributors = relay_spectra
                 .iter()
-                .filter(|(_, spec)| spec.get(*bin).copied().unwrap_or(-90.0) > CONTRIB_FLOOR_DB)
-                .map(|(name, _)| name.clone())
+                .filter(|(slot, _, _)| mask == 0 || mask & (1u32 << slot) != 0)
+                .filter(|(_, _, spec)| spec.get(*bin).copied().unwrap_or(-90.0) > CONTRIB_FLOOR_DB)
+                .map(|(_, name, _)| name.clone())
                 .collect();
             (*bin, *score, contributors)
         })
@@ -87,21 +90,22 @@ fn resonance_registry() -> &'static ResonanceRegistry {
 }
 
 pub fn publish_resonance(key: usize, lists: ResonanceLists) {
-    if let Ok(mut m) = resonance_registry().lock() {
+    // try_lock: audio thread must never block on the editor reader.
+    if let Ok(mut m) = resonance_registry().try_lock() {
         m.insert(key, lists);
     }
 }
 
 pub fn read_resonance(key: usize) -> ResonanceLists {
     resonance_registry()
-        .lock()
+        .try_lock()
         .ok()
         .and_then(|m| m.get(&key).cloned())
         .unwrap_or_default()
 }
 
 pub fn remove_resonance(key: usize) {
-    if let Ok(mut m) = resonance_registry().lock() {
+    if let Ok(mut m) = resonance_registry().try_lock() {
         m.remove(&key);
     }
 }
@@ -116,46 +120,47 @@ fn masking_registry() -> &'static MaskingRegistry {
 }
 
 pub fn publish_masking(key: usize, peaks: Vec<(usize, f32, Vec<String>)>) {
-    if let Ok(mut m) = masking_registry().lock() {
+    if let Ok(mut m) = masking_registry().try_lock() {
         m.insert(key, peaks);
     }
 }
 
 pub fn read_masking(key: usize) -> Vec<(usize, f32, Vec<String>)> {
     masking_registry()
-        .lock()
+        .try_lock()
         .ok()
         .and_then(|m| m.get(&key).cloned())
         .unwrap_or_default()
 }
 
 pub fn remove_masking(key: usize) {
-    if let Ok(mut m) = masking_registry().lock() {
+    if let Ok(mut m) = masking_registry().try_lock() {
         m.remove(&key);
     }
 }
 
-/// Per-bin power-sum (linear domain) of multiple dB spectra, back to dB.
-/// Models how the tracks actually combine on a bus — e.g. two -6dB signals
-/// at the same frequency sum to ~-3dB, not -6dB (`min`/`max` would say -6dB
-/// and miss the additive buildup).
-fn power_sum_spectrum(spectra: &[Vec<f32>]) -> Vec<f32> {
-    let mut out = vec![-90.0f32; SPECTRUM_BINS];
-    if spectra.is_empty() {
-        return out;
-    }
-    for (j, out_slot) in out.iter_mut().enumerate() {
-        let sum_lin: f32 = spectra
+/// Per-bin power-sum (linear domain) of named dB spectra, into `out` (no alloc).
+/// Models how tracks combine on a bus — e.g. two -6dB at same bin → ~-3dB.
+/// `mask` filters relay slots (0 = all active).
+pub(crate) fn power_sum_named_into(
+    relay_named: &[(u8, String, Vec<f32>)],
+    mask: u32,
+    out: &mut [f32],
+) {
+    let n = out.len().min(SPECTRUM_BINS);
+    out[..n].fill(-90.0);
+    for j in 0..n {
+        let sum_lin: f32 = relay_named
             .iter()
-            .map(|s| 10f32.powf(s.get(j).copied().unwrap_or(-90.0) / 10.0))
+            .filter(|(slot, _, _)| mask == 0 || mask & (1u32 << slot) != 0)
+            .map(|(_, _, s)| 10f32.powf(s.get(j).copied().unwrap_or(-90.0) / 10.0))
             .sum();
-        *out_slot = if sum_lin < 1e-9 {
+        out[j] = if sum_lin < 1e-9 {
             -90.0
         } else {
             10.0 * sum_lin.log10()
         };
     }
-    out
 }
 
 /// Drops peaks that are almost certainly a musical overtone of a louder,
@@ -248,7 +253,7 @@ fn track_has_masking_signal(spectrum: &[f32], sample_rate: f32) -> bool {
 
 struct MaskingAnalyzer {
     /// Persistence-gated collision level per bin — what everything outside
-    /// this struct reads (FFT overlay bars, `top_peaks`).
+    /// this struct reads (FFT overlay bars, `peaks_above_floor`).
     masking_map: Vec<f32>,
     /// This frame's ERB-smoothed collision level, before the persistence
     /// gate. Kept separate so a single loud-but-brief collision doesn't
@@ -256,10 +261,17 @@ struct MaskingAnalyzer {
     raw: Vec<f32>,
     persistence: Vec<u32>,
     scratch: Vec<f32>,
-    /// Names of the two tracks whose pairwise collision produced `scratch[j]`
-    /// / `masking_map[j]` (empty when no collision above floor at that bin).
-    scratch_contributors: Vec<Vec<String>>,
-    masking_contributors: Vec<Vec<String>>,
+    /// Contributor ids for `scratch[j]` / `masking_map[j]`: `0` = Own,
+    /// `1..=n` = index into `relay_names` + 1, `u8::MAX` = no collision.
+    /// Ids instead of per-bin `Vec<String>` keep the FFT-hop path alloc-free;
+    /// names are only resolved for the few reported peaks in
+    /// `peaks_above_floor`.
+    scratch_ids: Vec<(u8, u8)>,
+    masking_ids: Vec<(u8, u8)>,
+    /// Names for the current frame's relay contributor ids (reused buffer).
+    relay_names: Vec<String>,
+    /// Per-relay "has signal" flags for the current frame (reused buffer).
+    relay_live: Vec<bool>,
 }
 
 impl MaskingAnalyzer {
@@ -269,20 +281,24 @@ impl MaskingAnalyzer {
             raw: vec![-90.0; SPECTRUM_BINS],
             persistence: vec![0u32; SPECTRUM_BINS],
             scratch: vec![-90.0; SPECTRUM_BINS],
-            scratch_contributors: vec![Vec::new(); SPECTRUM_BINS],
-            masking_contributors: vec![Vec::new(); SPECTRUM_BINS],
+            scratch_ids: vec![(u8::MAX, u8::MAX); SPECTRUM_BINS],
+            masking_ids: vec![(u8::MAX, u8::MAX); SPECTRUM_BINS],
+            relay_names: Vec::new(),
+            relay_live: Vec::new(),
         }
     }
 
     /// `relay_named` pairs each Relay spectrum with its track name so a
     /// masking collision can be attributed to the two tracks that caused it.
-    /// `persistence_min` is the Sensitivity knob's shared persistence gate
+    /// `mask` filters relay slots (0 = all active). `persistence_min` is the
+    /// Sensitivity knob's shared persistence gate
     /// (same field resonance uses) — a collision only counts once it holds
     /// for that many frames, not on a single-frame blip.
     fn compute_masking(
         &mut self,
         own_spectrum: Option<&[f32]>,
-        relay_named: &[(String, Vec<f32>)],
+        relay_named: &[(u8, String, Vec<f32>)],
+        mask: u32,
         floor_db: f32,
         sample_rate: f32,
         persistence_min: u32,
@@ -292,35 +308,55 @@ impl MaskingAnalyzer {
         let own_live = own_spectrum
             .map(|s| track_has_masking_signal(s, sample_rate))
             .unwrap_or(false);
-        let relay_live: Vec<bool> = relay_named
-            .iter()
-            .map(|(_, s)| track_has_masking_signal(s, sample_rate))
-            .collect();
+
+        // Refresh contributor names/live flags in reused buffers — no per-hop
+        // allocation once the relay set is stable.
+        self.relay_live.clear();
+        let mut name_count = 0;
+        for (slot, name, s) in relay_named.iter() {
+            self.relay_live.push(
+                (mask == 0 || mask & (1u32 << slot) != 0)
+                    && track_has_masking_signal(s, sample_rate),
+            );
+            if let Some(existing) = self.relay_names.get_mut(name_count) {
+                existing.clear();
+                existing.push_str(name);
+            } else {
+                self.relay_names.push(name.clone());
+            }
+            name_count += 1;
+        }
+        self.relay_names.truncate(name_count);
 
         for j in 0..n {
             let freq = j as f32 * bin_hz;
-            let mut active: [(f32, &str); 17] = [(-90.0f32, ""); 17];
+            // (level, contributor id) — 0 = Own, 1..=n = relay index + 1.
+            let mut active: [(f32, u8); 17] = [(-90.0f32, u8::MAX); 17];
             let mut count = 0usize;
 
             if let Some(own_spec) = own_spectrum {
                 let own = spectrum_physical_db(own_spec.get(j).copied().unwrap_or(-90.0), freq);
                 if own_live && own > floor_db {
-                    active[count] = (own, "Own");
+                    active[count] = (own, 0);
                     count += 1;
                 }
             }
-            for ((name, relay), live) in relay_named.iter().zip(relay_live.iter()) {
+            for (i, ((_, _, relay), live)) in relay_named
+                .iter()
+                .zip(self.relay_live.iter())
+                .enumerate()
+            {
                 if let Some(&v) = relay.get(j) {
                     let phys = spectrum_physical_db(v, freq);
                     if *live && phys > floor_db && count < active.len() {
-                        active[count] = (phys, name.as_str());
+                        active[count] = (phys, (i + 1) as u8);
                         count += 1;
                     }
                 }
             }
 
             let mut best = -90.0f32;
-            let mut best_pair = ("", "");
+            let mut best_pair = (u8::MAX, u8::MAX);
             for a in 0..count {
                 for b in (a + 1)..count {
                     let collision = active[a].0.min(active[b].0);
@@ -331,11 +367,7 @@ impl MaskingAnalyzer {
                 }
             }
             self.scratch[j] = best;
-            self.scratch_contributors[j] = if best > -90.0 {
-                vec![best_pair.0.to_string(), best_pair.1.to_string()]
-            } else {
-                Vec::new()
-            };
+            self.scratch_ids[j] = best_pair;
         }
 
         // Smooth over the ERB (critical-band) width around each bin instead
@@ -360,7 +392,7 @@ impl MaskingAnalyzer {
                 }
             }
             self.raw[j] = m;
-            self.masking_contributors[j] = self.scratch_contributors[m_idx].clone();
+            self.masking_ids[j] = self.scratch_ids[m_idx];
         }
 
         const PERSIST_CAP: u32 = 40;
@@ -378,20 +410,46 @@ impl MaskingAnalyzer {
         }
     }
 
-    /// Top `n` masking-collision bins (frequency + dB + the two contributing
-    /// track names), sorted by severity. Mirrors the selection logic that
-    /// used to live in `editor.rs::masking_summary`, moved here so the
-    /// contributor names travel with the peak instead of being dropped.
-    fn top_peaks(&self, n: usize, floor_db: f32) -> Vec<(usize, f32, Vec<String>)> {
-        let mut peaks: Vec<(usize, f32, Vec<String>)> = self
-            .masking_map
-            .iter()
-            .enumerate()
-            .filter(|&(_, &db)| db > floor_db)
-            .map(|(i, &db)| (i, db, self.masking_contributors[i].clone()))
-            .collect();
+    /// Local-maxima of the masking map above `floor_db`. Sorted by severity
+    /// descending. No hard N-cap — Sensitivity is the gate; UI truncates for
+    /// display, SNAP exports the full list.
+    fn peaks_above_floor(&self, floor_db: f32) -> Vec<(usize, f32, Vec<String>)> {
+        let n = self.masking_map.len();
+        let mut peaks = Vec::new();
+        for i in 0..n {
+            let db = self.masking_map[i];
+            if db <= floor_db {
+                continue;
+            }
+            let left = if i == 0 {
+                f32::NEG_INFINITY
+            } else {
+                self.masking_map[i - 1]
+            };
+            let right = if i + 1 >= n {
+                f32::NEG_INFINITY
+            } else {
+                self.masking_map[i + 1]
+            };
+            if db >= left && db >= right {
+                // Resolve contributor ids → names only for reported peaks.
+                let (a, b) = self.masking_ids[i];
+                let mut names = Vec::with_capacity(2);
+                for id in [a, b] {
+                    match id {
+                        u8::MAX => {}
+                        0 => names.push("Own".to_string()),
+                        r => {
+                            if let Some(name) = self.relay_names.get((r - 1) as usize) {
+                                names.push(name.clone());
+                            }
+                        }
+                    }
+                }
+                peaks.push((i, db, names));
+            }
+        }
         peaks.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        peaks.truncate(n);
         peaks
     }
 }
@@ -603,7 +661,11 @@ pub struct LucentDspState {
     pub(crate) peak_tracker: PeakTracker,
     pub(crate) relay_peak_tracker: PeakTracker,
     pub(crate) masking_analyzer: MaskingAnalyzer,
-    pub(crate) snap_fft: SnapFFT,
+    /// Scratch for group-level power-sum (avoids per-FFT heap alloc on RT).
+    pub(crate) relay_sum_buf: Vec<f32>,
+    /// Reused relay-feed buffer for `read_active_into` — after the first hop
+    /// with a stable relay set, no heap allocs on the RT path.
+    pub(crate) relay_scratch: Vec<(u8, String, Vec<f32>)>,
     pub(crate) sample_rate: f32,
     pub(crate) peak_hold_value: f32,
     pub(crate) peak_hold_l_value: f32,
@@ -707,7 +769,8 @@ impl Default for LucentDspState {
             peak_tracker: PeakTracker::new(),
             relay_peak_tracker: PeakTracker::new(),
             masking_analyzer: MaskingAnalyzer::new(44100.0),
-            snap_fft: SnapFFT::new(),
+            relay_sum_buf: vec![-90.0; SPECTRUM_BINS],
+            relay_scratch: Vec::new(),
             sample_rate: 44100.0,
             peak_hold_value: -100.0,
             peak_hold_l_value: -100.0,
@@ -846,14 +909,31 @@ mod masking_tests {
         let sr = 48_000.0;
         let silent = tilted_silent_spectrum(sr);
         let relays = [
-            ("Relay A".to_string(), silent.clone()),
-            ("Relay B".to_string(), silent),
+            (0u8, "Relay A".to_string(), silent.clone()),
+            (1u8, "Relay B".to_string(), silent),
         ];
         let mut analyzer = MaskingAnalyzer::new(sr);
-        analyzer.compute_masking(None, &relays, -70.0, sr, 4);
+        analyzer.compute_masking(None, &relays, 0, -70.0, sr, 4);
         assert!(
-            analyzer.top_peaks(3, -70.0).is_empty(),
+            analyzer.peaks_above_floor(-70.0).is_empty(),
             "tilted silence must not register as masking"
+        );
+    }
+
+    #[test]
+    fn collision_reports_contributor_names() {
+        let sr = 48_000.0;
+        let mut peak = vec![-90.0f32; SPECTRUM_BINS];
+        peak[100] = 0.0;
+        let relays = [(0u8, "Relay A".to_string(), peak.clone())];
+        let mut analyzer = MaskingAnalyzer::new(sr);
+        analyzer.compute_masking(Some(&peak), &relays, 0, -70.0, sr, 0);
+        let peaks = analyzer.peaks_above_floor(-70.0);
+        assert!(
+            peaks.iter().any(|(_, _, names)| {
+                names.iter().any(|n| n == "Own") && names.iter().any(|n| n == "Relay A")
+            }),
+            "collision should name both contributors, got {peaks:?}"
         );
     }
 

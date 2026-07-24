@@ -582,6 +582,21 @@ impl RelayHub {
     /// If all retries fail, that slot is silently skipped.
     pub fn read_active(&self, my_name: &str, now_ms: u64) -> Vec<(u8, String, Vec<f32>)> {
         let mut out = Vec::new();
+        self.read_active_into(my_name, now_ms, &mut out);
+        out
+    }
+
+    /// [`read_active`] variant that reuses a caller-owned buffer: as long as the
+    /// live relay set stays the same, no heap allocation happens after the first
+    /// call (names and bin vectors keep their capacity across calls). Intended
+    /// for the audio-thread FFT-hop path; UI/debug code can keep `read_active`.
+    pub fn read_active_into(
+        &self,
+        my_name: &str,
+        now_ms: u64,
+        out: &mut Vec<(u8, String, Vec<f32>)>,
+    ) {
+        let mut n = 0;
         for idx in 0..MAX_SLOTS {
             let s = unsafe { &(*self.shared).slots[idx] };
 
@@ -601,7 +616,7 @@ impl RelayHub {
 
                 let mut name_buf = [0u8; MAX_NAME_LEN];
                 let mut target_buf = [0u8; MAX_NAME_LEN];
-                let mut bins = vec![0.0f32; SPECTRUM_BINS];
+                let mut bins = [0.0f32; SPECTRUM_BINS];
                 let (name_len, target_len) = unsafe {
                     std::ptr::copy_nonoverlapping(
                         s.bins.get() as *const f32,
@@ -629,14 +644,23 @@ impl RelayHub {
                 if seq1 == seq2 {
                     let target = String::from_utf8_lossy(&target_buf[..target_len]);
                     if target.is_empty() || target == my_name {
-                        let name = String::from_utf8_lossy(&name_buf[..name_len]).into_owned();
-                        out.push((idx as u8, name, bins));
+                        let name = String::from_utf8_lossy(&name_buf[..name_len]);
+                        if let Some(entry) = out.get_mut(n) {
+                            entry.0 = idx as u8;
+                            entry.1.clear();
+                            entry.1.push_str(&name);
+                            entry.2.clear();
+                            entry.2.extend_from_slice(&bins);
+                        } else {
+                            out.push((idx as u8, name.into_owned(), bins.to_vec()));
+                        }
+                        n += 1;
                     }
                     break;
                 }
             }
         }
-        out
+        out.truncate(n);
     }
 
     /// Diagnostic dump of all publisher slots — which are active, their labels,
@@ -1057,7 +1081,16 @@ impl RelayHub {
     /// }
     /// ```
     pub fn read_consumers(&self, now_ms: u64) -> Vec<String> {
-        let mut out: Vec<String> = Vec::new();
+        let mut out = Vec::new();
+        self.read_consumers_into(now_ms, &mut out);
+        out
+    }
+
+    /// [`read_consumers`] variant that reuses a caller-owned buffer (keeps the
+    /// `String` capacities across calls). For hot paths that resolve relay
+    /// targets repeatedly.
+    pub fn read_consumers_into(&self, now_ms: u64, out: &mut Vec<String>) {
+        let mut n = 0;
         for idx in 0..MAX_CONSUMERS {
             let s = unsafe { &(*self.shared).consumers[idx] };
 
@@ -1083,15 +1116,21 @@ impl RelayHub {
                 fence(Ordering::Acquire);
                 let seq2 = s.seq.load(Ordering::Acquire);
                 if seq1 == seq2 {
-                    let name = String::from_utf8_lossy(&name_buf[..name_len]).into_owned();
-                    if !name.is_empty() && !out.contains(&name) {
-                        out.push(name);
+                    let name = String::from_utf8_lossy(&name_buf[..name_len]);
+                    if !name.is_empty() && !out[..n].iter().any(|c| c == &name) {
+                        if let Some(slot) = out.get_mut(n) {
+                            slot.clear();
+                            slot.push_str(&name);
+                        } else {
+                            out.push(name.into_owned());
+                        }
+                        n += 1;
                     }
                     break;
                 }
             }
         }
-        out
+        out.truncate(n);
     }
 }
 
@@ -1133,12 +1172,21 @@ pub fn resolve_relay_target(hub: &RelayHub, selected: &str, now_ms: u64) -> Opti
     if selected.is_empty() {
         return Some(String::new());
     }
-    if hub.consumer_exists(selected, now_ms) {
+    resolve_from_consumers(selected, &hub.read_consumers(now_ms))
+}
+
+/// Pure [`resolve_relay_target`] against an already-fetched consumer list —
+/// no hub scan. Use when the caller read the consumers once and resolves
+/// (possibly repeatedly) from that snapshot.
+pub fn resolve_from_consumers(selected: &str, consumers: &[String]) -> Option<String> {
+    if selected.is_empty() {
+        return Some(String::new());
+    }
+    if consumers.iter().any(|c| c == selected) {
         return Some(selected.to_string());
     }
-    let lucents = hub.read_consumers(now_ms);
-    if lucents.len() == 1 {
-        return Some(lucents[0].clone());
+    if consumers.len() == 1 {
+        return Some(consumers[0].clone());
     }
     // ponytail: broadcast beats silent drop when the saved target is stale
     Some(String::new())
@@ -1148,14 +1196,27 @@ pub fn resolve_relay_target(hub: &RelayHub, selected: &str, now_ms: u64) -> Opti
 mod resolve_target_tests {
     use super::*;
 
+    // NOTE: no hub-based "stale target broadcasts" test here — the hub is
+    // process-global shared memory, so a parallel test (or a running plugin)
+    // with a live consumer heartbeat makes "no consumers" racy. The resolve
+    // logic is covered deterministically by `resolve_from_consumers_pure_cases`.
+
     #[test]
-    fn stale_target_with_no_consumers_broadcasts() {
-        let hub = RelayHub::open_or_create().expect("hub");
-        let now = now_ms();
-        assert_eq!(
-            resolve_relay_target(&hub, "Hub 1", now).as_deref(),
-            Some("")
-        );
+    fn resolve_from_consumers_pure_cases() {
+        let none: Vec<String> = Vec::new();
+        assert_eq!(resolve_from_consumers("", &none).as_deref(), Some(""));
+        // stale target, no consumers → broadcast (publish must not silently stop)
+        assert_eq!(resolve_from_consumers("Ghost", &none).as_deref(), Some(""));
+
+        let one = vec!["Lucent 1".to_string()];
+        assert_eq!(resolve_from_consumers("Lucent 1", &one).as_deref(), Some("Lucent 1"));
+        // stale target, exactly one consumer → auto-target it
+        assert_eq!(resolve_from_consumers("Ghost", &one).as_deref(), Some("Lucent 1"));
+
+        let two = vec!["A".to_string(), "B".to_string()];
+        assert_eq!(resolve_from_consumers("B", &two).as_deref(), Some("B"));
+        // stale target, multiple consumers → broadcast
+        assert_eq!(resolve_from_consumers("Ghost", &two).as_deref(), Some(""));
     }
 
     #[test]

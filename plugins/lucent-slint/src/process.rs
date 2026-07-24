@@ -1,14 +1,16 @@
-//! Lucent process path split for profile/isolation.
+//! Lucent process path — RT polish from dev 1.0.0:
+//! FtzDazGuard, relay_scratch / read_active_into, masking id path,
+//! EMA α=1/6, no SnapFFT on audio thread.
 //!
-//! ponytail: same-crate module split only — no behavior change.
+//! ponytail: same-crate module split — behavior matches lx-audiolabs-dev lucent.
 
 use std::sync::atomic::Ordering;
 use truce::prelude::*;
-
-use lx_analysis::{filter_relays_by_mask, relay_hub, SnapMode, SPECTRUM_BINS};
+use lx_analysis::{relay_hub, SPECTRUM_BINS};
+use lx_dsp::FtzDazGuard;
 
 use crate::{
-    attribute_contributors, gain_to_db, power_sum_spectrum, publish_masking, publish_resonance,
+    attribute_contributors, gain_to_db, power_sum_named_into, publish_masking, publish_resonance,
     sensitivity_thresholds, suppress_harmonics, LucentDspState, LucentParams, ResonanceLists,
 };
 
@@ -17,6 +19,7 @@ pub(crate) fn run(
     params: &LucentParams,
     buffer: &mut AudioBuffer,
 ) -> ProcessStatus {
+    let _ftz = FtzDazGuard::new();
     let fft_size = state.fft_input.len();
     let now_ms = lx_analysis::shm::now_ms();
 
@@ -31,16 +34,42 @@ pub(crate) fn run(
     }
 
     let mode = params.analyze_mode.value();
-    let snap_phase = params.shared.snap_phase.load(Ordering::Acquire);
 
-    // Pass-through: copy input to output
-    for ch in 0..buffer.channels() {
+    // Pass-through: copy input → output when not pure in-place (empty input
+    // sentinel means host already shares the buffer — data is on output).
+    let n_ch = buffer.channels();
+    let n = buffer.num_samples();
+    if n_ch == 0 || n == 0 {
+        return ProcessStatus::Normal;
+    }
+    for ch in 0..n_ch {
+        if buffer.input(ch).is_empty() {
+            continue;
+        }
         let (inp, out) = buffer.io(ch);
         out.copy_from_slice(inp);
     }
 
+    // Snapshot L/R from output (always holds the pass-through result, and is
+    // also the right source under pure in-place). Avoids buffer.input() empty
+    // sentinel panics on in-place hosts / chunked process.
+    // ponytail: fixed stack cap — DAW blocks stay well under 8k.
+    const MAX_BLOCK: usize = 8192;
+    let n = n.min(MAX_BLOCK);
+    let mut lbuf = [0.0f32; MAX_BLOCK];
+    let mut rbuf = [0.0f32; MAX_BLOCK];
+    {
+        let s0 = buffer.in_out_mut(0);
+        lbuf[..n].copy_from_slice(&s0[..n]);
+    }
+    if n_ch > 1 {
+        let s1 = buffer.in_out_mut(1);
+        rbuf[..n].copy_from_slice(&s1[..n]);
+    } else {
+        rbuf[..n].copy_from_slice(&lbuf[..n]);
+    }
+
     // Analysis
-    let n = buffer.num_samples();
     let sample_rate = state.sample_rate;
     let scope_len = lx_analysis::SCOPE_BUFFER_LEN;
 
@@ -54,57 +83,9 @@ pub(crate) fn run(
 
     #[allow(clippy::needless_range_loop)]
     for i in 0..n {
-        let in_l = buffer.input(0)[i];
-        let in_r = buffer.input(1)[i];
+        let in_l = lbuf[i];
+        let in_r = rbuf[i];
         let mono_in = (in_l + in_r) * 0.5;
-
-        // SNAP FFT (same pattern as Meridian/Equilibrium)
-        if snap_phase > 0 {
-            let sample = match snap_phase {
-                1 | 2 => mono_in,
-                3 => {
-                    let in_mono = (in_l + in_r) * 0.5;
-                    let out_mono = mono_in; // Lucent is pass-through, so out = in for SNAP
-                    out_mono - in_mono // delta = 0 for pure analyzer
-                }
-                _ => 0.0,
-            };
-            if state.snap_fft.push_sample(sample) {
-                let frame = state.snap_fft.compute_fft(sample_rate);
-                let threshold = if snap_phase == 2 || snap_phase == 3 {
-                    30
-                } else {
-                    60
-                };
-                if state.snap_fft.accumulate_snap(&frame, snap_phase, threshold) {
-                    let mode_snap = match snap_phase {
-                        1 => SnapMode::Stereo,
-                        2 => SnapMode::Mono,
-                        _ => SnapMode::Delta,
-                    };
-                    let snapshot = state.snap_fft.read_snapshot(mode_snap);
-                    if let Ok(mut buf) = match mode_snap {
-                        SnapMode::Stereo => params.shared.snap_stereo_snap.try_lock(),
-                        SnapMode::Mono => params.shared.snap_mono_snap.try_lock(),
-                        SnapMode::Delta => params.shared.snap_delta_snap.try_lock(),
-                    } {
-                        *buf = snapshot;
-                    }
-                    let next_phase = if snap_phase < 3 { snap_phase + 1 } else { 0 };
-                    params
-                        .shared
-                        .snap_phase
-                        .store(next_phase, Ordering::Release);
-                    if next_phase == 0 {
-                        params
-                            .shared
-                            .snap_active
-                            .store(false, Ordering::Release);
-                        state.snap_fft.reset_snapshots();
-                    }
-                }
-            }
-        }
 
         max_out_l = max_out_l.max(in_l.abs());
         max_out_r = max_out_r.max(in_r.abs());
@@ -172,9 +153,12 @@ pub(crate) fn run(
                                 frame.iter().map(|x| x * x).sum::<f32>() / n_bins as f32;
                             let energy_db = 10.0 * frame_energy.log10().max(-40.0);
                             let gate = energy_db > -80.0;
+                            // α=1/6 per FFT hop ≈ 250 ms at 48 kHz — SPAN-like
+                            // speed; was 49/50 (~2.1 s), which smeared
+                            // transient highs into invisibility.
                             for k in 0..n_bins {
                                 let input = if gate { frame[k] } else { 0.0 };
-                                avg[k] = avg[k] * (49.0 / 50.0) + input * (1.0 / 50.0);
+                                avg[k] = avg[k] * (5.0 / 6.0) + input * (1.0 / 6.0);
                             }
                         }
                     }
@@ -186,35 +170,38 @@ pub(crate) fn run(
                         state.peak_tracker.update(&peaks);
                         let own_resonances = state.peak_tracker.resonance_peaks(&sensitivity);
 
-                        let my_name = state.cached_display_name.clone();
                         let mask = params
                             .shared
                             .relay_active_mask
                             .load(Ordering::Acquire);
-                        let relay_named: Vec<(String, Vec<f32>)> = relay_hub()
-                            .map(|hub| {
-                                filter_relays_by_mask(
-                                    mask,
-                                    hub.read_active(&my_name, now_ms),
-                                )
-                            })
-                            .unwrap_or_default();
-                        let relay_spectra: Vec<Vec<f32>> =
-                            relay_named.iter().map(|(_, spec)| spec.clone()).collect();
+                        if let Some(hub) = relay_hub() {
+                            hub.read_active_into(
+                                &state.cached_display_name,
+                                now_ms,
+                                &mut state.relay_scratch,
+                            );
+                        } else {
+                            state.relay_scratch.clear();
+                        }
 
-                        // Group-level resonance: power-sum of the Relay tracks can show
-                        // a buildup that no single track (nor this bus's own signal) has.
-                        let relay_sum = power_sum_spectrum(&relay_spectra);
+                        // Group-level resonance: power-sum of Relay tracks (scratch buf).
+                        power_sum_named_into(
+                            &state.relay_scratch,
+                            mask,
+                            &mut state.relay_sum_buf,
+                        );
                         let relay_peaks = state.relay_peak_tracker.find_peaks(
-                            &relay_sum,
+                            &state.relay_sum_buf,
                             &sensitivity,
                             sample_rate,
                         );
-                        let relay_peaks = suppress_harmonics(&relay_sum, relay_peaks);
+                        let relay_peaks =
+                            suppress_harmonics(&state.relay_sum_buf, relay_peaks);
                         state.relay_peak_tracker.update(&relay_peaks);
                         let relay_resonances = attribute_contributors(
                             &state.relay_peak_tracker.resonance_peaks(&sensitivity),
-                            &relay_named,
+                            &state.relay_scratch,
+                            mask,
                         );
 
                         publish_resonance(
@@ -227,15 +214,18 @@ pub(crate) fn run(
 
                         state.masking_analyzer.compute_masking(
                             Some(&frame),
-                            &relay_named,
+                            &state.relay_scratch,
+                            mask,
                             sensitivity.masking_floor_db,
                             sample_rate,
                             sensitivity.persistence_min,
                         );
+                        // Full list for SNAP; UI still truncates when formatting text.
                         publish_masking(
                             state.instance_key,
-                            state.masking_analyzer
-                                .top_peaks(3, sensitivity.masking_floor_db),
+                            state
+                                .masking_analyzer
+                                .peaks_above_floor(sensitivity.masking_floor_db),
                         );
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.copy_from_slice(&state.masking_analyzer.masking_map);
@@ -248,9 +238,12 @@ pub(crate) fn run(
                                 frame.iter().map(|x| x * x).sum::<f32>() / n_bins as f32;
                             let energy_db = 10.0 * frame_energy.log10().max(-40.0);
                             let gate = energy_db > -80.0;
+                            // α=1/6 per FFT hop ≈ 250 ms at 48 kHz — SPAN-like
+                            // speed; was 49/50 (~2.1 s), which smeared
+                            // transient highs into invisibility.
                             for k in 0..n_bins {
                                 let input = if gate { frame[k] } else { 0.0 };
-                                avg[k] = avg[k] * (49.0 / 50.0) + input * (1.0 / 50.0);
+                                avg[k] = avg[k] * (5.0 / 6.0) + input * (1.0 / 6.0);
                             }
                         }
                     }
@@ -261,36 +254,38 @@ pub(crate) fn run(
                         if let Ok(mut avg) = params.shared.spectrum_avg.try_lock() {
                             avg.iter_mut().for_each(|b| *b = -90.0);
                         }
-                        let my_name = state.cached_display_name.clone();
                         let mask = params
                             .shared
                             .relay_active_mask
                             .load(Ordering::Acquire);
-                        let relay_named: Vec<(String, Vec<f32>)> = relay_hub()
-                            .map(|hub| {
-                                filter_relays_by_mask(
-                                    mask,
-                                    hub.read_active(&my_name, now_ms),
-                                )
-                            })
-                            .unwrap_or_default();
-                        let relay_spectra: Vec<Vec<f32>> =
-                            relay_named.iter().map(|(_, spec)| spec.clone()).collect();
+                        if let Some(hub) = relay_hub() {
+                            hub.read_active_into(
+                                &state.cached_display_name,
+                                now_ms,
+                                &mut state.relay_scratch,
+                            );
+                        } else {
+                            state.relay_scratch.clear();
+                        }
 
-                        // RELAY mode: no own signal, so resonance is purely the
-                        // Relay tracks "untereinander und zusammen" ÔÇö masking below
-                        // covers "untereinander" (pairwise), this covers "zusammen".
-                        let relay_sum = power_sum_spectrum(&relay_spectra);
+                        // RELAY mode: group resonance from Relay sum only.
+                        power_sum_named_into(
+                            &state.relay_scratch,
+                            mask,
+                            &mut state.relay_sum_buf,
+                        );
                         let relay_peaks = state.relay_peak_tracker.find_peaks(
-                            &relay_sum,
+                            &state.relay_sum_buf,
                             &sensitivity,
                             sample_rate,
                         );
-                        let relay_peaks = suppress_harmonics(&relay_sum, relay_peaks);
+                        let relay_peaks =
+                            suppress_harmonics(&state.relay_sum_buf, relay_peaks);
                         state.relay_peak_tracker.update(&relay_peaks);
                         let relay_resonances = attribute_contributors(
                             &state.relay_peak_tracker.resonance_peaks(&sensitivity),
-                            &relay_named,
+                            &state.relay_scratch,
+                            mask,
                         );
                         publish_resonance(
                             state.instance_key,
@@ -302,15 +297,17 @@ pub(crate) fn run(
 
                         state.masking_analyzer.compute_masking(
                             None,
-                            &relay_named,
+                            &state.relay_scratch,
+                            mask,
                             sensitivity.masking_floor_db,
                             sample_rate,
                             sensitivity.persistence_min,
                         );
                         publish_masking(
                             state.instance_key,
-                            state.masking_analyzer
-                                .top_peaks(3, sensitivity.masking_floor_db),
+                            state
+                                .masking_analyzer
+                                .peaks_above_floor(sensitivity.masking_floor_db),
                         );
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.copy_from_slice(&state.masking_analyzer.masking_map);
@@ -382,7 +379,7 @@ pub(crate) fn run(
             .store(corr.clamp(-1.0, 1.0), Ordering::Release);
     }
 
-    // Goniometer scope buffer ÔÇö visual auto-gain envelope, same pattern
+    // Goniometer scope buffer — visual auto-gain envelope, same pattern
     // as Equilibrium/Meridian (5ms attack / 300ms release envelope
     // scaling samples to ~90% of the display), so Lucent's vectorscope
     // fills the same visual range as theirs instead of showing a tiny
@@ -391,10 +388,8 @@ pub(crate) fn run(
         let start_pos = params.shared.scope_write_pos.load(Ordering::Acquire);
         if let Ok(mut scope) = params.shared.scope_samples.try_lock() {
             let buf_len = scope_len;
-            let in0 = buffer.input(0);
-            let in1 = buffer.input(1);
             let block_peak = (0..n)
-                .map(|i| in0[i].abs().max(in1[i].abs()))
+                .map(|i| lbuf[i].abs().max(rbuf[i].abs()))
                 .fold(0.0f32, f32::max)
                 .max(1e-9);
             let att = 1.0 - (-(n as f32) / (0.005 * sample_rate)).exp();
@@ -411,7 +406,7 @@ pub(crate) fn run(
             };
             for i in 0..n {
                 let pos = (start_pos + i) % buf_len;
-                scope[pos] = [in0[i] * vis_gain, in1[i] * vis_gain];
+                scope[pos] = [lbuf[i] * vis_gain, rbuf[i] * vis_gain];
             }
             params
                 .shared

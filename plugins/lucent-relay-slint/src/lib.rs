@@ -5,12 +5,18 @@ use std::sync::{Arc, RwLock};
 use truce::prelude::*;
 use truce_core::editor::Editor;
 
-use lx_analysis::{SPECTRUM_BINS, SharedState, relay_hub, resolve_relay_target};
+use lx_analysis::{
+    RelayHub, SPECTRUM_BINS, SharedState, relay_hub, resolve_from_consumers, resolve_relay_target,
+};
 
 mod editor;
 mod process;
 
 pub(crate) const FFT_SIZE: usize = 2048;
+/// How often the DSP side re-resolves its publish target against the SHM
+/// consumer table. Well under `STALE_MS` (500), so heartbeats never go stale;
+/// target-param changes bypass the interval and resolve immediately.
+const RESOLVE_INTERVAL_MS: u64 = 250;
 #[allow(dead_code)]
 const WINDOW_W: u32 = 260;
 #[allow(dead_code)]
@@ -65,33 +71,40 @@ pub(crate) fn sync_live(params: &LucentRelayParams) {
     }
 }
 
-/// Clear a persisted target that no longer matches any live Lucent consumer.
-pub(crate) fn reconcile_stale_target(params: &LucentRelayParams, cached_target: &mut String) {
-    let Some(hub) = relay_hub() else {
-        return;
-    };
-    let now_ms = lx_analysis::shm::now_ms();
-    if cached_target.is_empty() {
-        return;
+/// Resolve `selected` against one consumer-list snapshot and persist the fix
+/// when the persisted target went stale. Returns the target to publish with.
+fn resolve_and_reconcile(
+    hub: &RelayHub,
+    params: &LucentRelayParams,
+    consumers: &mut Vec<String>,
+    selected: &str,
+    now_ms: u64,
+) -> String {
+    hub.read_consumers_into(now_ms, consumers);
+    let resolved = resolve_from_consumers(selected, consumers).unwrap_or_default();
+    if !selected.is_empty() && resolved != selected {
+        // persisted target went stale — write the resolution back
+        let mut changed = false;
+        if let Ok(mut t) = params.target.write() {
+            if *t != resolved {
+                *t = resolved.clone();
+                changed = true;
+            }
+        }
+        if changed {
+            sync_live(params);
+        }
     }
-    let lucents = hub.read_consumers(now_ms);
-    if lucents.iter().any(|n| n == cached_target) {
-        return;
-    }
-    let resolved = resolve_relay_target(hub, cached_target, now_ms).unwrap_or_default();
-    if resolved == *cached_target {
-        return;
-    }
-    *cached_target = resolved.clone();
-    if let Ok(mut t) = params.target.write() {
-        *t = resolved;
-    }
-    sync_live(params);
+    resolved
 }
 
 /// Editor tick path — claim publisher slot and refresh heartbeat without transport.
 pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
     use std::sync::atomic::Ordering;
+    thread_local! {
+        static CONSUMERS_SCRATCH: std::cell::RefCell<Vec<String>> =
+            std::cell::RefCell::new(Vec::new());
+    }
     let now_ms = lx_analysis::shm::now_ms();
     let Some(hub) = relay_hub() else {
         return;
@@ -109,15 +122,12 @@ pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
         params.shm.shm_generation.store(generation, Ordering::Release);
     }
 
-    let mut cached_target = params
-        .target
-        .read()
-        .map(|s| s.clone())
-        .unwrap_or_default();
-    reconcile_stale_target(params, &mut cached_target);
-
     let (raw, sel) = read_persisted(params);
-    let target = resolve_relay_target(hub, &sel, now_ms).unwrap_or_default();
+    let target = CONSUMERS_SCRATCH.with(|scratch| {
+        let mut cons = scratch.borrow_mut();
+        cons.clear();
+        resolve_and_reconcile(hub, params, &mut cons, &sel, now_ms)
+    });
     let label = if raw.is_empty() {
         format!("Relay {}", slot as u8 + 1)
     } else {
@@ -145,6 +155,13 @@ pub struct LucentRelayDspState {
     pub(crate) cached_name: String,
     pub(crate) fallback_label: String,
     pub(crate) cached_target: String,
+    /// Last resolved publish target — refreshed by `resolve_target` at
+    /// `RESOLVE_INTERVAL_MS` cadence (or instantly on target-param change)
+    /// instead of re-scanning the SHM consumer table every block/hop.
+    pub(crate) resolved_target: String,
+    pub(crate) last_resolve_ms: Option<u64>,
+    /// Reused consumer-list buffer for `read_consumers_into` (no per-resolve alloc).
+    pub(crate) consumers_scratch: Vec<String>,
     #[allow(dead_code)]
     pub(crate) target_buf: [u8; lx_analysis::shm::MAX_NAME_LEN],
     pub(crate) liveness: Option<Arc<std::sync::atomic::AtomicBool>>,
@@ -184,6 +201,9 @@ impl Default for LucentRelayDspState {
             cached_name: String::new(),
             fallback_label: String::from("Relay"),
             cached_target: String::new(),
+            resolved_target: String::new(),
+            last_resolve_ms: None,
+            consumers_scratch: Vec::new(),
             target_buf: [0u8; lx_analysis::shm::MAX_NAME_LEN],
             liveness: None,
             instance_key: 0,
@@ -251,7 +271,34 @@ impl LucentRelayDspState {
         });
     }
 
-    fn publish_fft(&mut self, now_ms: u64) {
+    /// Refresh `resolved_target` from the SHM consumer table — at most once
+    /// per `RESOLVE_INTERVAL_MS`, or immediately when `force` (target param
+    /// changed / state loaded). Keeps the per-block and per-FFT-hop paths
+    /// free of consumer-table scans.
+    pub(crate) fn resolve_target(&mut self, params: &LucentRelayParams, now_ms: u64, force: bool) {
+        if !force
+            && let Some(last) = self.last_resolve_ms
+            && now_ms.wrapping_sub(last) < RESOLVE_INTERVAL_MS
+        {
+            return;
+        }
+        let Some(hub) = relay_hub() else {
+            return;
+        };
+        self.last_resolve_ms = Some(now_ms);
+        self.resolved_target = resolve_and_reconcile(
+            hub,
+            params,
+            &mut self.consumers_scratch,
+            &self.cached_target,
+            now_ms,
+        );
+        if self.resolved_target != self.cached_target {
+            self.cached_target = self.resolved_target.clone();
+        }
+    }
+
+    pub(crate) fn publish_fft(&mut self, now_ms: u64) {
         let Some(slot) = self.claimed_slot else {
             return;
         };
@@ -261,15 +308,12 @@ impl LucentRelayDspState {
         } else {
             &self.cached_name
         };
-        let Some(target) = resolve_relay_target(hub, &self.cached_target, now_ms) else {
-            return;
-        };
         {
             let ok = hub.write(
                 slot,
                 self.claimed_generation,
                 label,
-                &target,
+                &self.resolved_target,
                 &self.fft_bins,
                 &[-90.0f32; 5],
                 now_ms,
@@ -330,6 +374,8 @@ impl PluginLogic for LucentRelay {
         let (name, target) = read_persisted(params);
         state.cached_name = name;
         state.cached_target = target;
+        // Force a target re-resolve on the next block after a state load.
+        state.last_resolve_ms = None;
         sync_live(params);
     }
 
