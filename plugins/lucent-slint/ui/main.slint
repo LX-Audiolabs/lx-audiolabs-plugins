@@ -1,6 +1,6 @@
 import {
     Lx, LxShellHeader, LxShellBody, LxShellMain, LxShellRight, LxShellLeft,
-    LxKnob, LxToggleBtn, LxLineEdit, LxSpectrum, LxSegmentedButton, LxPanel, LxSection,
+    LxKnob, LxToggleBtn, LxButton, LxLineEdit, LxSpectrum, LxSegmentedButton, LxPanel, LxSection,
     LxStereoMeter,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 
@@ -13,7 +13,7 @@ export component LucentUi inherits Window {
     title: "Lucent";
     background: Lx.window;
 
-    in property <string> version: "0.3.6";
+    in property <string> version: "1.0.0";
 
     // Identity
     in-out property <string> display_name: "";
@@ -32,6 +32,12 @@ export component LucentUi inherits Window {
     in property <string> sensitivity_text: "50%";
     callback sensitivity_changed(float);
 
+    // SPAN-like display: 1/3-oct smooth (default off) + session SNAP
+    in-out property <bool> spectrum_smooth: false;
+    callback spectrum_smooth_changed(bool);
+    callback snap_clicked();
+    in property <string> snap_status: "";
+
     // Viz / telemetry
     in property <string> spectrum_cmds: "";
     in property <string> mask_cmds: "";
@@ -42,6 +48,10 @@ export component LucentUi inherits Window {
     in property <float> peak_l: 0.0;
     in property <float> peak_r: 0.0;
     in property <int> relay_count: 0;
+    // SPAN range labels (−18 top … −78 bottom)
+    in property <string> db_top: "-18 dB";
+    in property <string> db_mid: "-48";
+    in property <string> db_bot: "-78";
 
     VerticalLayout {
         padding: 0;
@@ -67,6 +77,16 @@ export component LucentUi inherits Window {
                     field-width: 160px;
                     accepted => { root.display_name_changed(self.text); }
                     committed => { root.display_name_changed(self.text); }
+                }
+                LxToggleBtn {
+                    label: "SMOOTH";
+                    small: true;
+                    active <=> root.spectrum_smooth;
+                    toggled => { root.spectrum_smooth_changed(self.active); }
+                }
+                LxButton {
+                    text: "SNAP";
+                    clicked => { root.snap_clicked(); }
                 }
                 LxToggleBtn {
                     label: "BYPASS";
@@ -148,9 +168,9 @@ export component LucentUi inherits Window {
                             commands: root.spectrum_cmds;
                             path-w: 900;
                             path-h: 400;
-                            db-top: "0 dB";
-                            db-mid: "-45";
-                            db-bot: "-90";
+                            db-top: root.db_top;
+                            db-mid: root.db_mid;
+                            db-bot: root.db_bot;
                         }
 
                         // Masking overlay path (stroke-only style via second spectrum tint)
@@ -175,8 +195,14 @@ export component LucentUi inherits Window {
                             font-size: Lx.font-sm;
                             vertical-alignment: center;
                         }
+                        if root.snap_status != "": Text {
+                            text: root.snap_status;
+                            color: Lx.amber;
+                            font-size: Lx.font-xs;
+                            vertical-alignment: center;
+                        }
                         Text {
-                            text: "20 Hz — 20 kHz";
+                            text: "20 Hz — 20 kHz  ·  −78…−18 dB";
                             color: Lx.text-dim;
                             font-size: Lx.font-xs;
                             vertical-alignment: center;

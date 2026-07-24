@@ -1,6 +1,6 @@
 [package]
 name = "lucent-relay-slint"
-version = "0.3.6"
+version = "1.0.0"
 edition = "2024"
 description = "LX Audiolabs — Lucent Relay (Slint UI — FFT sender, pass-through)"
 license = "GPL-3.0-or-later"

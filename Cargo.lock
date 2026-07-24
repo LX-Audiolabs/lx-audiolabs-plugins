@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aether-slint"
-version = "1.2.7"
+version = "1.2.8"
 dependencies = [
  "clap-sys",
  "lx-analysis",
@@ -319,7 +319,7 @@ checksum = "62af46d040ba9df09edc6528dae9d8e49f5f3e82f55b7d2ec31a733c38dbc49d"
 
 [[package]]
 name = "aurum-slint"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "clap-sys",
  "lx-analysis",
@@ -1188,7 +1188,7 @@ dependencies = [
 
 [[package]]
 name = "equilibrium-slint"
-version = "1.6.10"
+version = "1.6.11"
 dependencies = [
  "clap-sys",
  "lx-analysis",
@@ -2800,7 +2800,7 @@ dependencies = [
 
 [[package]]
 name = "lucent-relay-slint"
-version = "0.3.6"
+version = "1.0.0"
 dependencies = [
  "clap-sys",
  "lx-analysis",
@@ -2822,7 +2822,7 @@ dependencies = [
 
 [[package]]
 name = "lucent-slint"
-version = "0.3.6"
+version = "1.0.0"
 dependencies = [
  "clap-sys",
  "lx-analysis",
@@ -3026,7 +3026,7 @@ dependencies = [
 
 [[package]]
 name = "meridian-slint"
-version = "1.9.7"
+version = "1.9.8"
 dependencies = [
  "clap-sys",
  "lx-analysis",

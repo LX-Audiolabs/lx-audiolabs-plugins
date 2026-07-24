@@ -1,6 +1,6 @@
 [package]
 name = "meridian-slint"
-version = "1.9.7"
+version = "1.9.8"
 edition = "2024"
 description = "LX Audiolabs — Meridian (Slint UI test)"
 license = "GPL-3.0-or-later"
