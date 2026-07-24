@@ -5,14 +5,12 @@ use std::sync::{Arc, RwLock};
 use truce::prelude::*;
 use truce_core::editor::Editor;
 
-use lx_analysis::{
-    compute_spectrum_bins, SPECTRUM_BINS, SharedState, relay_hub, resolve_relay_target,
-};
-use lx_dsp::FtzDazGuard;
+use lx_analysis::{SPECTRUM_BINS, SharedState, relay_hub, resolve_relay_target};
 
 mod editor;
+mod process;
 
-const FFT_SIZE: usize = 2048;
+pub(crate) const FFT_SIZE: usize = 2048;
 #[allow(dead_code)]
 const WINDOW_W: u32 = 260;
 #[allow(dead_code)]
@@ -54,7 +52,7 @@ pub struct LucentRelayParams {
     pub shm: Arc<SharedState>,
 }
 
-fn read_persisted(params: &LucentRelayParams) -> (String, String) {
+pub(crate) fn read_persisted(params: &LucentRelayParams) -> (String, String) {
     let name = params.name.read().map(|s| s.clone()).unwrap_or_default();
     let target = params.target.read().map(|s| s.clone()).unwrap_or_default();
     (name, target)
@@ -68,7 +66,7 @@ pub(crate) fn sync_live(params: &LucentRelayParams) {
 }
 
 /// Clear a persisted target that no longer matches any live Lucent consumer.
-fn reconcile_stale_target(params: &LucentRelayParams, cached_target: &mut String) {
+pub(crate) fn reconcile_stale_target(params: &LucentRelayParams, cached_target: &mut String) {
     let Some(hub) = relay_hub() else {
         return;
     };
@@ -133,24 +131,24 @@ pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
 pub struct LucentRelay;
 
 pub struct LucentRelayDspState {
-    shm_state: Arc<SharedState>,
-    fft_fwd: Arc<dyn RealToComplex<f32>>,
-    fft_input: Vec<f32>,
-    fft_write_pos: usize,
-    fft_hann: Vec<f32>,
-    fft_windowed: Vec<f32>,
-    fft_output: Vec<Complex<f32>>,
-    fft_bins: Vec<f32>,
-    sample_rate: f32,
-    claimed_slot: Option<u8>,
-    claimed_generation: u32,
-    cached_name: String,
-    fallback_label: String,
-    cached_target: String,
+    pub(crate) shm_state: Arc<SharedState>,
+    pub(crate) fft_fwd: Arc<dyn RealToComplex<f32>>,
+    pub(crate) fft_input: Vec<f32>,
+    pub(crate) fft_write_pos: usize,
+    pub(crate) fft_hann: Vec<f32>,
+    pub(crate) fft_windowed: Vec<f32>,
+    pub(crate) fft_output: Vec<Complex<f32>>,
+    pub(crate) fft_bins: Vec<f32>,
+    pub(crate) sample_rate: f32,
+    pub(crate) claimed_slot: Option<u8>,
+    pub(crate) claimed_generation: u32,
+    pub(crate) cached_name: String,
+    pub(crate) fallback_label: String,
+    pub(crate) cached_target: String,
     #[allow(dead_code)]
-    target_buf: [u8; lx_analysis::shm::MAX_NAME_LEN],
-    liveness: Option<Arc<std::sync::atomic::AtomicBool>>,
-    instance_key: usize,
+    pub(crate) target_buf: [u8; lx_analysis::shm::MAX_NAME_LEN],
+    pub(crate) liveness: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pub(crate) instance_key: usize,
 }
 
 impl LucentRelayDspState {
@@ -318,66 +316,7 @@ impl PluginLogic for LucentRelay {
         _events: &EventList,
         _ctx: &mut ProcessContext,
     ) -> ProcessStatus {
-        let _ftz = FtzDazGuard::new();
-
-        let now_ms = lx_analysis::shm::now_ms();
-        if state.claimed_slot.is_none() {
-            state.claim_slot();
-        }
-
-        let (n, t) = read_persisted(params);
-        if n != state.cached_name {
-            state.cached_name = n;
-        }
-        if t != state.cached_target {
-            state.cached_target = t;
-        }
-        reconcile_stale_target(params, &mut state.cached_target);
-        sync_live(params);
-
-        // Pass-through (copy input → output per channel)
-        for ch in 0..buffer.channels() {
-            let (inp, out) = buffer.io(ch);
-            out.copy_from_slice(inp);
-        }
-
-        // FFT: read inputs via &self method to avoid double &mut borrow
-        let n_samples = buffer.num_samples();
-        for i in 0..n_samples {
-            let l = buffer.input(0)[i];
-            let r = if buffer.num_input_channels() > 1 {
-                buffer.input(1)[i]
-            } else {
-                l
-            };
-            state.fft_input[state.fft_write_pos] = (l + r) * 0.5;
-            state.fft_write_pos += 1;
-
-            if state.fft_write_pos >= FFT_SIZE {
-                state.fft_write_pos = 0;
-                for (d, (s, w)) in state
-                    .fft_windowed
-                    .iter_mut()
-                    .zip(state.fft_input.iter().zip(state.fft_hann.iter()))
-                {
-                    *d = s * w;
-                }
-                if state
-                    .fft_fwd
-                    .process(&mut state.fft_windowed, &mut state.fft_output)
-                    .is_ok()
-                {
-                    compute_spectrum_bins(
-                        &state.fft_output,
-                        &mut state.fft_bins,
-                        FFT_SIZE,
-                        state.sample_rate,
-                    );
-                    state.publish_fft(now_ms);
-                }
-            }
-        }
-        ProcessStatus::Normal
+        process::run(state, params, buffer)
     }
 
     fn snapshot_into(_state: &LucentRelayDspState, _buf: &mut Vec<u8>) -> bool {
