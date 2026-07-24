@@ -14,23 +14,19 @@ Not lazy: input validation, error handling preventing data loss, security, acces
 When `graphify-out/graph.json` exists, query/path/explain first before raw grep or source reads. `/graphify` to build/update.
 
 ## truce
-When writing, editing, or debugging truce plugin code (Params, PluginLogic, process, state, editor), consult `TRUCE_SKILL.md` in the sibling `lx-audiolabs-dev` repo — covers param macros, lifecycle, threading rules, common bugs, shared crates, and build workflow.
+When writing, editing, or debugging truce plugin code (Params, PluginLogic, process, state, editor), ALWAYS consult `TRUCE_SKILL.md` — covers param macros, lifecycle, threading rules, common bugs, shared crates, and build workflow.
+Building: `cargo truce install --clap -p <pluginname>` (release build).
 
 ## Slint
-When writing, editing, or debugging `.slint` files, ALWAYS consult `SLINT_SKILL.md` first — it covers language rules, layout/sizing, common compile errors, truce-slint interop, and widget reference. Slint version: **1.17.1**, software renderer only.
-
-## truce
-building with the truce framework is `cargo truce install --clap -p <pluginname>` this already is release.
+When writing, editing, or debugging `.slint` files, ALWAYS consult `SLINT_SKILL.md` first — project context, backend choices, baseview versions, LX-specific interop. For `.slint` language questions (syntax, layout, gotchas), also reference [slint-ui/ai-plugins](https://github.com/slint-ui/ai-plugins/blob/master/skills/slint/SKILL.md). Slint version: **1.17.1**, multi-backend via slint-baseview.
 
 ## github commits & push
 Commits always as user.name="lxndrbe" & user.email="ardvinnamoon@gmail.com"
 Github AUTH always as github.user "lxndrbe"
 
 ## UI direction (2026-07)
-- Path: **Slint** via **`truce-slint`** (software renderer + wgpu present). Build: **`lx-slint-build`** (`@truce` widgets, Slint **1.17.1** matching truce-slint).
-- Runtime: `truce_slint::SlintEditor` (`PluginContext` / `SyncFn`). No local FemtoVG bridge; if GPU later: Slint **`renderer-skia`**.
-- Layout: **`crates/`** = libs (`lx-slint-build`, `lx-dsp`, `lx-analysis`, `lx-vault`, `lx-shm`, `lx-ui-slint`); **`plugins/`** = products.
-- **UI shell:** `LxShellHeader` + `LxShellBody` / Left / Main / Right; reuse `LxKnob`, `LxLineEdit`, `LxButton`, etc.
-- **Slint-native redesign track:** Lucent + Aurum (full UI rebuild, not Vizia clone) — candidates to drop from `lx-audiolabs-dev` once shipped.
-- Also in tree: Lucent Relay, Equilibrium, Aether, Meridian (Slint ports).
-- Dev repo Vizia: keep remaining plugins; Lucent/Aurum can leave when Slint variants are release-ready.
+- Path: **Slint** via **slint-baseview** (our fork, baseview 0.3 next, 3 backends: femtovg/OpenGL, wgpu, wgpu-vulkan).
+- Editor adapter: **lx-slint-editor** (`truce::Editor` on slint-baseview), replacing truce-slint.
+- Runtime: `slint_baseview::SlintWindow` via `lx_slint_editor::LxSlintEditor`. No local FemtoVG bridge; wgpu + Vulkan paths avoid OpenGL crash vectors.
+- Layout: **`crates/`** = libs (`lx-slint-build`, `lx-slint-editor`, `lx-dsp`, `lx-analysis`, `lx-vault`, `lx-shm`, `lx-ui-slint`); **`plugins/`** = products.
+- Plugins still on truce-slint (truce-dev, baseview-truce 0.1.1). Migration to lx-slint-editor pending.

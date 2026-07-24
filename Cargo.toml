@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/lx-slint-build",
+    "crates/lx-slint-editor",
     "crates/lx-analysis",
     "crates/lx-dsp",
     "crates/lx-ui-slint",
@@ -28,6 +29,10 @@ truce-slint     = { path = "../truce-dev/crates/truce-slint" }
 truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
 # keep for @truce widget materialize at Slint 1.17.1 (match truce-slint)
 lx-slint-build  = { path = "crates/lx-slint-build" }
+lx-slint-editor = { path = "crates/lx-slint-editor" }
+# Our private fork: baseview 0.3, slint 1.17.1, 3 backends
+slint-baseview  = { git = "https://github.com/lxndrbe/slint-baseview.git", default-features = false }
+baseview = { git = "https://github.com/RustAudio/baseview.git", branch = "next" }
 clap-sys        = "0.5"
 # MUST match truce-slint pin
 slint           = { version = "=1.17.1", default-features = false, features = [
