@@ -1,0 +1,7 @@
+# Project-specific overlay for lx-audio-graph.
+# Add custom frameworks or migrations here. The default taxonomy already
+# covers truce, nih-plug, clack, JUCE, Slint, egui, iced, vizia, wry, etc.
+
+[migrations.truce-slint]
+from = "truce-slint"
+to = "lx-slint-editor"

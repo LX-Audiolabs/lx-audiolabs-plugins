@@ -1,0 +1,53 @@
+name: audio-graph
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout plugin workspace
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: audio-graph
+
+      - name: Install lx-audio-graph
+        # NOTE: adjust this repository URL once lx-audio-graph is pushed to GitHub.
+        # For a private repository, add a CARGO_NET_GIT_FETCH_WITH_CLI=true secret
+        # or use a personal access token with actions/checkout on the tool repo.
+        run: cargo install --git https://github.com/LX-Audiolabs/lx-audio-graph --branch main
+
+      - name: Generate audio-graph overlay
+        run: lx-audio-graph .
+
+      - name: Upload audio-graph artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-graph
+          path: |
+            graphify-out/audio-graph.json
+            graphify-out/audio-graph.html
+          if-no-files-found: error
+
+      - name: Verify audio-graph.json was produced
+        run: |
+          test -f graphify-out/audio-graph.json
+          python3 - <<'PY'
+          import json
+          with open('graphify-out/audio-graph.json') as f:
+              g = json.load(f)
+          assert g['version'] == '0.1.1'
+          assert len(g['nodes']) > 0
+          assert g['migration_summary']['total_plugins'] > 0
+          print(f"audio-graph ok: {len(g['nodes'])} nodes, {g['migration_summary']['total_plugins']} plugins")
+          PY
