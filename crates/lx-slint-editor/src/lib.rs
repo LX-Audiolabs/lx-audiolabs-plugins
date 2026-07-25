@@ -1,8 +1,8 @@
 //! `LxSlintEditor` — truce `Editor` adapter for slint-baseview.
 //!
-//! Uses our slint-baseview (baseview 0.3, slint 1.17.1, FemtoVG OpenGL backend)
-//! instead of baseview-truce 0.1.1. Swap feature to `backend-skia` later if
-//! FemtoVG fails in DAW hosts.
+//! Default: FemtoVG + OpenGL (baseview 0.3, slint 1.17.1). Stable in Windows
+//! DAW hosts; better cross-compile story than Skia. Swap Cargo feature later
+//! for `backend-skia` or `backend-wgpu` A/B.
 
 use std::sync::Arc;
 
@@ -127,7 +127,7 @@ where
         let parent_window = parent::ParentedWindow::from_raw(parent);
 
         let (w, h) = self.size;
-        // FemtoVG needs an OpenGL context (baseview opengl feature).
+        // FemtoVG needs OpenGL (baseview opengl feature).
         // alpha_bits=8 helps embedded plugin windows in DAW hosts.
         let options = WindowSettings::new()
             .with_title("LX Audiolabs")

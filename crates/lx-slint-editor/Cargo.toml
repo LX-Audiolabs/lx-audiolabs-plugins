@@ -16,9 +16,9 @@ truce = { path = "../../../truce-dev/crates/truce", default-features = false }
 raw-window-handle = "0.6"
 
 # Our slint-baseview fork (baseview 0.3, slint 1.17.1)
-# backend-femtovg = OpenGL/GPU via FemtoVG (A/B test vs Skia)
+# Default: FemtoVG OpenGL (stable in DAW hosts on Windows; easier cross than Skia).
+# A/B later: backend-skia | backend-wgpu when host/GPU path is ready.
 slint-baseview = { workspace = true, features = ["backend-femtovg"] }
-# Needed directly for Window, WindowSettings, GlConfig
 baseview = { workspace = true, features = ["opengl"] }
 slint = { workspace = true }
 log = "0.4"
