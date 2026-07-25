@@ -4861,7 +4861,6 @@ dependencies = [
 [[package]]
 name = "slint-baseview"
 version = "0.1.0"
-source = "git+https://github.com/lxndrbe/slint-baseview.git#d78c916a296280b43270b88ac403264e7f4f7426"
 dependencies = [
  "baseview",
  "keyboard-types 0.8.3",

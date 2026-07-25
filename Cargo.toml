@@ -31,7 +31,8 @@ truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
 lx-slint-build  = { path = "crates/lx-slint-build" }
 lx-slint-editor = { path = "crates/lx-slint-editor" }
 # Our private fork: baseview 0.3, slint 1.17.1, 3 backends
-slint-baseview  = { git = "https://github.com/lxndrbe/slint-baseview.git", default-features = false }
+# path: local until reopen-safe platform handoff is pushed (d78c916+)
+slint-baseview  = { path = "../slint-baseview", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", branch = "next" }
 clap-sys        = "0.5"
 # MUST match truce-slint pin
