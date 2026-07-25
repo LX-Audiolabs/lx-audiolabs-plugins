@@ -104,7 +104,30 @@ if params.bypass.value() {
 
 ## Editor (Slint)
 
-### Current: truce-slint
+### Current: lx-slint-editor
+```rust
+use lx_slint_editor::LxSlintEditor;
+
+fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
+    LxSlintEditor::new(
+        params,
+        (800, 600),
+        |ctx: PluginContext<MyParams>| {
+            let ui = MyUi::new().unwrap();
+            let s = ctx.clone();
+            ui.on_gain_changed(move |v| s.automate(P::Gain, v as f64));
+            ui
+        },
+        |ui: &MyUi, ctx: &PluginContext<MyParams>| {
+            ui.set_gain(ctx.get_param(P::Gain) as f32);
+        },
+    )
+    .resizable(true)
+    .into()
+}
+```
+
+### Legacy: truce-slint
 ```rust
 use truce_slint::SlintEditor;
 
@@ -117,17 +140,6 @@ fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
             ui.set_gain(state.get_param(P::Gain));
         })
     }).into_editor()
-}
-```
-
-### Future: lx-slint-editor
-```rust
-use lx_slint_editor::LxSlintEditor;
-
-fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
-    LxSlintEditor::new(params, (800, 600), |state: PluginContext<MyParams>| {
-        // same setup pattern as truce-slint
-    }).resizable(true).into_editor()
 }
 ```
 See `SLINT_SKILL.md` for full Slint development rules.

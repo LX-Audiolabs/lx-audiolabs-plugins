@@ -13,6 +13,9 @@ Not lazy: input validation, error handling preventing data loss, security, acces
 ## graphify
 When `graphify-out/graph.json` exists, query/path/explain first before raw grep or source reads. `/graphify` to build/update.
 
+## audio-graph
+When `graphify-out/audio-graph.json` exists, read it before working on plugins or crates. It contains the detected framework (truce, nih-plug, clack, JUCE), plugin-vs-crate kind, editor migration status (`truce-slint` legacy vs `lx-slint-editor`), internal dependency edges, and AST-level audio symbols (`PluginLogic`, `process`, `editor`, `Params` structs, `truce::plugin!` macro calls). Use it to avoid framework-confused suggestions or partial migrations that improve one plugin while breaking others. Regenerate with `lx-audio-graph .` (global install), or keep current with `lx-audio-graph --watch .` / `lx-audio-graph install-hook .`.
+
 ## truce
 When writing, editing, or debugging truce plugin code (Params, PluginLogic, process, state, editor), ALWAYS consult `TRUCE_SKILL.md` — covers param macros, lifecycle, threading rules, common bugs, shared crates, and build workflow.
 Building: `cargo truce install --clap -p <pluginname>` (release build).

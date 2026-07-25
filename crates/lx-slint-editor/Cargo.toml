@@ -16,7 +16,7 @@ truce = { path = "../../../truce-dev/crates/truce", default-features = false }
 raw-window-handle = "0.6"
 
 # Our slint-baseview fork (baseview 0.3, slint 1.17.1)
-slint-baseview = { workspace = true, features = ["backend-femtovg"] }
+slint-baseview = { workspace = true, features = ["backend-skia"] }
 # Needed directly for Window, WindowSettings types
 baseview = { workspace = true }
 slint = { workspace = true }

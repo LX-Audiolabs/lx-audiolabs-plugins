@@ -1,6 +1,6 @@
 # Slint Development Skill — LX Audiolabs
 
-Slint **1.17.1**, multi-backend (femtovg, wgpu, wgpu-vulkan), baseview **0.3** (next).
+Slint **1.17.1**, multi-backend (skia, wgpu, wgpu-vulkan), baseview **0.3** (next).
 Target: DAW audio plugins (CLAP/VST3/LV2), embedded in host windows.
 
 > **`.slint` language reference:** See [slint-ui/ai-plugins](https://github.com/slint-ui/ai-plugins/blob/master/skills/slint/SKILL.md) — upstream skill with extensive `.slint` language docs, layout rules, gotchas. This file covers LX-Audiolabs-specific project context, backend choices, and interop.
@@ -29,11 +29,11 @@ Our fork of slint-baseview (private, github.com/lxndrbe) supports three backends
 
 | Feature | Renderer | GPU-API | baseview dep | Notes |
 |---------|----------|---------|-------------|-------|
-| `backend-femtovg` (default) | FemtoVG | OpenGL | `baseview/opengl` | GPU-accelerated, GL context from baseview |
+| `backend-skia` (default) | Skia | GPU-accelerated (OpenGL/DX/Vulkan) | — | New default, replaces femtovg |
 | `backend-wgpu` | Software | wgpu (DX12) | — | CPU render → wgpu blit, no OpenGL |
 | `backend-wgpu-vulkan` | Software | wgpu (Vulkan) | — | Forces Vulkan backend, avoids DX12 crashes |
 
-Skia (`renderer-skia`) is **not available** in slint 1.17.1 — `SkiaWGPURenderer` is gated behind `unstable-wgpu-29` and lacks a public `render()` for manual render loops. Target slint 2.x.
+`backend-femtovg` (OpenGL via FemtoVG) is deprecated; do not use for new work.
 
 ### No MCP server
 DAW plugin context can't expose TCP ports. Use `slint-viewer --screenshot` for visual checks.
@@ -74,7 +74,7 @@ lx-audiolabs-slint/
 └── Cargo.toml              ← slint-baseview git-dep, baseview next
 ```
 
-> **Migration status:** `lx-slint-editor` skeleton exists (compiles). Plugins still use `truce-slint`. Migration planned when editor adapter is wired.
+> **Migration status:** `lx-slint-editor` is now the current adapter (Skia backend). `truce-slint` is legacy; migrate plugins when touching editor code.
 
 ### Widgets (`@truce`)
 
@@ -93,7 +93,29 @@ Import: `import { Knob, Meter, ParamSlider, Toggle, Dropdown, XYPad } from "@tru
 
 ## Rust Interop
 
-### truce-slint Pattern (current, legacy)
+### lx-slint-editor Pattern (current)
+
+```rust
+use lx_slint_editor::LxSlintEditor;
+
+LxSlintEditor::new(
+    params,
+    (600, 400),
+    |ctx: PluginContext<MyParams>| {
+        let ui = MyPluginUi::new().unwrap();
+        let s = ctx.clone();
+        ui.on_gain_changed(move |v| s.automate(P::Gain, v as f64));
+        ui
+    },
+    |ui: &MyPluginUi, ctx: &PluginContext<MyParams>| {
+        ui.set_gain(ctx.get_param(P::Gain) as f32);
+    },
+)
+.resizable(true)
+.into()
+```
+
+### truce-slint Pattern (legacy)
 
 ```rust
 use truce_slint::SlintEditor;
@@ -106,21 +128,6 @@ SlintEditor::new(params, (600, 400), |state: PluginContext<MyParams>| {
         ui.set_gain(state.get_param(P::Gain));
     })
 })
-```
-
-### lx-slint-editor Pattern (future)
-
-```rust
-use lx_slint_editor::LxSlintEditor;
-
-LxSlintEditor::new(params, (600, 400), |state: PluginContext<MyParams>| {
-    let ui = MyPluginUi::new().unwrap();
-    let s = state.clone();
-    ui.on_gain_changed(move |v| s.automate(P::Gain, v as f64));
-    Box::new(move |state: &PluginContext<MyParams>| {
-        ui.set_gain(state.get_param(P::Gain));
-    })
-}).resizable(true)
 ```
 
 ### Naming Convention

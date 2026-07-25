@@ -1,24 +1,61 @@
 //! `LxSlintEditor` — truce `Editor` adapter for slint-baseview.
 //!
-//! Uses our slint-baseview (baseview 0.3, slint 1.17.1, multi-backend)
+//! Uses our slint-baseview (baseview 0.3, slint 1.17.1, Skia GPU backend)
 //! instead of baseview-truce 0.1.1.
 
 use std::sync::Arc;
 
-use baseview::Window;
+use baseview::{dpi::LogicalSize, Window, WindowSettings};
+use slint::ComponentHandle;
+use slint_baseview::slint_window::SlintWindow;
 use truce_core::editor::{Editor, PluginContext, RawWindowHandle};
 use truce_params::Params;
 
 mod parent;
 
-pub type SetupFn<P> = Arc<dyn Fn(PluginContext<P>) -> SyncFn<P> + Send + Sync>;
-pub type SyncFn<P> = Box<dyn Fn(&PluginContext<P>)>;
+/// Build closure: creates the Slint component and wires UI callbacks.
+pub type BuildFn<P, C> = Arc<dyn Fn(PluginContext<P>) -> C + Send + Sync>;
 
-#[allow(dead_code)]
-pub struct LxSlintEditor<P: Params + ?Sized> {
+/// Per-frame sync closure: pushes host parameter values into the component.
+pub type SyncFn<P, C> = Arc<dyn Fn(&C, &PluginContext<P>) + Send + Sync>;
+
+/// Slint-based editor implementing truce's `Editor` trait.
+///
+/// Generic over the concrete Slint component type, because the GPU-backed
+/// `slint_baseview::SlintWindow` needs to own the generated component.
+///
+/// # Example
+///
+/// ```ignore
+/// use lx_slint_editor::LxSlintEditor;
+///
+/// fn editor(params: Arc<MyParams>) -> Box<dyn Editor> {
+///     LxSlintEditor::new(
+///         params,
+///         (800, 600),
+///         |ctx| {
+///             let ui = MyPluginUi::new().unwrap();
+///             let s = ctx.clone();
+///             ui.on_gain_changed(move |v| s.automate(P::Gain, v as f64));
+///             ui
+///         },
+///         |ui, ctx| {
+///             ui.set_gain(ctx.get_param(P::Gain) as f32);
+///         },
+///     )
+///     .resizable(true)
+///     .into()
+/// }
+/// ```
+pub struct LxSlintEditor<P, C>
+where
+    P: Params + ?Sized + 'static,
+    C: ComponentHandle + 'static,
+{
     params: Arc<P>,
     size: (u32, u32),
-    setup: SetupFn<P>,
+    build: BuildFn<P, C>,
+    sync: SyncFn<P, C>,
     window: Option<Window>,
     can_resize: bool,
 }
@@ -26,18 +63,35 @@ pub struct LxSlintEditor<P: Params + ?Sized> {
 // SAFETY: baseview::Window holds raw native window pointers (HWND/NSView)
 // and is not auto-Send. Hosts call Editor::open/close from a single GUI
 // thread, never concurrently. Same pattern as truce-slint, truce-egui, truce-iced.
-unsafe impl<P: Params + ?Sized> Send for LxSlintEditor<P> {}
+unsafe impl<P, C> Send for LxSlintEditor<P, C>
+where
+    P: Params + ?Sized + 'static,
+    C: ComponentHandle + 'static,
+{
+}
 
-impl<P: Params + ?Sized> LxSlintEditor<P> {
+impl<P, C> LxSlintEditor<P, C>
+where
+    P: Params + ?Sized + 'static,
+    C: ComponentHandle + 'static,
+{
+    /// Create a new editor adapter.
+    ///
+    /// - `build` is called once when the host opens the editor. It receives a
+    ///   `PluginContext` and must return the concrete Slint component.
+    /// - `sync` is called every frame to copy host parameter values into the
+    ///   component.
     pub fn new(
         params: Arc<P>,
         size: (u32, u32),
-        setup: impl Fn(PluginContext<P>) -> SyncFn<P> + Send + Sync + 'static,
+        build: impl Fn(PluginContext<P>) -> C + Send + Sync + 'static,
+        sync: impl Fn(&C, &PluginContext<P>) + Send + Sync + 'static,
     ) -> Self {
         Self {
             params,
             size,
-            setup: Arc::new(setup),
+            build: Arc::new(build),
+            sync: Arc::new(sync),
             window: None,
             can_resize: false,
         }
@@ -50,22 +104,62 @@ impl<P: Params + ?Sized> LxSlintEditor<P> {
     }
 }
 
-impl<P: Params + 'static> Editor for LxSlintEditor<P> {
+impl<P, C> Editor for LxSlintEditor<P, C>
+where
+    P: Params + 'static,
+    C: ComponentHandle + 'static,
+{
     fn size(&self) -> (u32, u32) {
         self.size
     }
 
-    fn open(&mut self, _parent: RawWindowHandle, _context: PluginContext) {
-        // ponytail: SlintWindow::open_parented needs concrete component type.
-        // For now, stub — wiring comes when plugins migrate.
-        log::info!("LxSlintEditor::open — skeleton, not yet wired");
+    fn open(&mut self, parent: RawWindowHandle, context: PluginContext) {
+        let ctx = context.with_params(self.params.clone());
+        let parent_window = parent::ParentedWindow::from_raw(parent);
+
+        let (w, h) = self.size;
+        let options = WindowSettings::new()
+            .with_size(LogicalSize::new(f64::from(w), f64::from(h)));
+
+        let build = Arc::clone(&self.build);
+        let sync = Arc::clone(&self.sync);
+
+        let window = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            SlintWindow::open_parented(
+                &parent_window,
+                options,
+                ctx.clone(),
+                move |state: &mut PluginContext<P>| build(state.clone()),
+                move |component: &C, state: &mut PluginContext<P>| {
+                    sync(component, state);
+                },
+            )
+        }));
+
+        match window {
+            Ok(Ok(w)) => self.window = Some(w),
+            Ok(Err(e)) => log::error!("LxSlintEditor::open failed: {e}"),
+            Err(_) => log::error!("LxSlintEditor::open panicked"),
+        }
     }
 
     fn close(&mut self) {
-        self.window.take();
+        if let Some(window) = self.window.take() {
+            window.close();
+        }
     }
 
     fn can_resize(&self) -> bool {
         self.can_resize
+    }
+}
+
+impl<P, C> From<LxSlintEditor<P, C>> for Box<dyn Editor>
+where
+    P: Params + 'static,
+    C: ComponentHandle + 'static,
+{
+    fn from(editor: LxSlintEditor<P, C>) -> Self {
+        Box::new(editor)
     }
 }
