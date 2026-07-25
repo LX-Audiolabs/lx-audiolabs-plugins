@@ -1,5 +1,6 @@
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
@@ -15,6 +16,150 @@ slint::include_modules!();
 // Frozen vault size (ui-layout-spec): 990 × 660
 const WINDOW_W: u32 = 990;
 const WINDOW_H: u32 = 660;
+
+/// Match vizia Meridian `TICK_INTERVAL` — telemetry / host→UI poll ~30 Hz.
+const TICK_INTERVAL: Duration = Duration::from_millis(33);
+
+/// Cache key for EQ curve (vizia `EqCurveKey` parity).
+#[derive(Clone, Copy, PartialEq)]
+struct EqCurveKey {
+    hpf_freq: f32,
+    lpf_freq: f32,
+    cut_slope: i64,
+    bass_gain: f32,
+    bass_slope: i64,
+    lo_mid_gain: f32,
+    lo_mid_slope: i64,
+    mid_gain: f32,
+    mid_slope: i64,
+    high_gain: f32,
+    high_slope: i64,
+    excite_gain: f32,
+    excite_slope: i64,
+    eq_freq_1: f32,
+    eq_freq_2: f32,
+    eq_freq_3: f32,
+    eq_freq_4: f32,
+    eq_freq_5: f32,
+    tilt_gain: f32,
+    sample_rate: f32,
+}
+
+fn eq_curve_key(params: &MeridianParams, sr: f32) -> EqCurveKey {
+    EqCurveKey {
+        hpf_freq: params.hpf_freq.raw_target() as f32,
+        lpf_freq: params.lpf_freq.raw_target() as f32,
+        cut_slope: params.cut_slope.value(),
+        bass_gain: params.bass_gain.raw_target() as f32,
+        bass_slope: params.bass_slope.value(),
+        lo_mid_gain: params.lo_mid_gain.raw_target() as f32,
+        lo_mid_slope: params.lo_mid_slope.value(),
+        mid_gain: params.mid_gain.raw_target() as f32,
+        mid_slope: params.mid_slope.value(),
+        high_gain: params.high_gain.raw_target() as f32,
+        high_slope: params.high_slope.value(),
+        excite_gain: params.excite_gain.raw_target() as f32,
+        excite_slope: params.excite_slope.value(),
+        eq_freq_1: params.eq_freq_1.raw_target() as f32,
+        eq_freq_2: params.eq_freq_2.raw_target() as f32,
+        eq_freq_3: params.eq_freq_3.raw_target() as f32,
+        eq_freq_4: params.eq_freq_4.raw_target() as f32,
+        eq_freq_5: params.eq_freq_5.raw_target() as f32,
+        tilt_gain: params.tilt_gain.raw_target() as f32,
+        sample_rate: sr,
+    }
+}
+
+/// Per-editor sync bookkeeping (vizia Ticker + TickAccum + dirty sets).
+struct SyncCache {
+    last_tick: Instant,
+    /// First open must fill UI even if Instant says "not due".
+    primed: bool,
+    eq_key: Option<EqCurveKey>,
+    eq_cmds: String,
+    gr_history: Vec<f32>,
+    gr_peak_hold: f32,
+    gr_peak_hold_ticks: u32,
+    was_measuring: bool,
+    // Dirty mirrors — only call Slint setters when value changes.
+    floats: [f32; 30],
+    ints: [f32; 6],
+    /// `None` = never pushed (first set always applies).
+    bools: [Option<bool>; 5],
+    meter_l: f32,
+    meter_r: f32,
+    peak_hold_l: f32,
+    peak_hold_r: f32,
+    gr: f32,
+    gr_db_q: f32,
+    corr: f32,
+    balance: f32,
+    hold_l_db_q: f32,
+    hold_r_db_q: f32,
+    auto_loud: Option<bool>,
+}
+
+impl SyncCache {
+    fn new() -> Self {
+        Self {
+            last_tick: Instant::now()
+                .checked_sub(TICK_INTERVAL)
+                .unwrap_or_else(Instant::now),
+            primed: false,
+            eq_key: None,
+            eq_cmds: String::new(),
+            gr_history: vec![0.0; 90],
+            gr_peak_hold: 0.0,
+            gr_peak_hold_ticks: 0,
+            was_measuring: false,
+            floats: [f32::NAN; 30],
+            ints: [f32::NAN; 6],
+            bools: [None; 5],
+            meter_l: f32::NAN,
+            meter_r: f32::NAN,
+            peak_hold_l: f32::NAN,
+            peak_hold_r: f32::NAN,
+            gr: f32::NAN,
+            gr_db_q: f32::NAN,
+            corr: f32::NAN,
+            balance: f32::NAN,
+            hold_l_db_q: f32::NAN,
+            hold_r_db_q: f32::NAN,
+            auto_loud: None,
+        }
+    }
+
+    fn due(&mut self) -> bool {
+        let now = Instant::now();
+        if !self.primed || now.duration_since(self.last_tick) >= TICK_INTERVAL {
+            self.last_tick = now;
+            self.primed = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[inline]
+fn changed_f32(prev: &mut f32, v: f32) -> bool {
+    if *prev != v {
+        *prev = v;
+        true
+    } else {
+        false
+    }
+}
+
+#[inline]
+fn changed_bool(prev: &mut Option<bool>, v: bool) -> bool {
+    if *prev != Some(v) {
+        *prev = Some(v);
+        true
+    } else {
+        false
+    }
+}
 
 /// Normalized default for a FloatParam (log/linear/skew — matches host).
 fn float_default_norm(p: &FloatParam) -> f32 {
@@ -81,33 +226,42 @@ macro_rules! bind_bools {
     };
 }
 
-macro_rules! sync_floats {
-    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
+/// Dirty host→UI float push. `$idx` indexes `SyncCache::floats`.
+macro_rules! sync_floats_dirty {
+    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
             lx_slint_editor::paste! {
-                $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p));
-                $ui.[<set_ $name _text>](slint::SharedString::from($state.format_param($p)));
+                let v = PluginContextReadF32::get_param($state, $p);
+                if changed_f32(&mut $cache.floats[$idx], v) {
+                    $ui.[<set_ $name>](v);
+                    $ui.[<set_ $name _text>](slint::SharedString::from($state.format_param($p)));
+                }
             }
         )*
     };
 }
 
-macro_rules! sync_ints {
-    ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
+macro_rules! sync_ints_dirty {
+    ($ui:expr, $state:expr, $cache:expr, $count:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
             lx_slint_editor::paste! {
                 let idx = discrete_index(PluginContextReadF32::get_param($state, $p) as f64, $count) as f32;
-                $ui.[<set_ $name>](idx);
+                if changed_f32(&mut $cache.ints[$idx], idx) {
+                    $ui.[<set_ $name>](idx);
+                }
             }
         )*
     };
 }
 
-macro_rules! sync_bools {
-    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
+macro_rules! sync_bools_dirty {
+    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
             lx_slint_editor::paste! {
-                $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p) > 0.5);
+                let v = PluginContextReadF32::get_param($state, $p) > 0.5;
+                if changed_bool(&mut $cache.bools[$idx], v) {
+                    $ui.[<set_ $name>](v);
+                }
             }
         )*
     };
@@ -164,11 +318,9 @@ fn spawn_vault_scan(_vp: String, pending: Arc<PendingPresets>, generation: u32) 
 pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
 
-    // Per-frame UI telemetry — Mutex because LxSlintEditor SyncFn is Send+Sync.
-    let was_measuring = Mutex::new(false);
-    let gr_history: Mutex<Vec<f32>> = Mutex::new(vec![0.0; 90]);
-    let gr_peak_hold: Mutex<f32> = Mutex::new(0.0);
-    let gr_peak_hold_ticks: Mutex<u32> = Mutex::new(0);
+    // Vizia-parity tick state: 33 ms throttle, dirty sets, EQ cache.
+    // Mutex: LxSlintEditor SyncFn is Send+Sync.
+    let sync_cache = Mutex::new(SyncCache::new());
 
     LxSlintEditor::new(
         params.clone(),
@@ -445,65 +597,77 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
         {
             let shared_for_sync = shared.clone();
             let params_for_curve = params.clone();
-            let shared_for_curve = shared.clone();
             move |ui: &MeridianUi, state: &PluginContext<MeridianParams>| {
-                // --- host → UI normalized values ---
-                sync_floats!(ui, state,
-                    P::HpfFreq => hpf_freq,
-                    P::LpfFreq => lpf_freq,
-                    P::BassGain => bass_gain,
-                    P::LoMidGain => lo_mid_gain,
-                    P::MidGain => mid_gain,
-                    P::HighGain => high_gain,
-                    P::ExciteGain => excite_gain,
-                    P::EqFreq1 => eq_freq_1,
-                    P::EqFreq2 => eq_freq_2,
-                    P::EqFreq3 => eq_freq_3,
-                    P::EqFreq4 => eq_freq_4,
-                    P::EqFreq5 => eq_freq_5,
-                    P::TiltGain => tilt_gain,
-                    P::WarmthDrive => warmth_drive,
-                    P::WarmthMix => warmth_mix,
-                    P::ExciteAmount => excite_amount,
-                    P::ExciteBlend => excite_blend,
-                    P::ExciteFreq => excite_freq,
-                    P::CompThreshold => comp_threshold,
-                    P::CompMix => comp_mix,
-                    P::CompAttack => comp_attack,
-                    P::CompRelease => comp_release,
-                    P::CompCharacter => comp_character,
-                    P::CompMakeup => comp_makeup,
-                    P::InflateEffect => inflate_effect,
-                    P::InflateCurve => inflate_curve,
-                    P::StereoWidth => stereo_width,
-                    P::Pan => pan,
-                    P::OutputGain => output_gain,
+                let Ok(mut cache) = sync_cache.lock() else {
+                    return;
+                };
+                // Vizia Ticker: heavy host→UI work at ~30 Hz only.
+                if !cache.due() {
+                    return;
+                }
+
+                // --- host → UI normalized values (dirty) ---
+                sync_floats_dirty!(ui, state, cache,
+                    0, P::HpfFreq => hpf_freq,
+                    1, P::LpfFreq => lpf_freq,
+                    2, P::BassGain => bass_gain,
+                    3, P::LoMidGain => lo_mid_gain,
+                    4, P::MidGain => mid_gain,
+                    5, P::HighGain => high_gain,
+                    6, P::ExciteGain => excite_gain,
+                    7, P::EqFreq1 => eq_freq_1,
+                    8, P::EqFreq2 => eq_freq_2,
+                    9, P::EqFreq3 => eq_freq_3,
+                    10, P::EqFreq4 => eq_freq_4,
+                    11, P::EqFreq5 => eq_freq_5,
+                    12, P::TiltGain => tilt_gain,
+                    13, P::WarmthDrive => warmth_drive,
+                    14, P::WarmthMix => warmth_mix,
+                    15, P::ExciteAmount => excite_amount,
+                    16, P::ExciteBlend => excite_blend,
+                    17, P::ExciteFreq => excite_freq,
+                    18, P::CompThreshold => comp_threshold,
+                    19, P::CompMix => comp_mix,
+                    20, P::CompAttack => comp_attack,
+                    21, P::CompRelease => comp_release,
+                    22, P::CompCharacter => comp_character,
+                    23, P::CompMakeup => comp_makeup,
+                    24, P::InflateEffect => inflate_effect,
+                    25, P::InflateCurve => inflate_curve,
+                    26, P::StereoWidth => stereo_width,
+                    27, P::Pan => pan,
+                    28, P::OutputGain => output_gain,
                 );
 
-                sync_ints!(ui, state, 2, P::CutSlope => cut_slope);
-                sync_ints!(ui, state, 3,
-                    P::BassSlope => bass_slope,
-                    P::LoMidSlope => lo_mid_slope,
-                    P::MidSlope => mid_slope,
-                    P::HighSlope => high_slope,
-                    P::ExciteSlope => excite_slope,
+                sync_ints_dirty!(ui, state, cache, 2, 0, P::CutSlope => cut_slope);
+                sync_ints_dirty!(ui, state, cache, 3,
+                    1, P::BassSlope => bass_slope,
+                    2, P::LoMidSlope => lo_mid_slope,
+                    3, P::MidSlope => mid_slope,
+                    4, P::HighSlope => high_slope,
+                    5, P::ExciteSlope => excite_slope,
                 );
 
-                sync_bools!(ui, state,
-                    P::MonoActive => mono_active,
-                    P::DeltaActive => delta_active,
-                    P::BypassActive => bypass_active,
-                    P::InflateBandSplit => inflate_band_split,
-                    P::InflateClip => inflate_clip,
+                sync_bools_dirty!(ui, state, cache,
+                    0, P::MonoActive => mono_active,
+                    1, P::DeltaActive => delta_active,
+                    2, P::BypassActive => bypass_active,
+                    3, P::InflateBandSplit => inflate_band_split,
+                    4, P::InflateClip => inflate_clip,
                 );
 
-                // --- EQ curve ---
-                let sr = shared_for_curve.sample_rate.load(Ordering::Relaxed).max(1.0);
-                let cmds = eq_curve_path(&params_for_curve, sr);
-                ui.set_curve_cmds(slint::SharedString::from(cmds));
+                let shared = &shared_for_sync;
+                let sr = shared.sample_rate.load(Ordering::Relaxed).max(1.0);
+
+                // --- EQ curve (cached like vizia EqCurveKey) ---
+                let key = eq_curve_key(&params_for_curve, sr);
+                if cache.eq_key != Some(key) {
+                    cache.eq_key = Some(key);
+                    cache.eq_cmds = eq_curve_path(&params_for_curve, sr);
+                    ui.set_curve_cmds(slint::SharedString::from(cache.eq_cmds.as_str()));
+                }
 
                 // --- meters ---
-                let shared = &shared_for_sync;
                 let peak_l_db = shared.output_peak_l.load(Ordering::Relaxed);
                 let peak_r_db = shared.output_peak_r.load(Ordering::Relaxed);
                 let hold_l_db = shared.peak_hold_l.load(Ordering::Relaxed);
@@ -512,63 +676,96 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let corr = shared.phase_correlation.load(Ordering::Relaxed);
                 let balance = shared.balance.load(Ordering::Relaxed);
 
-                ui.set_meter_l(db_to_meter(peak_l_db));
-                ui.set_meter_r(db_to_meter(peak_r_db));
-                ui.set_peak_hold_l(db_to_meter(hold_l_db));
-                ui.set_peak_hold_r(db_to_meter(hold_r_db));
-                ui.set_gr(db_to_gr(gr_db));
-                ui.set_gr_text(slint::SharedString::from(format!("GR: {gr_db:.1}")));
-                ui.set_correlation(corr);
-                ui.set_balance(balance);
-                ui.set_corr_text(slint::SharedString::from(format!("corr: {corr:.2}")));
-                ui.set_balance_text(slint::SharedString::from(format!("bal: {balance:.2}")));
-                ui.set_peak_l_text(slint::SharedString::from(fmt_db(hold_l_db)));
-                ui.set_peak_r_text(slint::SharedString::from(fmt_db(hold_r_db)));
-
-                // GR envelope + peak-hold (original footer mini-display)
-                if let (Ok(mut hist), Ok(mut hold), Ok(mut ticks)) = (
-                    gr_history.lock(),
-                    gr_peak_hold.lock(),
-                    gr_peak_hold_ticks.lock(),
-                ) {
-                    hist.push(gr_db);
-                    if hist.len() > 90 {
-                        hist.remove(0);
-                    }
-                    if gr_db > *hold {
-                        *hold = gr_db;
-                        *ticks = 90;
-                    } else if *ticks > 0 {
-                        *ticks -= 1;
-                    } else {
-                        *hold = (*hold - 0.15).max(gr_db).max(0.0);
-                    }
-                    ui.set_comp_peak_text(slint::SharedString::from(format!("PK: {:.1}", *hold)));
-                    ui.set_gr_envelope_cmds(slint::SharedString::from(gr_envelope_path(
-                        &hist, gr_db, 110.0, 48.0,
-                    )));
+                let ml = db_to_meter(peak_l_db);
+                let mr = db_to_meter(peak_r_db);
+                let phl = db_to_meter(hold_l_db);
+                let phr = db_to_meter(hold_r_db);
+                let grn = db_to_gr(gr_db);
+                if changed_f32(&mut cache.meter_l, ml) {
+                    ui.set_meter_l(ml);
                 }
+                if changed_f32(&mut cache.meter_r, mr) {
+                    ui.set_meter_r(mr);
+                }
+                if changed_f32(&mut cache.peak_hold_l, phl) {
+                    ui.set_peak_hold_l(phl);
+                }
+                if changed_f32(&mut cache.peak_hold_r, phr) {
+                    ui.set_peak_hold_r(phr);
+                }
+                if changed_f32(&mut cache.gr, grn) {
+                    ui.set_gr(grn);
+                }
+                // Quantize text updates to 0.1 dB / 0.01 corr so we skip most string allocs.
+                let gr_q = (gr_db * 10.0).round() / 10.0;
+                if changed_f32(&mut cache.gr_db_q, gr_q) {
+                    ui.set_gr_text(slint::SharedString::from(format!("GR: {gr_q:.1}")));
+                }
+                if changed_f32(&mut cache.corr, corr) {
+                    ui.set_correlation(corr);
+                    ui.set_corr_text(slint::SharedString::from(format!("corr: {corr:.2}")));
+                }
+                if changed_f32(&mut cache.balance, balance) {
+                    ui.set_balance(balance);
+                    ui.set_balance_text(slint::SharedString::from(format!("bal: {balance:.2}")));
+                }
+                let hold_l_q = (hold_l_db * 10.0).round() / 10.0;
+                let hold_r_q = (hold_r_db * 10.0).round() / 10.0;
+                if changed_f32(&mut cache.hold_l_db_q, hold_l_q) {
+                    ui.set_peak_l_text(slint::SharedString::from(fmt_db(hold_l_db)));
+                }
+                if changed_f32(&mut cache.hold_r_db_q, hold_r_q) {
+                    ui.set_peak_r_text(slint::SharedString::from(fmt_db(hold_r_db)));
+                }
+
+                // GR envelope + peak-hold (footer mini-display) — only on tick
+                cache.gr_history.push(gr_db);
+                if cache.gr_history.len() > 90 {
+                    cache.gr_history.remove(0);
+                }
+                if gr_db > cache.gr_peak_hold {
+                    cache.gr_peak_hold = gr_db;
+                    cache.gr_peak_hold_ticks = 90;
+                } else if cache.gr_peak_hold_ticks > 0 {
+                    cache.gr_peak_hold_ticks -= 1;
+                } else {
+                    cache.gr_peak_hold = (cache.gr_peak_hold - 0.15).max(gr_db).max(0.0);
+                }
+                ui.set_comp_peak_text(slint::SharedString::from(format!(
+                    "PK: {:.1}",
+                    cache.gr_peak_hold
+                )));
+                ui.set_gr_envelope_cmds(slint::SharedString::from(gr_envelope_path(
+                    &cache.gr_history,
+                    gr_db,
+                    110.0,
+                    48.0,
+                )));
 
                 // --- Auto Loud status + apply LUFS offset when measure ends ---
                 let measuring = shared.auto_loud_measuring.load(Ordering::Acquire);
-                ui.set_auto_loud_measuring(measuring);
-                if let Ok(mut was) = was_measuring.lock() {
-                    if *was && !measuring {
-                        let offset = shared.auto_loud_gain_offset.load(Ordering::Acquire);
-                        shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
-                        if offset.abs() > 0.01 {
-                            let cur_db = state.params().output_gain.raw_target() as f32;
-                            let new_db = (cur_db + offset).clamp(-12.0, 12.0);
-                            let norm = ((new_db + 12.0) / 24.0) as f64;
-                            state.automate(P::OutputGain, norm.clamp(0.0, 1.0));
-                        }
-                    }
-                    *was = measuring;
+                if changed_bool(&mut cache.auto_loud, measuring) {
+                    ui.set_auto_loud_measuring(measuring);
                 }
+                if cache.was_measuring && !measuring {
+                    let offset = shared.auto_loud_gain_offset.load(Ordering::Acquire);
+                    shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
+                    if offset.abs() > 0.01 {
+                        let cur_db = state.params().output_gain.raw_target() as f32;
+                        let new_db = (cur_db + offset).clamp(-12.0, 12.0);
+                        let norm = ((new_db + 12.0) / 24.0) as f64;
+                        state.automate(P::OutputGain, norm.clamp(0.0, 1.0));
+                    }
+                }
+                cache.was_measuring = measuring;
 
-                // --- spectrum & goniometer paths ---
-                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 140.0)));
-                ui.set_gonio_path(slint::SharedString::from(gonio_path(shared, 139.0, 139.0)));
+                // --- spectrum & goniometer at tick rate only (~30 Hz, vizia parity) ---
+                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(
+                    shared, 620.0, 140.0,
+                )));
+                ui.set_gonio_path(slint::SharedString::from(gonio_path(
+                    shared, 139.0, 139.0,
+                )));
             }
         },
     )
