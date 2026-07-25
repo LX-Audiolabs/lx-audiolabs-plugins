@@ -1,12 +1,14 @@
 //! Bridge from truce `RawWindowHandle` to `raw_window_handle 0.6`.
 //!
-//! Unused until LxSlintEditor::open() is wired — silenced until then.
-#![allow(unused_imports, dead_code)]
+//! baseview 0.3 / slint-baseview expect rwh 0.6 `HasWindowHandle`.
 
 use raw_window_handle::{
-    AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle,
-    RawDisplayHandle, RawWindowHandle, WindowHandle, XlibDisplayHandle, XlibWindowHandle,
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, WindowHandle,
 };
+#[cfg(target_os = "macos")]
+use raw_window_handle::AppKitWindowHandle;
+#[cfg(target_os = "linux")]
+use raw_window_handle::{RawDisplayHandle, XlibDisplayHandle, XlibWindowHandle};
 use std::num::NonZero;
 use truce_core::editor::RawWindowHandle as TruceRaw;
 

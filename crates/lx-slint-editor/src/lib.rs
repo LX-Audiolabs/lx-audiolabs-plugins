@@ -1,17 +1,23 @@
 //! `LxSlintEditor` — truce `Editor` adapter for slint-baseview.
 //!
-//! Uses our slint-baseview (baseview 0.3, slint 1.17.1, Skia GPU backend)
-//! instead of baseview-truce 0.1.1.
+//! Uses our slint-baseview (baseview 0.3, slint 1.17.1, FemtoVG OpenGL backend)
+//! instead of baseview-truce 0.1.1. Swap feature to `backend-skia` later if
+//! FemtoVG fails in DAW hosts.
 
 use std::sync::Arc;
 
-use baseview::{dpi::LogicalSize, Window, WindowSettings};
+use baseview::{dpi::LogicalSize, gl::GlConfig, Window, WindowSettings};
 use slint::ComponentHandle;
 use slint_baseview::slint_window::SlintWindow;
-use truce_core::editor::{Editor, PluginContext, RawWindowHandle};
+use truce_core::editor::{Editor, RawWindowHandle};
 use truce_params::Params;
 
 mod parent;
+
+/// Re-export for plugin bind macros (replaces `truce_slint::paste`).
+pub use paste::paste;
+/// Re-export so plugins need not depend on truce-core editor types directly.
+pub use truce_core::editor::PluginContext;
 
 /// Build closure: creates the Slint component and wires UI callbacks.
 pub type BuildFn<P, C> = Arc<dyn Fn(PluginContext<P>) -> C + Send + Sync>;
@@ -114,12 +120,22 @@ where
     }
 
     fn open(&mut self, parent: RawWindowHandle, context: PluginContext) {
+        // Drop previous window if host re-opens without close.
+        self.close();
+
         let ctx = context.with_params(self.params.clone());
         let parent_window = parent::ParentedWindow::from_raw(parent);
 
         let (w, h) = self.size;
+        // FemtoVG needs an OpenGL context (baseview opengl feature).
+        // alpha_bits=8 helps embedded plugin windows in DAW hosts.
         let options = WindowSettings::new()
-            .with_size(LogicalSize::new(f64::from(w), f64::from(h)));
+            .with_title("LX Audiolabs")
+            .with_size(LogicalSize::new(f64::from(w), f64::from(h)))
+            .with_gl_config(GlConfig {
+                alpha_bits: 8,
+                ..GlConfig::default()
+            });
 
         let build = Arc::clone(&self.build);
         let sync = Arc::clone(&self.sync);

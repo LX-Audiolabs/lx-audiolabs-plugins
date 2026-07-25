@@ -1,12 +1,10 @@
-use std::cell::RefCell;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
 use truce_params::FloatParam;
-use truce_slint::{PluginContext, SlintEditor, SyncFn};
+use lx_slint_editor::{LxSlintEditor, PluginContext};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -28,7 +26,7 @@ fn float_default_norm(p: &FloatParam) -> f32 {
 macro_rules! bind_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
             }
@@ -40,7 +38,7 @@ macro_rules! bind_floats {
 macro_rules! set_float_defaults {
     ($ui:expr, $params:expr, $($name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 $ui.[<set_ $name _default>](float_default_norm(&$params.$name));
             }
         )*
@@ -59,7 +57,7 @@ macro_rules! reset_floats {
 macro_rules! bind_ints {
     ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let s = $state.clone();
                 let count = $count as usize;
                 $ui.[<on_ $name _changed>](move |v: f32| {
@@ -73,7 +71,7 @@ macro_rules! bind_ints {
 macro_rules! bind_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v: bool| {
                     s.automate($p, if v { 1.0 } else { 0.0 });
@@ -86,7 +84,7 @@ macro_rules! bind_bools {
 macro_rules! sync_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p));
                 $ui.[<set_ $name _text>](slint::SharedString::from($state.format_param($p)));
             }
@@ -97,7 +95,7 @@ macro_rules! sync_floats {
 macro_rules! sync_ints {
     ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 let idx = discrete_index(PluginContextReadF32::get_param($state, $p) as f64, $count) as f32;
                 $ui.[<set_ $name>](idx);
             }
@@ -108,234 +106,117 @@ macro_rules! sync_ints {
 macro_rules! sync_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            truce_slint::paste! {
+            lx_slint_editor::paste! {
                 $ui.[<set_ $name>](PluginContextReadF32::get_param($state, $p) > 0.5);
             }
         )*
     };
 }
 
+// Vault UI helpers (build-time callbacks only)
+struct VaultUiState {
+    vault_path: Option<String>,
+    names: Vec<String>,
+    cache: Vec<(String, std::path::PathBuf, ())>,
+    pending: Arc<PendingPresets>,
+    scanning_for: Option<String>,
+}
+struct PendingPresets {
+    ready: std::sync::atomic::AtomicBool,
+    generation: std::sync::atomic::AtomicU32,
+    presets: Mutex<Option<(u32, Vec<(String, std::path::PathBuf, ())>)>>,
+}
+impl PendingPresets {
+    fn new() -> Self {
+        Self {
+            ready: std::sync::atomic::AtomicBool::new(false),
+            generation: std::sync::atomic::AtomicU32::new(0),
+            presets: Mutex::new(None),
+        }
+    }
+    fn bump_generation(&self) -> u32 {
+        let new = self
+            .generation
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .wrapping_add(1);
+        self.generation
+            .store(new, std::sync::atomic::Ordering::Release);
+        self.ready
+            .store(false, std::sync::atomic::Ordering::Release);
+        if let Ok(mut guard) = self.presets.lock() {
+            *guard = None;
+        }
+        new
+    }
+}
+fn spawn_vault_scan(_vp: String, pending: Arc<PendingPresets>, generation: u32) {
+    std::thread::spawn(move || {
+        // Minimal scan: just mark ready
+        if let Ok(mut guard) = pending.presets.lock() {
+            *guard = Some((generation, Vec::new()));
+        }
+        pending
+            .ready
+            .store(true, std::sync::atomic::Ordering::Release);
+    });
+}
+
 pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
-    SlintEditor::new(
+
+    // Per-frame UI telemetry — Mutex because LxSlintEditor SyncFn is Send+Sync.
+    let was_measuring = Mutex::new(false);
+    let gr_history: Mutex<Vec<f32>> = Mutex::new(vec![0.0; 90]);
+    let gr_peak_hold: Mutex<f32> = Mutex::new(0.0);
+    let gr_peak_hold_ticks: Mutex<u32> = Mutex::new(0);
+
+    LxSlintEditor::new(
         params.clone(),
         (WINDOW_W, WINDOW_H),
-        move |state: PluginContext<MeridianParams>| -> SyncFn<MeridianParams> {
-            let ui = MeridianUi::new().unwrap();
+        {
+            let params = params.clone();
+            let shared = shared.clone();
+            move |state: PluginContext<MeridianParams>| {
+                let ui = MeridianUi::new().unwrap();
 
-            // Right-click reset targets: real defaults via range.normalize
-            // (Slint `*_default` props were stubbed at 0.5 → mid-position jumps).
-            set_float_defaults!(
-                ui,
-                params,
-                hpf_freq,
-                lpf_freq,
-                bass_gain,
-                lo_mid_gain,
-                mid_gain,
-                high_gain,
-                excite_gain,
-                eq_freq_1,
-                eq_freq_2,
-                eq_freq_3,
-                eq_freq_4,
-                eq_freq_5,
-                tilt_gain,
-                warmth_drive,
-                warmth_mix,
-                excite_amount,
-                excite_blend,
-                excite_freq,
-                comp_threshold,
-                comp_mix,
-                comp_attack,
-                comp_release,
-                comp_character,
-                comp_makeup,
-                inflate_effect,
-                inflate_curve,
-                stereo_width,
-                pan,
-                output_gain,
-            );
+                // Right-click reset targets: real defaults via range.normalize
+                // (Slint `*_default` props were stubbed at 0.5 → mid-position jumps).
+                set_float_defaults!(
+                    ui,
+                    params,
+                    hpf_freq,
+                    lpf_freq,
+                    bass_gain,
+                    lo_mid_gain,
+                    mid_gain,
+                    high_gain,
+                    excite_gain,
+                    eq_freq_1,
+                    eq_freq_2,
+                    eq_freq_3,
+                    eq_freq_4,
+                    eq_freq_5,
+                    tilt_gain,
+                    warmth_drive,
+                    warmth_mix,
+                    excite_amount,
+                    excite_blend,
+                    excite_freq,
+                    comp_threshold,
+                    comp_mix,
+                    comp_attack,
+                    comp_release,
+                    comp_character,
+                    comp_makeup,
+                    inflate_effect,
+                    inflate_curve,
+                    stereo_width,
+                    pan,
+                    output_gain,
+                );
 
-            // --- UI → host callbacks ---
-            bind_floats!(ui, state,
-                P::HpfFreq => hpf_freq,
-                P::LpfFreq => lpf_freq,
-                P::BassGain => bass_gain,
-                P::LoMidGain => lo_mid_gain,
-                P::MidGain => mid_gain,
-                P::HighGain => high_gain,
-                P::ExciteGain => excite_gain,
-                P::EqFreq1 => eq_freq_1,
-                P::EqFreq2 => eq_freq_2,
-                P::EqFreq3 => eq_freq_3,
-                P::EqFreq4 => eq_freq_4,
-                P::EqFreq5 => eq_freq_5,
-                P::TiltGain => tilt_gain,
-                P::WarmthDrive => warmth_drive,
-                P::WarmthMix => warmth_mix,
-                P::ExciteAmount => excite_amount,
-                P::ExciteBlend => excite_blend,
-                P::ExciteFreq => excite_freq,
-                P::CompThreshold => comp_threshold,
-                P::CompMix => comp_mix,
-                P::CompAttack => comp_attack,
-                P::CompRelease => comp_release,
-                P::CompCharacter => comp_character,
-                P::CompMakeup => comp_makeup,
-                P::InflateEffect => inflate_effect,
-                P::InflateCurve => inflate_curve,
-                P::StereoWidth => stereo_width,
-                P::Pan => pan,
-                P::OutputGain => output_gain,
-            );
-
-            // CutSlope = discrete(0,1) → 2 choices (12/24 dB).
-            // EQ band slopes = discrete(0,2) → 3 choices (A/B/C).
-            // Wrong count breaks amber: index 1 → discrete_norm(1,3)=0.5 →
-            // sync discrete_index(1,3)=2 → no segment matches.
-            bind_ints!(ui, state, 2, P::CutSlope => cut_slope);
-            bind_ints!(ui, state, 3,
-                P::BassSlope => bass_slope,
-                P::LoMidSlope => lo_mid_slope,
-                P::MidSlope => mid_slope,
-                P::HighSlope => high_slope,
-                P::ExciteSlope => excite_slope,
-            );
-
-            bind_bools!(ui, state,
-                P::MonoActive => mono_active,
-                P::DeltaActive => delta_active,
-                P::BypassActive => bypass_active,
-                P::InflateBandSplit => inflate_band_split,
-                P::InflateClip => inflate_clip,
-            );
-
-            // --- vault / preset / reset callbacks (UI actions, not parameters) ---
-            let snap_state = state.clone();
-            ui.on_snap_clicked(move || {
-                snap_state
-                    .shared
-                    .snap_active
-                    .store(true, std::sync::atomic::Ordering::Release);
-                tracing::info!("SNAP triggered");
-            });
-
-            let _save_state = state.clone();
-            let save_params = params.clone();
-            let _save_shared = shared.clone();
-            ui.on_save_clicked(move || {
-                // Minimal preset save: store current parameter values in a plain text file
-                // under the plugin's local presets directory.
-                let dir = lx_analysis::get_plugin_dir("Meridian").join("presets");
-                let _ = std::fs::create_dir_all(&dir);
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                let name = format!("meridian_preset_{now}");
-                let fp = dir.join(format!("{name}.txt"));
-                // Build a simple text representation
-                let mut lines = Vec::new();
-                macro_rules! store_float {
-                    ($p:ident) => {
-                        lines.push(format!("{}={}", stringify!($p), save_params.$p.raw_target()));
-                    };
-                }
-                store_float!(hpf_freq);
-                store_float!(lpf_freq);
-                store_float!(bass_gain);
-                store_float!(lo_mid_gain);
-                store_float!(mid_gain);
-                store_float!(high_gain);
-                store_float!(excite_gain);
-                store_float!(eq_freq_1);
-                store_float!(eq_freq_2);
-                store_float!(eq_freq_3);
-                store_float!(eq_freq_4);
-                store_float!(eq_freq_5);
-                store_float!(tilt_gain);
-                store_float!(warmth_drive);
-                store_float!(warmth_mix);
-                store_float!(excite_amount);
-                store_float!(excite_blend);
-                store_float!(excite_freq);
-                store_float!(comp_threshold);
-                store_float!(comp_mix);
-                store_float!(comp_attack);
-                store_float!(comp_release);
-                store_float!(comp_character);
-                store_float!(comp_makeup);
-                store_float!(inflate_effect);
-                store_float!(inflate_curve);
-                store_float!(stereo_width);
-                store_float!(pan);
-                store_float!(output_gain);
-                macro_rules! store_int {
-                    ($p:ident) => {
-                        lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
-                    };
-                }
-                store_int!(cut_slope);
-                store_int!(bass_slope);
-                store_int!(lo_mid_slope);
-                store_int!(mid_slope);
-                store_int!(high_slope);
-                store_int!(excite_slope);
-                macro_rules! store_bool {
-                    ($p:ident) => {
-                        lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
-                    };
-                }
-                store_bool!(mono_active);
-                store_bool!(delta_active);
-                store_bool!(bypass_active);
-                store_bool!(inflate_band_split);
-                store_bool!(inflate_clip);
-                let content = lines.join("\n");
-                if std::fs::write(&fp, content).is_ok() {
-                    tracing::info!("SAVE preset to {}", fp.display());
-                }
-            });
-
-            let vault_state = Arc::new(std::sync::Mutex::new(VaultUiState {
-                vault_path: None,
-                names: Vec::new(),
-                cache: Vec::new(),
-                pending: Arc::new(PendingPresets::new()),
-                scanning_for: None,
-            }));
-            let vault_state_clone = vault_state.clone();
-            ui.on_vault_path_changed(move |path: slint::SharedString| {
-                let path = path.to_string().trim().to_string();
-                let new_vp = if path.is_empty() { None } else { Some(path) };
-                if let Ok(mut vs) = vault_state_clone.lock() {
-                    vs.vault_path = new_vp.clone();
-                    let mut cfg = lx_analysis::load_config("Meridian");
-                    cfg.vault_path = new_vp.clone();
-                    let _ = lx_analysis::save_config("Meridian", &cfg);
-                    let scan_gen = vs.pending.bump_generation();
-                    if let Some(ref _vp) = new_vp {
-                        vs.scanning_for = Some(_vp.clone());
-                        spawn_vault_scan(_vp.clone(), vs.pending.clone(), scan_gen);
-                    } else {
-                        vs.names = Vec::new();
-                        vs.cache.clear();
-                        vs.scanning_for = None;
-                    }
-                }
-            });
-
-            let reset_state = state.clone();
-            let reset_params = params.clone();
-            ui.on_reset_clicked(move || {
-                // Same path as right-click: ParamRange::normalize(default_plain).
-                // Old linear (default-min)/(max-min) broke log freqs (HPF/LPF/EQ).
-                reset_floats!(
-                    reset_state,
-                    reset_params,
+                // --- UI → host callbacks ---
+                bind_floats!(ui, state,
                     P::HpfFreq => hpf_freq,
                     P::LpfFreq => lpf_freq,
                     P::BassGain => bass_gain,
@@ -366,86 +247,207 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     P::Pan => pan,
                     P::OutputGain => output_gain,
                 );
-                reset_state.automate(P::CutSlope, discrete_norm(0, 2));
-                reset_state.automate(P::BassSlope, discrete_norm(1, 3));
-                reset_state.automate(P::LoMidSlope, discrete_norm(1, 3));
-                reset_state.automate(P::MidSlope, discrete_norm(1, 3));
-                reset_state.automate(P::HighSlope, discrete_norm(1, 3));
-                reset_state.automate(P::ExciteSlope, discrete_norm(1, 3));
-                reset_state.automate(P::InflateBandSplit, 0.0);
-                reset_state.automate(P::InflateClip, 0.0);
-                reset_state.automate(P::MonoActive, 0.0);
-                reset_state.automate(P::DeltaActive, 0.0);
-                reset_state.automate(P::BypassActive, 0.0);
-                tracing::info!("RESET clicked");
-            });
 
-            // AUTO LOUD — arm DSP meters (process applies trigger → measure ~5s)
-            let shared_loud = shared.clone();
-            ui.on_auto_loud_clicked(move || {
-                if shared_loud.auto_loud_measuring.load(Ordering::Acquire) {
-                    return; // already measuring
-                }
-                shared_loud
-                    .auto_loud_trigger
-                    .store(true, Ordering::Release);
-            });
+                // CutSlope = discrete(0,1) → 2 choices (12/24 dB).
+                // EQ band slopes = discrete(0,2) → 3 choices (A/B/C).
+                bind_ints!(ui, state, 2, P::CutSlope => cut_slope);
+                bind_ints!(ui, state, 3,
+                    P::BassSlope => bass_slope,
+                    P::LoMidSlope => lo_mid_slope,
+                    P::MidSlope => mid_slope,
+                    P::HighSlope => high_slope,
+                    P::ExciteSlope => excite_slope,
+                );
 
+                bind_bools!(ui, state,
+                    P::MonoActive => mono_active,
+                    P::DeltaActive => delta_active,
+                    P::BypassActive => bypass_active,
+                    P::InflateBandSplit => inflate_band_split,
+                    P::InflateClip => inflate_clip,
+                );
+
+                // --- vault / preset / reset callbacks (UI actions, not parameters) ---
+                let snap_shared = shared.clone();
+                ui.on_snap_clicked(move || {
+                    snap_shared
+                        .snap_active
+                        .store(true, std::sync::atomic::Ordering::Release);
+                    tracing::info!("SNAP triggered");
+                });
+
+                let save_params = params.clone();
+                ui.on_save_clicked(move || {
+                    // Minimal preset save: store current parameter values in a plain text file
+                    // under the plugin's local presets directory.
+                    let dir = lx_analysis::get_plugin_dir("Meridian").join("presets");
+                    let _ = std::fs::create_dir_all(&dir);
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    let name = format!("meridian_preset_{now}");
+                    let fp = dir.join(format!("{name}.txt"));
+                    let mut lines = Vec::new();
+                    macro_rules! store_float {
+                        ($p:ident) => {
+                            lines.push(format!("{}={}", stringify!($p), save_params.$p.raw_target()));
+                        };
+                    }
+                    store_float!(hpf_freq);
+                    store_float!(lpf_freq);
+                    store_float!(bass_gain);
+                    store_float!(lo_mid_gain);
+                    store_float!(mid_gain);
+                    store_float!(high_gain);
+                    store_float!(excite_gain);
+                    store_float!(eq_freq_1);
+                    store_float!(eq_freq_2);
+                    store_float!(eq_freq_3);
+                    store_float!(eq_freq_4);
+                    store_float!(eq_freq_5);
+                    store_float!(tilt_gain);
+                    store_float!(warmth_drive);
+                    store_float!(warmth_mix);
+                    store_float!(excite_amount);
+                    store_float!(excite_blend);
+                    store_float!(excite_freq);
+                    store_float!(comp_threshold);
+                    store_float!(comp_mix);
+                    store_float!(comp_attack);
+                    store_float!(comp_release);
+                    store_float!(comp_character);
+                    store_float!(comp_makeup);
+                    store_float!(inflate_effect);
+                    store_float!(inflate_curve);
+                    store_float!(stereo_width);
+                    store_float!(pan);
+                    store_float!(output_gain);
+                    macro_rules! store_int {
+                        ($p:ident) => {
+                            lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
+                        };
+                    }
+                    store_int!(cut_slope);
+                    store_int!(bass_slope);
+                    store_int!(lo_mid_slope);
+                    store_int!(mid_slope);
+                    store_int!(high_slope);
+                    store_int!(excite_slope);
+                    macro_rules! store_bool {
+                        ($p:ident) => {
+                            lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
+                        };
+                    }
+                    store_bool!(mono_active);
+                    store_bool!(delta_active);
+                    store_bool!(bypass_active);
+                    store_bool!(inflate_band_split);
+                    store_bool!(inflate_clip);
+                    let content = lines.join("\n");
+                    if std::fs::write(&fp, content).is_ok() {
+                        tracing::info!("SAVE preset to {}", fp.display());
+                    }
+                });
+
+                let vault_state = Arc::new(Mutex::new(VaultUiState {
+                    vault_path: None,
+                    names: Vec::new(),
+                    cache: Vec::new(),
+                    pending: Arc::new(PendingPresets::new()),
+                    scanning_for: None,
+                }));
+                let vault_state_clone = vault_state.clone();
+                ui.on_vault_path_changed(move |path: slint::SharedString| {
+                    let path = path.to_string().trim().to_string();
+                    let new_vp = if path.is_empty() { None } else { Some(path) };
+                    if let Ok(mut vs) = vault_state_clone.lock() {
+                        vs.vault_path = new_vp.clone();
+                        let mut cfg = lx_analysis::load_config("Meridian");
+                        cfg.vault_path = new_vp.clone();
+                        let _ = lx_analysis::save_config("Meridian", &cfg);
+                        let scan_gen = vs.pending.bump_generation();
+                        if let Some(ref _vp) = new_vp {
+                            vs.scanning_for = Some(_vp.clone());
+                            spawn_vault_scan(_vp.clone(), vs.pending.clone(), scan_gen);
+                        } else {
+                            vs.names = Vec::new();
+                            vs.cache.clear();
+                            vs.scanning_for = None;
+                        }
+                    }
+                });
+
+                let reset_state = state.clone();
+                let reset_params = params.clone();
+                ui.on_reset_clicked(move || {
+                    reset_floats!(
+                        reset_state,
+                        reset_params,
+                        P::HpfFreq => hpf_freq,
+                        P::LpfFreq => lpf_freq,
+                        P::BassGain => bass_gain,
+                        P::LoMidGain => lo_mid_gain,
+                        P::MidGain => mid_gain,
+                        P::HighGain => high_gain,
+                        P::ExciteGain => excite_gain,
+                        P::EqFreq1 => eq_freq_1,
+                        P::EqFreq2 => eq_freq_2,
+                        P::EqFreq3 => eq_freq_3,
+                        P::EqFreq4 => eq_freq_4,
+                        P::EqFreq5 => eq_freq_5,
+                        P::TiltGain => tilt_gain,
+                        P::WarmthDrive => warmth_drive,
+                        P::WarmthMix => warmth_mix,
+                        P::ExciteAmount => excite_amount,
+                        P::ExciteBlend => excite_blend,
+                        P::ExciteFreq => excite_freq,
+                        P::CompThreshold => comp_threshold,
+                        P::CompMix => comp_mix,
+                        P::CompAttack => comp_attack,
+                        P::CompRelease => comp_release,
+                        P::CompCharacter => comp_character,
+                        P::CompMakeup => comp_makeup,
+                        P::InflateEffect => inflate_effect,
+                        P::InflateCurve => inflate_curve,
+                        P::StereoWidth => stereo_width,
+                        P::Pan => pan,
+                        P::OutputGain => output_gain,
+                    );
+                    reset_state.automate(P::CutSlope, discrete_norm(0, 2));
+                    reset_state.automate(P::BassSlope, discrete_norm(1, 3));
+                    reset_state.automate(P::LoMidSlope, discrete_norm(1, 3));
+                    reset_state.automate(P::MidSlope, discrete_norm(1, 3));
+                    reset_state.automate(P::HighSlope, discrete_norm(1, 3));
+                    reset_state.automate(P::ExciteSlope, discrete_norm(1, 3));
+                    reset_state.automate(P::InflateBandSplit, 0.0);
+                    reset_state.automate(P::InflateClip, 0.0);
+                    reset_state.automate(P::MonoActive, 0.0);
+                    reset_state.automate(P::DeltaActive, 0.0);
+                    reset_state.automate(P::BypassActive, 0.0);
+                    tracing::info!("RESET clicked");
+                });
+
+                // AUTO LOUD — arm DSP meters (process applies trigger → measure ~5s)
+                let shared_loud = shared.clone();
+                ui.on_auto_loud_clicked(move || {
+                    if shared_loud.auto_loud_measuring.load(Ordering::Acquire) {
+                        return; // already measuring
+                    }
+                    shared_loud
+                        .auto_loud_trigger
+                        .store(true, Ordering::Release);
+                });
+
+                ui
+            }
+        },
+        {
             let shared_for_sync = shared.clone();
             let params_for_curve = params.clone();
             let shared_for_curve = shared.clone();
-            let was_measuring = RefCell::new(false);
-            // GR envelope mini-display state (matches vizia telemetry)
-            let gr_history: RefCell<Vec<f32>> = RefCell::new(vec![0.0; 90]);
-            let gr_peak_hold: RefCell<f32> = RefCell::new(0.0);
-            let gr_peak_hold_ticks: RefCell<u32> = RefCell::new(0);
-
-            // Vault UI state struct (needed for vault path handling)
-            struct VaultUiState {
-                vault_path: Option<String>,
-                names: Vec<String>,
-                cache: Vec<(String, std::path::PathBuf, ())>,
-                pending: Arc<PendingPresets>,
-                scanning_for: Option<String>,
-            }
-            struct PendingPresets {
-                ready: std::sync::atomic::AtomicBool,
-                generation: std::sync::atomic::AtomicU32,
-                presets: std::sync::Mutex<Option<(u32, Vec<(String, std::path::PathBuf, ())>)>>,
-            }
-            impl PendingPresets {
-                fn new() -> Self {
-                    Self {
-                        ready: std::sync::atomic::AtomicBool::new(false),
-                        generation: std::sync::atomic::AtomicU32::new(0),
-                        presets: std::sync::Mutex::new(None),
-                    }
-                }
-                fn bump_generation(&self) -> u32 {
-                    let new = self.generation.load(std::sync::atomic::Ordering::Relaxed).wrapping_add(1);
-                    self.generation.store(new, std::sync::atomic::Ordering::Release);
-                    self.ready.store(false, std::sync::atomic::Ordering::Release);
-                    if let Ok(mut guard) = self.presets.lock() {
-                        *guard = None;
-                    }
-                    new
-                }
-            }
-            fn spawn_vault_scan(_vp: String, pending: Arc<PendingPresets>, generation: u32) {
-                std::thread::spawn(move || {
-                    // Minimal scan: just mark ready
-                    if let Ok(mut guard) = pending.presets.lock() {
-                        *guard = Some((generation, Vec::new()));
-                    }
-                    pending.ready.store(true, std::sync::atomic::Ordering::Release);
-                });
-            }
-
-            Box::new(move |state: &PluginContext<MeridianParams>| {
+            move |ui: &MeridianUi, state: &PluginContext<MeridianParams>| {
                 // --- host → UI normalized values ---
-                // sync_floats! macro is defined above; we keep it but remove the default_norm lines
-                // The macro currently sets default_norm; we need to modify it.
-                // For now, we call the macro as is, but we'll fix the macro definition later.
                 sync_floats!(ui, state,
                     P::HpfFreq => hpf_freq,
                     P::LpfFreq => lpf_freq,
@@ -510,7 +512,6 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let corr = shared.phase_correlation.load(Ordering::Relaxed);
                 let balance = shared.balance.load(Ordering::Relaxed);
 
-                // Stereo meter: map −60..+6 dB → 0..1 (matches frozen LxStereoMeter ticks)
                 ui.set_meter_l(db_to_meter(peak_l_db));
                 ui.set_meter_r(db_to_meter(peak_r_db));
                 ui.set_peak_hold_l(db_to_meter(hold_l_db));
@@ -525,14 +526,15 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 ui.set_peak_r_text(slint::SharedString::from(fmt_db(hold_r_db)));
 
                 // GR envelope + peak-hold (original footer mini-display)
-                {
-                    let mut hist = gr_history.borrow_mut();
+                if let (Ok(mut hist), Ok(mut hold), Ok(mut ticks)) = (
+                    gr_history.lock(),
+                    gr_peak_hold.lock(),
+                    gr_peak_hold_ticks.lock(),
+                ) {
                     hist.push(gr_db);
                     if hist.len() > 90 {
                         hist.remove(0);
                     }
-                    let mut hold = gr_peak_hold.borrow_mut();
-                    let mut ticks = gr_peak_hold_ticks.borrow_mut();
                     if gr_db > *hold {
                         *hold = gr_db;
                         *ticks = 90;
@@ -541,7 +543,6 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     } else {
                         *hold = (*hold - 0.15).max(gr_db).max(0.0);
                     }
-                    // Original PK label = GR peak-hold, not compressor input peak
                     ui.set_comp_peak_text(slint::SharedString::from(format!("PK: {:.1}", *hold)));
                     ui.set_gr_envelope_cmds(slint::SharedString::from(gr_envelope_path(
                         &hist, gr_db, 110.0, 48.0,
@@ -551,16 +552,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 // --- Auto Loud status + apply LUFS offset when measure ends ---
                 let measuring = shared.auto_loud_measuring.load(Ordering::Acquire);
                 ui.set_auto_loud_measuring(measuring);
-                {
-                    let mut was = was_measuring.borrow_mut();
+                if let Ok(mut was) = was_measuring.lock() {
                     if *was && !measuring {
-                        // Measurement just finished — offset is dB to add to Output Gain.
                         let offset = shared.auto_loud_gain_offset.load(Ordering::Acquire);
                         shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
                         if offset.abs() > 0.01 {
                             let cur_db = state.params().output_gain.raw_target() as f32;
                             let new_db = (cur_db + offset).clamp(-12.0, 12.0);
-                            // linear(-12, 12) → normalize
                             let norm = ((new_db + 12.0) / 24.0) as f64;
                             state.automate(P::OutputGain, norm.clamp(0.0, 1.0));
                         }
@@ -569,14 +567,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
 
                 // --- spectrum & goniometer paths ---
-                // Main spectrum ≈ 990 − 180 − 155 − pad ≈ 620 × 140 (FFT card fixed height)
                 ui.set_spectrum_path(slint::SharedString::from(spectrum_path(shared, 620.0, 140.0)));
-                // Right-bar gonio is square ~139×139
                 ui.set_gonio_path(slint::SharedString::from(gonio_path(shared, 139.0, 139.0)));
-            })
+            }
         },
     )
-    .into_editor()
+    .resizable(true)
+    .into()
 }
 
 fn fmt_db(v: f32) -> String {
