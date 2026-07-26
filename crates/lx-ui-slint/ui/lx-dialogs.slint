@@ -9,18 +9,31 @@ import { LxLineEdit } from "lx-controls.slint";
 /// PopupWindow + full-window dimmer TouchArea ate all hits in embedded
 /// DAW hosts (TextInput + PASTE dead). Stack this last on the Window.
 ///
+/// **Draft path (important):** do NOT live-bind `path` to the plugin's saved
+/// vault path. Continuous `path: root.vault_path` re-applies every frame and
+/// fights TextInput (Meridian spectrum sync made this obvious; Aether less so).
+/// Seed once when opening, two-way-bind a draft property, commit on SAVE:
+///
+///   in-out property <string> vault_setup_path: "";
+///   // SETUP clicked:
+///   //   root.vault_setup_path = root.vault_path;
+///   //   root.vault_setup_open = true;
 ///   vault_setup := LxVaultSetupOverlay {
 ///       width: 100%; height: 100%;
 ///       open <=> root.vault_setup_open;
-///       path <=> root.vault_path;
+///       path <=> root.vault_setup_path;
 ///       plugin-label: "Meridian";
 ///       paste-status: root.vault_paste_status;
 ///       paste-requested => { root.vault_paste_requested(); }
-///       saved(p) => { root.vault_path_changed(p); }
+///       saved(p) => {
+///           root.vault_path = p;
+///           root.vault_path_changed(p);
+///       }
 ///   }
-///   // open: root.vault_setup_open = true;
+///   // PASTE handler: set vault_setup_path (draft), not vault_path.
 export component LxVaultSetupOverlay inherits Rectangle {
     in-out property <bool> open: false;
+    // Editable draft. Parent two-ways a draft prop; SAVE commits.
     in-out property <string> path: "";
     in property <string> plugin-label: "Plugin";
     in property <string> paste-status: "";
@@ -65,8 +78,6 @@ export component LxVaultSetupOverlay inherits Rectangle {
         clicked => { root.open = false; root.closed(); }
     }
 
-    // FocusScope replaces PopupWindow's built-in focus management.
-    // Ensures TextInput can receive keyboard focus in Rectangle overlay.
     card := Rectangle {
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
@@ -77,18 +88,35 @@ export component LxVaultSetupOverlay inherits Rectangle {
         border-width: 1px;
         border-color: Lx.steel;
 
-        // One-shot timer: focus path-input after overlay renders.
-        // PopupWindow auto-focused; Rectangle overlay needs explicit focus.
+        // One-shot: focus path after layout. 0ms races first layout in DAW hosts
+        // (esp. Meridian with heavy Path layers); 16ms ≈ 1 frame @ 60 Hz.
         focus-timer := Timer {
-            interval: 0ms;
+            interval: 16ms;
             running: false;
             triggered => {
+                // FocusScope first so tab order / key capture is in the card,
+                // then TextInput via LxLineEdit.forward-focus.
+                card-focus.focus();
                 path-input.focus-input();
                 focus-timer.running = false;
             }
         }
 
-        FocusScope {
+        // Fill the card — zero-size FocusScope never receives focus.
+        card-focus := FocusScope {
+            width: 100%;
+            height: 100%;
+            // When focused but TextInput doesn't have it, re-target.
+            // Escape closes (same idea as Popup close-on-escape).
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    root.open = false;
+                    root.closed();
+                    return accept;
+                }
+                return reject;
+            }
+
             vl := VerticalLayout {
                 padding: Lx.pad-md;
                 spacing: Lx.gap-md;
@@ -117,6 +145,9 @@ export component LxVaultSetupOverlay inherits Rectangle {
                     LxButton {
                         text: "PASTE";
                         min-width: 64px;
+                        // Host reads OS clipboard (DAW often steals Ctrl+V).
+                        // Native Ctrl+V also works when platform clipboard_text
+                        // uses clipboard_get_retry (slint-baseview).
                         clicked => { root.paste-requested(); }
                     }
                 }
@@ -154,6 +185,8 @@ export component LxVaultSetupOverlay inherits Rectangle {
     changed open => {
         if root.open {
             focus-timer.running = true;
+        } else {
+            focus-timer.running = false;
         }
     }
 }

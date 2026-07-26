@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
+use lx_slint_editor::PluginContext;
 use truce_core::cast::discrete_norm;
-use truce_slint::PluginContext;
 
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;

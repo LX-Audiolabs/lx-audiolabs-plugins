@@ -238,6 +238,9 @@ export component LxLineEdit inherits Rectangle {
     in property <length> field-width: 0px; // 0 = stretch
     out property <bool> has-focus: ti.has-focus;
 
+    // Tab / FocusScope.focus() must reach TextInput, not this shell.
+    forward-focus: ti;
+
     callback accepted(string); // Enter pressed
     // Focus-lost commit. Host callbacks MUST ignore this during editor teardown
     // (TextInput loses focus while the component tree is destroyed).

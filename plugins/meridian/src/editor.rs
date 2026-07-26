@@ -545,14 +545,15 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     }
                 });
 
-                // Vault Setup PASTE: read OS clipboard in Rust (Ctrl+V often
-                // never reaches the plugin window under DAW key capture).
+                // Vault Setup PASTE: write draft path only (vault_setup_path).
+                // Ctrl+V also works via slint-baseview clipboard_get_retry; this
+                // is the DAW-steal fallback button.
                 let paste_ui = ui.as_weak();
                 ui.on_vault_paste_requested(move || {
                     let Some(ui) = paste_ui.upgrade() else { return };
                     match lx_slint_editor::clipboard_get_retry() {
                         Some(s) => {
-                            ui.set_vault_path(SharedString::from(s));
+                            ui.set_vault_setup_path(SharedString::from(s));
                             ui.set_vault_paste_status(SharedString::new());
                         }
                         None => {

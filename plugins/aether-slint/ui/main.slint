@@ -88,8 +88,10 @@ export component AetherUi inherits Window {
     callback save_clicked();
     callback vault_path_changed(string);
     callback vault_paste_requested();
-    in property <string> vault_paste_status: "";
+    in-out property <string> vault_paste_status: "";
     in-out property <bool> vault_setup_open: false;
+    // Draft path while SETUP is open (do not live-bind vault_path — kills TextInput).
+    in-out property <string> vault_setup_path: "";
     callback preset_selected(string);
 
     title: "Aether";
@@ -179,7 +181,10 @@ export component AetherUi inherits Window {
                     vertical-stretch: 0;
                     height: Lx.button-h-lg;
                     min-width: 56px;
-                    clicked => { root.vault_setup_open = true; }
+                    clicked => {
+                        root.vault_setup_path = root.vault_path;
+                        root.vault_setup_open = true;
+                    }
                 }
 
                 LxToggleBtn {
@@ -549,9 +554,8 @@ export component AetherUi inherits Window {
         width: 100%;
         height: 100%;
         open <=> root.vault_setup_open;
-        // pony: one-way — typing only mutates dialog.path, not vault_path.
-        // SAVE explicitly writes back so cancel discards edits.
-        path: root.vault_path;
+        // Two-way draft only — seed on SETUP click; SAVE commits to vault_path.
+        path <=> root.vault_setup_path;
         plugin-label: "Aether";
         paste-status: root.vault_paste_status;
         paste-requested => { root.vault_paste_requested(); }
