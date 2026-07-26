@@ -8,7 +8,7 @@ members = [
     "crates/lx-vault",
     "crates/lx-shm",
     "plugins/aether-slint",
-    "plugins/meridian-slint",
+    "plugins/meridian",
     "plugins/lucent-relay-slint",
     "plugins/lucent-slint",
     "plugins/aurum-slint",

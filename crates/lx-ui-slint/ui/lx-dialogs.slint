@@ -20,8 +20,12 @@ export component LxVaultSetupPopup inherits PopupWindow {
     in-out property <string> path: "";
     // Shown in subtitle: "Configure your Vault path for {plugin-label}:"
     in property <string> plugin-label: "Plugin";
+    // Host sets this after reading OS clipboard (Ctrl+V often stolen by DAW).
+    in property <string> paste-status: "";
 
     callback saved(string);
+    // Host must read OS clipboard and assign `path` (see plugin editor).
+    callback paste-requested();
 
     close-policy: close-on-click-outside;
 
@@ -36,13 +40,15 @@ export component LxVaultSetupPopup inherits PopupWindow {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
             width: 420px;
-            height: 160px;
+            // Content-fit: fixed heights let the layout distribute leftover
+            // space into the gaps. preferred-height keeps gaps at gap-md.
+            height: vl.preferred-height;
             background: Lx.panel;
             border-radius: Lx.radius-md;
             border-width: 1px;
             border-color: Lx.steel;
 
-            VerticalLayout {
+            vl := VerticalLayout {
                 padding: Lx.pad-md;
                 spacing: Lx.gap-md;
 
@@ -50,7 +56,7 @@ export component LxVaultSetupPopup inherits PopupWindow {
                     text: "LX AUDIOLABS — SETUP";
                     font-size: Lx.font-lg;
                     font-weight: 700;
-                    color: Lx.text;
+                    color: Lx.amber;
                     vertical-stretch: 0;
                 }
                 Text {
@@ -59,9 +65,25 @@ export component LxVaultSetupPopup inherits PopupWindow {
                     color: Lx.text-secondary;
                     vertical-stretch: 0;
                 }
-                LxLineEdit {
-                    placeholder-text: "Enter Vault absolute path...";
-                    text <=> root.path;
+                HorizontalLayout {
+                    spacing: Lx.gap-sm;
+                    vertical-stretch: 0;
+                    LxLineEdit {
+                        placeholder-text: "Enter Vault absolute path...";
+                        text <=> root.path;
+                        horizontal-stretch: 1;
+                    }
+                    // DAW hosts often steal Ctrl+V — explicit paste via OS clipboard.
+                    LxButton {
+                        text: "PASTE";
+                        min-width: 64px;
+                        clicked => { root.paste-requested(); }
+                    }
+                }
+                if root.paste-status != "": Text {
+                    text: root.paste-status;
+                    font-size: Lx.font-xs;
+                    color: Lx.crimson;
                     vertical-stretch: 0;
                 }
                 HorizontalLayout {
@@ -70,6 +92,7 @@ export component LxVaultSetupPopup inherits PopupWindow {
 
                     LxButton {
                         text: "SAVE";
+                        primary: true;
                         clicked => {
                             root.saved(root.path);
                             root.close();

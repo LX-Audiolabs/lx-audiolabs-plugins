@@ -87,6 +87,8 @@ export component AetherUi inherits Window {
     callback reset_clicked();
     callback save_clicked();
     callback vault_path_changed(string);
+    callback vault_paste_requested();
+    in property <string> vault_paste_status: "";
     callback preset_selected(string);
 
     title: "Aether";
@@ -547,6 +549,8 @@ export component AetherUi inherits Window {
         height: root.height;
         path <=> root.vault_path;
         plugin-label: "Aether";
+        paste-status: root.vault_paste_status;
+        paste-requested => { root.vault_paste_requested(); }
         saved(p) => { root.vault_path_changed(p); }
     }
 }

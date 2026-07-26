@@ -13,6 +13,7 @@ name = "aether-slint"
 version = "1.2.8"
 dependencies = [
  "clap-sys",
+ "copypasta",
  "lx-analysis",
  "lx-dsp",
  "lx-slint-build",
@@ -322,6 +323,7 @@ name = "aurum-slint"
 version = "0.2.6"
 dependencies = [
  "clap-sys",
+ "copypasta",
  "lx-analysis",
  "lx-dsp",
  "lx-slint-build",
@@ -3026,7 +3028,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "meridian-slint"
+name = "meridian"
 version = "1.9.8"
 dependencies = [
  "clap-sys",
@@ -4863,6 +4865,7 @@ name = "slint-baseview"
 version = "0.1.0"
 dependencies = [
  "baseview",
+ "copypasta",
  "keyboard-types 0.8.3",
  "raw-window-handle 0.6.2",
  "slint",

@@ -134,6 +134,10 @@ export component LxPanel inherits Rectangle {
     border-radius: Lx.radius-md;
     border-width: 1px;
     border-color: Lx.edge-dark;
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: 1px;
+    drop-shadow-blur: 4px;
+    drop-shadow-color: #00000055;
 }
 
 // Card with optional amber section title — recessed tray look.
@@ -145,6 +149,10 @@ export component LxSection inherits Rectangle {
     border-radius: Lx.radius-md;
     border-width: 1px;
     border-color: Lx.stage-rim;
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: 1px;
+    drop-shadow-blur: 5px;
+    drop-shadow-color: #00000066;
 
     VerticalLayout {
         padding: Lx.pad-md;
@@ -186,7 +194,8 @@ export component LxToggleBtn inherits Rectangle {
     height: root.small ? Lx.button-h-sm : Lx.button-h;
     min-width: root.small ? 36px : 56px;
     border-radius: Lx.radius-sm;
-    // No border-width: software renderer strokes AABB (square frame around rounded pill).
+    border-width: 1px;
+    border-color: root.active ? #ffffff33 : Lx.edge-dark;
     background: root.active
         ? (root.danger
             ? @linear-gradient(180deg, Lx.crimson-hi 0%, Lx.crimson 50%, Lx.crimson-lo 100%)
@@ -194,6 +203,10 @@ export component LxToggleBtn inherits Rectangle {
         : (root.danger
             ? @linear-gradient(180deg, #4a2020 0%, Lx.danger-bg 100%)
             : @linear-gradient(180deg, Lx.raise-hi 0%, Lx.control 50%, Lx.raise-lo 100%));
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: Lx.shadow-btn-y;
+    drop-shadow-blur: Lx.shadow-btn-blur;
+    drop-shadow-color: Lx.shadow-soft;
 
     Text {
         width: 100%;
@@ -232,6 +245,9 @@ export component LxToggleBtn inherits Rectangle {
                     ? @linear-gradient(180deg, Lx.crimson-lo 0%, Lx.crimson 100%)
                     : @linear-gradient(180deg, Lx.amber-lo 0%, Lx.amber 100%))
                 : @linear-gradient(180deg, Lx.raise-lo 0%, Lx.control-active 100%);
+            // Pressed = flatter (shadow collapses)
+            drop-shadow-offset-y: 0px;
+            drop-shadow-blur: 1px;
         }
     ]
 }
@@ -245,10 +261,15 @@ export component LxButton inherits Rectangle {
     height: Lx.button-h;
     min-width: 56px;
     border-radius: Lx.radius-sm;
-    // No border-width: software renderer AABB stroke.
+    border-width: 1px;
+    border-color: root.primary ? #ffffff33 : Lx.edge-dark;
     background: root.primary
         ? @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 50%, Lx.amber-lo 100%)
         : @linear-gradient(180deg, Lx.raise-hi 0%, Lx.control 50%, Lx.raise-lo 100%);
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: Lx.shadow-btn-y;
+    drop-shadow-blur: Lx.shadow-btn-blur;
+    drop-shadow-color: Lx.shadow-soft;
 
     Text {
         width: 100%;
@@ -271,12 +292,16 @@ export component LxButton inherits Rectangle {
         }
         pressed when ta.pressed && root.primary: {
             background: @linear-gradient(180deg, Lx.amber-lo 0%, Lx.amber 100%);
+            drop-shadow-offset-y: 0px;
+            drop-shadow-blur: 1px;
         }
         hover when ta.has-hover && !root.primary: {
             background: @linear-gradient(180deg, Lx.control-hover 0%, Lx.control 55%, Lx.raise-lo 100%);
         }
         pressed when ta.pressed && !root.primary: {
             background: @linear-gradient(180deg, Lx.raise-lo 0%, Lx.control-active 100%);
+            drop-shadow-offset-y: 0px;
+            drop-shadow-blur: 1px;
         }
     ]
 }
@@ -289,8 +314,13 @@ export component LxDangerBtn inherits Rectangle {
     height: Lx.button-h;
     min-width: 56px;
     border-radius: Lx.radius-sm;
-    // No border-width: software renderer AABB stroke.
+    border-width: 1px;
+    border-color: #00000066;
     background: @linear-gradient(180deg, #4a2020 0%, Lx.danger-bg 100%);
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: Lx.shadow-btn-y;
+    drop-shadow-blur: Lx.shadow-btn-blur;
+    drop-shadow-color: Lx.shadow-soft;
 
     Text {
         width: 100%;

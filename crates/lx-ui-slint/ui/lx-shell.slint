@@ -192,10 +192,12 @@ export component LxShellHeader inherits Rectangle {
                 horizontal-stretch: 0;
                 vertical-stretch: 0;
 
+                // LX monogram slightly larger than AUDIOLABS — same 18px looks
+                // optically smaller on a 2-letter word next to a long wordmark.
                 Text {
                     text: root.brand-left;
-                    font-size: 18px;
-                    font-weight: 700;
+                    font-size: 22px;
+                    font-weight: 800;
                     color: Lx.amber;
                     vertical-alignment: center;
                 }

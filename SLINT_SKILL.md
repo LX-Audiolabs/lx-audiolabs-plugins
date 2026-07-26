@@ -66,7 +66,7 @@ lx-audiolabs-slint/
 │   └── lx-shm/             ← Shared memory (Lucent Relay)
 ├── plugins/
 │   ├── lucent-slint/       ← Spectrum analyzer
-│   ├── meridian-slint/     ← Channel strip
+│   ├── meridian/           ← Channel strip
 │   ├── aether-slint/       ← EQ
 │   ├── equilibrium-slint/  ← Spectral balancer
 │   ├── aurum-slint/        ← Saturation

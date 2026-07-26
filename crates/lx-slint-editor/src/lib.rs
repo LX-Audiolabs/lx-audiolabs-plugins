@@ -18,6 +18,8 @@ mod parent;
 pub use paste::paste;
 /// Re-export so plugins need not depend on truce-core editor types directly.
 pub use truce_core::editor::PluginContext;
+/// OS clipboard helpers (vault PASTE button, Ctrl+V inject, etc.).
+pub use slint_baseview::platform::{clipboard_get, clipboard_get_retry, clipboard_set};
 
 /// Build closure: creates the Slint component and wires UI callbacks.
 pub type BuildFn<P, C> = Arc<dyn Fn(PluginContext<P>) -> C + Send + Sync>;

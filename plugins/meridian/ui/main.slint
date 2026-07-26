@@ -96,8 +96,13 @@ export component MeridianUi inherits Window {
 
     // --- visualization ---
     in property <string> spectrum_path: "";
+    // Fill under the spectrum — Rust rebuilds this anchored to the curve peak.
+    in property <brush> spectrum_fill: @linear-gradient(180deg, #7df3ddff 0%, #19e6b3f0 55%, #19e6b3b3 85%, #19e6b300 100%);
     in property <string> curve_cmds: "";
     in property <string> gonio_path: "";
+    // Display-only 1/3-oct spectrum smoothing (Lucent parity, not a param).
+    in-out property <bool> spectrum_smooth: false;
+    callback spectrum_smooth_changed(bool);
     in property <float> meter_l: 0.0;
     in property <float> meter_r: 0.0;
     in property <float> peak_hold_l: 0.0;
@@ -123,6 +128,9 @@ export component MeridianUi inherits Window {
     callback snap_clicked;
     callback save_clicked;
     callback vault_path_changed(string);
+    // Vault Setup PASTE button (DAWs often steal Ctrl+V from the plugin).
+    callback vault_paste_requested();
+    in property <string> vault_paste_status: "";
     callback reset_clicked;
 
     init => { Palette.color-scheme = ColorScheme.dark; }
@@ -159,6 +167,10 @@ export component MeridianUi inherits Window {
                 spacing: 4px;
                 alignment: center;
 
+                LxDangerBtn {
+                    label: "RESET";
+                    clicked => { root.reset_clicked(); }
+                }
                 LxToggleBtn {
                     label: "MONO";
                     active <=> root.mono_active;
@@ -376,15 +388,15 @@ export component MeridianUi inherits Window {
                         }
                     }
 
-                    // ── Card 2: FFT — no title, fixed height (no stretch hog)
+                    // ── Card 2: FFT — no title, taller pit (+25px vs 140)
                     LxSection {
                         show-title: false;
                         vertical-stretch: 0;
 
                         Rectangle {
-                            min-height: 120px;
-                            preferred-height: 140px;
-                            max-height: 150px;
+                            min-height: 145px;
+                            preferred-height: 165px;
+                            max-height: 175px;
                             vertical-stretch: 0;
                             background: Lx.void;
                             border-radius: Lx.radius-sm;
@@ -397,10 +409,12 @@ export component MeridianUi inherits Window {
                                 height: 100%;
                                 commands: root.spectrum_path;
                                 path-w: 620;
-                                path-h: 140;
-                                // Stroke only — fill shading hides EQ curve overlay.
-                                fill-color: transparent;
+                                path-h: 165;
+                                // Gradient fill under the curve — anchored to
+                                // the curve peak (Rust), fades out at the floor.
+                                fill: root.spectrum_fill;
                                 stroke-color: #19e6b3;
+                                stroke-width: 2px;
                                 db-top: "-18";
                                 db-mid: "-44";
                                 db-bot: "-70";
@@ -414,8 +428,7 @@ export component MeridianUi inherits Window {
                                 height: 100%;
                                 commands: root.curve_cmds;
                                 path-w: 620;
-                                path-h: 140;
-                                surface: transparent;
+                                path-h: 165;
                                 show-grid: false;
                                 show-labels: true;
                                 labels-right: true;
@@ -423,10 +436,23 @@ export component MeridianUi inherits Window {
                                 db-mid: "0";
                                 db-bot: "-24";
                             }
+
+                            // Display smoothing toggle — sits left of the +24 label.
+                            // Explicit width: positioned (no layout), min-width 36px
+                            // would clip the 6-char label.
+                            LxToggleBtn {
+                                x: parent.width - 100px;
+                                y: 4px;
+                                width: 46px;
+                                label: "SMOOTH";
+                                small: true;
+                                active <=> root.spectrum_smooth;
+                                toggled(v) => { root.spectrum_smooth_changed(v); }
+                            }
                         }
                     }
 
-                    // ── Card 3: 5-band EQ (title + leftover vertical space; −20px vs FFT gain)
+                    // ── Card 3: 5-band EQ (leftover vertical space after taller FFT)
                     LxSection {
                         title: "EQ";
                         show-title: true;
@@ -568,30 +594,34 @@ export component MeridianUi inherits Window {
                     level-r: root.meter_r;
                     hold-l: root.peak_hold_l;
                     hold-r: root.peak_hold_r;
+                    balance: root.balance;
                     reset-peaks => { root.reset_peaks(); }
                 }
 
-                // Peak readouts
-                HorizontalLayout {
-                    spacing: 4px;
+                // Peak readouts — click resets peak hold (DAW-style).
+                TouchArea {
                     vertical-stretch: 0;
-                    Text {
-                        text: root.peak_l_text != "" ? root.peak_l_text : "L";
-                        font-size: Lx.font-sm;
-                        color: Lx.amber;
-                        horizontal-stretch: 1;
-                    }
-                    Text {
-                        text: "dB";
-                        font-size: Lx.font-xs;
-                        color: Lx.text-muted;
-                    }
-                    Text {
-                        text: root.peak_r_text != "" ? root.peak_r_text : "R";
-                        font-size: Lx.font-sm;
-                        color: Lx.amber;
-                        horizontal-stretch: 1;
-                        horizontal-alignment: right;
+                    clicked => { root.reset_peaks(); }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: root.peak_l_text != "" ? root.peak_l_text : "L";
+                            font-size: Lx.font-sm;
+                            color: Lx.amber;
+                            horizontal-stretch: 1;
+                        }
+                        Text {
+                            text: "dB";
+                            font-size: Lx.font-xs;
+                            color: Lx.text-muted;
+                        }
+                        Text {
+                            text: root.peak_r_text != "" ? root.peak_r_text : "R";
+                            font-size: Lx.font-sm;
+                            color: Lx.amber;
+                            horizontal-stretch: 1;
+                            horizontal-alignment: right;
+                        }
                     }
                 }
 
@@ -624,7 +654,7 @@ export component MeridianUi inherits Window {
             }
         }
 
-        // ── FOOTER: 3 cards (COMP | INFLATE | STEREO) + bare RESET ──
+        // ── FOOTER: 3 cards (COMP | INFLATE | STEREO) ──
         LxShellFooter {
             // COMPRESSOR card
             LxSection {
@@ -694,19 +724,6 @@ export component MeridianUi inherits Window {
                     LxKnob { label: "WIDTH"; small: true; value <=> root.stereo_width; value-text: root.stereo_width_text; default-value: root.stereo_width_default; changed(v) => { root.stereo_width_changed(v); } }
                 }
             }
-
-            // RESET — bare, no card
-            VerticalLayout {
-                spacing: 0;
-                horizontal-stretch: 0;
-                alignment: center;
-                min-width: 72px;
-
-                LxDangerBtn {
-                    label: "RESET";
-                    clicked => { root.reset_clicked(); }
-                }
-            }
         }
     }
 
@@ -718,6 +735,8 @@ export component MeridianUi inherits Window {
         height: root.height;
         path <=> root.vault_path;
         plugin-label: "Meridian";
+        paste-status: root.vault_paste_status;
+        paste-requested => { root.vault_paste_requested(); }
         saved(p) => { root.vault_path_changed(p); }
     }
 }

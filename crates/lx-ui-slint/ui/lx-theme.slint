@@ -1,5 +1,6 @@
-// LX Audiolabs design tokens — brand CI + soft-3D (software-renderer safe).
-// Depth via gradients / layered rects / path arcs — no drop-shadow / GPU shading.
+// LX Audiolabs design tokens — brand CI + soft-3D (FemtoVG / GPU).
+// Depth: linear + radial gradients, drop-shadow, layered discs.
+// Layout sizes stay token-driven (knob-d, button-h, …) — shadows are paint-only.
 
 export global Lx {
     // Surfaces — neutral gray ladder (classic LX / Aether), not pure black.
@@ -13,20 +14,31 @@ export global Lx {
     out property <color> control-active: #555555;
 
     // Soft-3D surface stops (buttons, well, knob face) — gray family
-    out property <color> raise-hi: #3a3a3a;       // top edge of raised control
-    out property <color> raise-lo: #1a1a1a;       // bottom of raised control
-    out property <color> well-hi: #141414;        // top of recessed well (darker)
-    out property <color> well-lo: #1e1e1e;        // bottom of recessed well
-    out property <color> edge-light: #ffffff22;   // 1px highlight rim
-    out property <color> edge-dark: #00000055;    // 1px shadow rim (softer)
-    out property <color> metal-hi: #4a4a4a;       // bezel / ring highlight
-    out property <color> metal-mid: #2a2a2a;
-    out property <color> metal-lo: #141414;
-    out property <color> face-hi: #323232;        // knob face highlight
-    out property <color> face-mid: #1e1e1e;
-    out property <color> face-lo: #171717;
+    out property <color> raise-hi: #454545;       // top edge of raised control
+    out property <color> raise-lo: #161616;       // bottom of raised control
+    out property <color> well-hi: #0e0e0e;        // top of recessed well (darker)
+    out property <color> well-lo: #222222;        // bottom of recessed well
+    out property <color> edge-light: #ffffff33;   // 1px highlight rim
+    out property <color> edge-dark: #00000066;    // 1px shadow rim
+    out property <color> metal-hi: #5a5a5a;       // bezel / ring highlight
+    out property <color> metal-mid: #2e2e2e;
+    out property <color> metal-lo: #121212;
+    out property <color> face-hi: #3a3a3a;        // knob face highlight (dome top)
+    out property <color> face-mid: #222222;
+    out property <color> face-lo: #141414;
     out property <color> stage: #141414;          // analyzer / spectrum pit
     out property <color> stage-rim: #2a2a2a;
+
+    // Drop-shadow tokens (FemtoVG). Offset/blur only — do not change layout size.
+    out property <color> shadow-soft: #00000088;
+    out property <color> shadow-hard: #000000aa;
+    out property <color> glow-amber: #ff731a44;
+    out property <length> shadow-btn-y: 1px;
+    out property <length> shadow-btn-blur: 3px;
+    out property <length> shadow-knob-y: 2px;
+    out property <length> shadow-knob-blur: 5px;
+    out property <length> shadow-thumb-y: 1px;
+    out property <length> shadow-thumb-blur: 3px;
 
     // Brand / accent
     out property <color> amber: #ff731a;

@@ -97,6 +97,7 @@ struct SyncCache {
     hold_l_db_q: f32,
     hold_r_db_q: f32,
     auto_loud: Option<bool>,
+    spectrum_fill_q: f32,
 }
 
 impl SyncCache {
@@ -126,6 +127,7 @@ impl SyncCache {
             hold_l_db_q: f32::NAN,
             hold_r_db_q: f32::NAN,
             auto_loud: None,
+            spectrum_fill_q: f32::NAN,
         }
     }
 
@@ -428,6 +430,22 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     tracing::info!("SNAP triggered");
                 });
 
+                // Display-only 1/3-oct spectrum smoothing toggle (Lucent parity).
+                let smooth_shared = shared.clone();
+                ui.on_spectrum_smooth_changed(move |on: bool| {
+                    smooth_shared
+                        .spectrum_smooth
+                        .store(on, std::sync::atomic::Ordering::Release);
+                });
+
+                // Peak-hold reset (click on readouts / double-click on meter).
+                let reset_shared = shared.clone();
+                ui.on_reset_peaks(move || {
+                    reset_shared
+                        .reset_peak
+                        .store(true, std::sync::atomic::Ordering::Release);
+                });
+
                 let save_params = params.clone();
                 ui.on_save_clicked(move || {
                     // Minimal preset save: store current parameter values in a plain text file
@@ -502,12 +520,25 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     }
                 });
 
+                // Restore persisted vault path — without this the path was
+                // saved on change but never loaded → "lost" on every reopen
+                // (Aether parity).
+                let init_cfg = lx_analysis::load_config("Meridian");
+                let init_vp = init_cfg.vault_path.clone();
+                if let Some(ref vp) = init_vp {
+                    ui.set_vault_path(slint::SharedString::from(vp.as_str()));
+                }
+                let vault_pending = Arc::new(PendingPresets::new());
+                if let Some(ref vp) = init_vp {
+                    let scan_gen = vault_pending.bump_generation();
+                    spawn_vault_scan(vp.clone(), vault_pending.clone(), scan_gen);
+                }
                 let vault_state = Arc::new(Mutex::new(VaultUiState {
-                    vault_path: None,
+                    vault_path: init_vp.clone(),
                     names: Vec::new(),
                     cache: Vec::new(),
-                    pending: Arc::new(PendingPresets::new()),
-                    scanning_for: None,
+                    pending: vault_pending,
+                    scanning_for: init_vp,
                 }));
                 let vault_state_clone = vault_state.clone();
                 ui.on_vault_path_changed(move |path: slint::SharedString| {
@@ -526,6 +557,25 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                             vs.names = Vec::new();
                             vs.cache.clear();
                             vs.scanning_for = None;
+                        }
+                    }
+                });
+
+                // Vault Setup PASTE: read OS clipboard in Rust (Ctrl+V often
+                // never reaches the plugin window under DAW key capture).
+                let paste_ui = ui.as_weak();
+                ui.on_vault_paste_requested(move || {
+                    let Some(ui) = paste_ui.upgrade() else { return };
+                    // Retry: OpenClipboard can flake under DAW message loops.
+                    match lx_slint_editor::clipboard_get_retry() {
+                        Some(s) => {
+                            ui.set_vault_path(slint::SharedString::from(s));
+                            ui.set_vault_paste_status(slint::SharedString::new());
+                        }
+                        None => {
+                            ui.set_vault_paste_status(slint::SharedString::from(
+                                "Clipboard empty or unavailable — copy a path and try PASTE again",
+                            ));
                         }
                     }
                 });
@@ -703,7 +753,9 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
                 if changed_f32(&mut cache.corr, corr) {
                     ui.set_correlation(corr);
-                    ui.set_corr_text(slint::SharedString::from(format!("corr: {corr:.2}")));
+                    ui.set_corr_text(slint::SharedString::from(format!(
+                        "correlation: {corr:.2}"
+                    )));
                 }
                 if changed_f32(&mut cache.balance, balance) {
                     ui.set_balance(balance);
@@ -760,9 +812,15 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 cache.was_measuring = measuring;
 
                 // --- spectrum & goniometer at tick rate only (~30 Hz, vizia parity) ---
-                ui.set_spectrum_path(slint::SharedString::from(spectrum_path(
-                    shared, 620.0, 140.0,
-                )));
+                // path-h must match LxSpectrum path-h / FFT card height (165).
+                ui.set_spectrum_smooth(shared.spectrum_smooth.load(Ordering::Relaxed));
+                let (cmds, fill_top) = spectrum_path(shared, 620.0, 165.0);
+                ui.set_spectrum_path(slint::SharedString::from(cmds));
+                // Rebuild the fill brush only when the peak moves ≥2 % of height.
+                let fq = (fill_top * 50.0).round() / 50.0;
+                if changed_f32(&mut cache.spectrum_fill_q, fq) {
+                    ui.set_spectrum_fill(spectrum_fill_brush(fq));
+                }
                 ui.set_gonio_path(slint::SharedString::from(gonio_path(
                     shared, 139.0, 139.0,
                 )));
@@ -796,7 +854,75 @@ fn db_to_gr(db: f32) -> f32 {
 // Y range matches vizia SpectrumConfig default: −70 … −18 dB.
 // X is log-frequency (20 Hz … 20 kHz), same as SpectrumView.
 
-fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
+/// 1/3-octave fractional-band smoothing (Lucent `lx-ui` canvas parity).
+/// Returns 241 log-spaced dB points from 20 Hz to 20 kHz.
+fn smooth_spectrum_third_octave(spectrum: &[f32], sample_rate: f32) -> Vec<f32> {
+    use lx_analysis::SPECTRUM_BINS;
+    if spectrum.is_empty() {
+        return Vec::new();
+    }
+    let fft_size = SPECTRUM_BINS * 2;
+    let log_min = 20.0_f32.ln();
+    let log_max = 20000.0_f32.ln();
+    let bin_hz = sample_rate / fft_size as f32;
+    const DENOM_LOW: f32 = 3.0;
+    const DENOM_HIGH: f32 = 20.0;
+    const F_LOW: f32 = 500.0;
+    const F_HIGH: f32 = 16000.0;
+    let taper_lo = F_LOW.ln();
+    let taper_hi = F_HIGH.ln();
+    const STEPS: usize = 240;
+    let len = spectrum.len();
+
+    let power: Vec<f32> = spectrum
+        .iter()
+        .map(|&db| 10.0_f32.powf(db * 0.1))
+        .collect();
+
+    let mut out = Vec::with_capacity(STEPS + 1);
+    for i in 0..=STEPS {
+        let frac = i as f32 / STEPS as f32;
+        let ln_fc = log_min + (log_max - log_min) * frac;
+        let fc = ln_fc.exp();
+        let t = ((ln_fc - taper_lo) / (taper_hi - taper_lo)).clamp(0.0, 1.0);
+        let denom = DENOM_LOW + (DENOM_HIGH - DENOM_LOW) * t;
+        let half = 2.0_f32.powf(1.0 / (2.0 * denom));
+        const MIN_BIN: f32 = 1.0;
+        let lo = (fc / half / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
+        let hi = (fc * half / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
+        let avg_power = if hi - lo >= 1.0 {
+            let i0 = lo.floor() as usize;
+            let i1 = hi.floor() as usize;
+            let mut sum = 0.0f32;
+            if i0 == i1 {
+                sum = power[i0] * (hi - lo);
+            } else {
+                sum += power[i0] * ((i0 + 1) as f32 - lo);
+                for p in &power[i0 + 1..i1] {
+                    sum += *p;
+                }
+                sum += power[i1] * (hi - i1 as f32);
+            }
+            sum / (hi - lo)
+        } else {
+            let pos = (fc / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
+            let i0 = pos.floor() as usize;
+            let i1 = (i0 + 1).min(len - 1);
+            let t_bin = pos - i0 as f32;
+            power[i0] * (1.0 - t_bin) + power[i1] * t_bin
+        };
+        out.push((10.0 * avg_power.max(1e-12).log10()).clamp(-90.0, 12.0));
+    }
+    if out.len() >= 3 {
+        let raw = out.clone();
+        for i in 1..out.len().saturating_sub(1) {
+            out[i] = raw[i - 1] * 0.25 + raw[i] * 0.5 + raw[i + 1] * 0.25;
+        }
+    }
+    out
+}
+
+fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> (String, f32) {
     use lx_analysis::SPECTRUM_BINS;
     const MIN_DB: f32 = -70.0;
     const MAX_DB: f32 = -18.0;
@@ -809,7 +935,7 @@ fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
         .unwrap_or_default();
     let n = bins.len().min(SPECTRUM_BINS);
     if n < 2 {
-        return String::new();
+        return (String::new(), 1.0);
     }
 
     let sr = shared.sample_rate.load(Ordering::Relaxed).max(1.0);
@@ -822,36 +948,83 @@ fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
         h - norm * h
     };
 
-    // Collect log-x samples (skip sub-20 Hz bins).
-    let mut pts: Vec<(f32, f32)> = Vec::with_capacity(n);
-    for i in 0..n {
-        let freq = i as f32 * sr / fft_size;
-        if freq < 20.0 {
-            continue;
+    // Collect log-x samples. SMOOTH on = 1/3-octave fractional-band average
+    // (Lucent parity); off = raw log-spaced bins (skip sub-20 Hz bins).
+    let pts: Vec<(f32, f32)> = if shared.spectrum_smooth.load(Ordering::Relaxed) {
+        let sm = smooth_spectrum_third_octave(&bins[..n], sr);
+        let denom = sm.len().saturating_sub(1).max(1) as f32;
+        sm.iter()
+            .enumerate()
+            .map(|(i, &db)| (i as f32 / denom * w, db_to_y(db.clamp(MIN_DB, MAX_DB))))
+            .collect()
+    } else {
+        let mut pts: Vec<(f32, f32)> = Vec::with_capacity(n);
+        for i in 0..n {
+            let freq = i as f32 * sr / fft_size;
+            if freq < 20.0 {
+                continue;
+            }
+            if freq > 20000.0 {
+                break;
+            }
+            let x = log_f(freq) * w;
+            let y = db_to_y(bins[i].clamp(MIN_DB, MAX_DB));
+            pts.push((x, y));
         }
-        if freq > 20000.0 {
-            break;
-        }
-        let x = log_f(freq) * w;
-        let y = db_to_y(bins[i].clamp(MIN_DB, MAX_DB));
-        pts.push((x, y));
-    }
+        pts
+    };
     if pts.len() < 2 {
-        return String::new();
+        return (String::new(), 1.0);
     }
 
-    let mut s = String::with_capacity(pts.len() * 22);
-    // Filled area under curve (floor at bottom of −70 dB range)
-    s.push_str(&format!("M {:.1} {:.1}", pts[0].0, h));
-    for &(x, y) in &pts {
+    // Fill gradient anchor: highest curve point (min y) as 0..1 of height.
+    // The fill brush fades from here to transparent at the floor — relative
+    // to the spectrum, not the widget height.
+    let fill_top = pts.iter().map(|p| p.1).fold(f32::INFINITY, f32::min) / h;
+
+    // Stroke+fill path: closed loop from left baseline -> up to first point ->
+    // along the curve -> down to right baseline -> back to left baseline.
+    // Baseline is h+2 and both corners sit outside the viewBox, so the closing
+    // edges (bottom + sides) are clipped — only the curve gets stroked.
+    let mut s = String::with_capacity(pts.len() * 22 + 48);
+    let base = h + 2.0;
+    s.push_str(&format!("M -2.0 {:.1} L {:.1} {:.1}", base, pts[0].0, pts[0].1));
+    for &(x, y) in pts.iter().skip(1) {
         s.push_str(&format!(" L {x:.1} {y:.1}"));
     }
-    s.push_str(&format!(
-        " L {:.1} {:.1} Z",
-        pts.last().map(|p| p.0).unwrap_or(w),
-        h
-    ));
-    s
+    let last_x = pts.last().unwrap().0;
+    s.push_str(&format!(" L {:.1} {:.1} L {:.1} {:.1} Z", last_x, base, w + 2.0, base));
+    (s, fill_top)
+}
+
+/// Fill brush for the spectrum: opaque at the curve's peak, fading to
+/// transparent at the pit floor — anchored to the spectrum, not the widget.
+fn spectrum_fill_brush(top: f32) -> slint::Brush {
+    use slint::private_unstable_api::re_exports::{GradientStop, LinearGradientBrush};
+    let c = |a: u8| slint::Color::from_argb_u8(a, 0x19, 0xe6, 0xb3);
+    let t = top.clamp(0.0, 0.85);
+    let span = 1.0 - t;
+    slint::Brush::LinearGradient(LinearGradientBrush::new(
+        180.0,
+        [
+            GradientStop {
+                color: slint::Color::from_argb_u8(0xff, 0x7d, 0xf3, 0xdd),
+                position: t,
+            },
+            GradientStop {
+                color: c(0xf0),
+                position: t + span * 0.55,
+            },
+            GradientStop {
+                color: c(0xb3),
+                position: t + span * 0.85,
+            },
+            GradientStop {
+                color: c(0x00),
+                position: 1.0,
+            },
+        ],
+    ))
 }
 
 /// GR envelope path for footer mini-display (viewBox w×h, max GR = 12 dB).
@@ -1014,7 +1187,7 @@ fn eq_curve_path(params: &MeridianParams, sr: f32) -> String {
     // Match vizia compute_eq_curve: ±24 dB overlay scale (not spectrum −70…−18).
     const N: usize = 256;
     const W: f32 = 620.0;
-    const H: f32 = 140.0; // matches FFT card path-h
+    const H: f32 = 165.0; // matches FFT card path-h
     const DB_MIN: f32 = -24.0;
     const DB_MAX: f32 = 24.0;
     let db_range = DB_MAX - DB_MIN;

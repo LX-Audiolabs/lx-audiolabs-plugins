@@ -246,7 +246,7 @@ pub struct MeridianParams {
     #[param(
         name = "Tilt",
         default = 0.0,
-        range = "linear(-1.5, 1.5)",
+        range = "linear(-2.0, 2.0)",
         unit = "dB",
         group = "Tilt"
     )]

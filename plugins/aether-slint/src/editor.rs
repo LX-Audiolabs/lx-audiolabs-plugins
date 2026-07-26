@@ -381,6 +381,27 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 }
             });
 
+            // Vault Setup PASTE button (Ctrl+V often stolen by host).
+            let paste_ui = ui.as_weak();
+            let paste_lv = live.clone();
+            ui.on_vault_paste_requested(move || {
+                if !paste_lv.load(Ordering::Acquire) {
+                    return;
+                }
+                let Some(ui) = paste_ui.upgrade() else { return };
+                match vault_clipboard_get() {
+                    Some(s) => {
+                        ui.set_vault_path(SharedString::from(s));
+                        ui.set_vault_paste_status(SharedString::new());
+                    }
+                    None => {
+                        ui.set_vault_paste_status(SharedString::from(
+                            "Clipboard empty or unavailable — copy a path and try PASTE again",
+                        ));
+                    }
+                }
+            });
+
             // ── preset selected ──
             let s_sel = state.clone();
             let vs_sel = vault_state.clone();
@@ -629,4 +650,23 @@ fn eq_curve_path(params: &AetherParams, sr: f32) -> String {
         }
     }
     cmds
+}
+
+/// OS clipboard for Vault Setup PASTE (Ctrl+V often stolen by host).
+fn vault_clipboard_get() -> Option<String> {
+    use copypasta::{ClipboardContext, ClipboardProvider};
+    for attempt in 0..12 {
+        let got = ClipboardContext::new()
+            .ok()
+            .and_then(|mut ctx| ctx.get_contents().ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        if got.is_some() {
+            return got;
+        }
+        if attempt + 1 < 12 {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+    None
 }

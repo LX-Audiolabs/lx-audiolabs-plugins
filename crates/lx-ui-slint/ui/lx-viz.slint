@@ -3,12 +3,14 @@
 import { Lx } from "lx-theme.slint";
 import { LxPanel } from "lx-chrome.slint";
 
-// Filled spectrum area. Path commands in path-w × path-h viewBox coords.
+// Spectrum analyzer pit. Path commands in path-w × path-h viewBox coords.
+// Flat void background — no soft-3D panel gradient/shadow (kills readability).
 export component LxSpectrum inherits LxPanel {
     in property <string> commands: "";
-    in property <color> fill-color: #19e6804d;
+    // Default transparent: stroke-only. Set to a gradient or solid brush for fill.
+    in property <brush> fill: transparent;
     in property <color> stroke-color: Lx.gonio;
-    in property <length> stroke-width: 1px;
+    in property <length> stroke-width: 1.5px;
     in property <float> path-w: 100;
     in property <float> path-h: 100;
     in property <bool> show-grid: true;
@@ -22,7 +24,14 @@ export component LxSpectrum inherits LxPanel {
     in property <string> freq-mid: "1 kHz";
     in property <string> freq-hi: "20 kHz";
 
-    surface: Lx.stage;
+    surface: Lx.void;
+    // Override LxPanel soft-3D: solid pit, no drop-shadow.
+    background: Lx.void;
+    border-width: 0px;
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: 0px;
+    drop-shadow-blur: 0px;
+    drop-shadow-color: transparent;
     clip: true;
 
     // Horizontal grid lines
@@ -75,7 +84,7 @@ export component LxSpectrum inherits LxPanel {
         viewbox-height: root.path-h;
         // Stretch path to widget (default contain letterboxes / can hide fill).
         commands: root.commands;
-        fill: root.fill-color;
+        fill: root.fill;
         stroke: root.stroke-color;
         stroke-width: root.stroke-width;
     }
@@ -119,6 +128,7 @@ export component LxSpectrum inherits LxPanel {
 }
 
 // EQ transfer curve (stroke only) with ±dB grid.
+// Flat pit like LxSpectrum — no soft-3D shading over the analyzer.
 export component LxEqCurve inherits LxPanel {
     in property <string> commands: "";
     in property <color> stroke-color: Lx.eq-curve;
@@ -135,7 +145,13 @@ export component LxEqCurve inherits LxPanel {
     in property <string> freq-mid: "1 kHz";
     in property <string> freq-hi: "20 kHz";
 
-    surface: Lx.stage;
+    surface: Lx.void;
+    background: transparent; // overlay-friendly; host can set solid if standalone
+    border-width: 0px;
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: 0px;
+    drop-shadow-blur: 0px;
+    drop-shadow-color: transparent;
     clip: true;
 
     // 0 dB line

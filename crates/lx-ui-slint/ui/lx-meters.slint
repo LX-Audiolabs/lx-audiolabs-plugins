@@ -39,13 +39,17 @@ export component LxMeterBar inherits Rectangle {
     }
 }
 
-// Slint-native LED peak column — segmented hardware look (no GPU gradient tricks).
+// Slint-native LED peak column — thin hardware LED stack.
 // `level` 0..1 maps −60..+6 dB (same range as LxStereoMeter / frozen Vizia stereo meter).
 // Caller: norm = ((db + 60) / 66).clamp(0, 1). Colors follow real dB zones, not segment index.
+//
+// Many thin segments (default 32) ≈ 3–4px each at sidebar height — same thin look
+// as the old min-height pack, but stacked to fill the full column.
+// Cap: for-loop lists 0..31 (max 32). Pass segments ≤ 32.
 export component LxLedColumn inherits Rectangle {
     in property <float> level: 0.0;
     in property <float> hold: 0.0;
-    in property <int> segments: 16;
+    in property <int> segments: 32;
     in property <string> channel: "L";
 
     horizontal-stretch: 1;
@@ -59,6 +63,12 @@ export component LxLedColumn inherits Rectangle {
     property <float> lv: clamp(root.level, 0, 1);
     property <float> hv: clamp(root.hold, 0, 1);
     property <int> hold-seg: root.hv > 0.0 ? Math.floor((1.0 - root.hv) * root.segments) : -1;
+    property <int> n: max(root.segments, 1);
+    // 1px gap keeps LED slits; 0px would look like a solid bar.
+    property <length> gap: 1px;
+    // Explicit per-segment height so the stack always spans the full column.
+    property <length> seg-h: (root.height - root.gap * (root.n - 1)) / root.n;
+
     // Index 0 = top segment. Lit when level reaches its threshold from top.
     // threshold for segment i (0=top): 1 - (i+1)/segments
     pure function seg-on(i: int) -> bool {
@@ -70,7 +80,6 @@ export component LxLedColumn inherits Rectangle {
     }
     pure function seg-color(i: int) -> color {
         // Match Vizia StereoMeterView: red > 0 dB, amber > −6 dB, else green.
-        // (Old code colored by index: top 2 red + next 3 amber → amber already at ~−19 dB.)
         if seg-db(i) > 0.0 { return Lx.led-red; }
         if seg-db(i) > -6.0 { return Lx.led-amber; }
         return Lx.led-green;
@@ -81,46 +90,44 @@ export component LxLedColumn inherits Rectangle {
         return Lx.led-off;
     }
 
-    VerticalLayout {
-        padding: 0;
-        spacing: 1px;
-        alignment: end;
+    // Absolute slots: i=0 at top … i=n-1 at bottom. Unused indices hidden.
+    for i in [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+    ]: Rectangle {
+        x: 0;
         width: parent.width;
-        height: parent.height;
-
-        // Build fixed 16 segments (covers dense sidebar). Extra ignored if level uses fewer via math.
-        for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]: Rectangle {
-            horizontal-stretch: 1;
-            vertical-stretch: 1;
-            min-height: 3px;
-            border-radius: 1px;
-            background: seg-bg(i);
-            border-width: 1px;
-            border-color: #00000055;
-            opacity: i < root.segments ? 1.0 : 0.0;
-            // Collapse unused if segments < 16 via zero stretch when over index
-            visible: i < root.segments;
-        }
+        y: i * (root.seg-h + root.gap);
+        height: max(root.seg-h, 1px);
+        border-radius: 0.5px;
+        background: seg-bg(i);
+        // No per-seg border — 1px border ate thin LEDs and made them look chunky.
+        visible: i < root.segments;
     }
 
-    // Single LED-highlight / vignette gradient across the whole column width,
-    // not repeated per segment. Drawn on top so the meter reads as one bar.
+    // Soft side vignette (narrow) so columns still read as one bar, not plastic blocks.
     Rectangle {
         width: parent.width;
         height: parent.height;
-        background: @linear-gradient(90deg, #00000040 0%, #ffffff33 50%, #00000040 100%);
+        background: @linear-gradient(90deg, #00000030 0%, #ffffff18 50%, #00000030 100%);
     }
 }
 
 // Stereo LED peak meter — Aurum / master bus style.
 // Levels are 0..1 with −60..+6 dB mapping (same as LxStereoMeter).
 // Caller: ((db + 60) / 66).clamp(0, 1). Full-scale 0 dBFS ≈ 0.91 (top is +6).
+//
+// Layout: LED columns + scale share one row (same height); L/R labels below
+// so dB ticks align with the LED stack, not the label strip.
 export component LxLedPeakMeter inherits Rectangle {
     in property <float> level-l: 0.0;
     in property <float> level-r: 0.0;
     in property <float> hold-l: 0.0;
     in property <float> hold-r: 0.0;
-    in property <int> segments: 16;
+    // Stereo balance −1..+1 (L louder .. R louder). Dot in scale gap (vizia parity).
+    in property <float> balance: 0.0;
+    // Default 32 thin LEDs (was 16 fat). Cap 32 (see LxLedColumn for-loop).
+    in property <int> segments: 32;
     in property <string> readout: "";
 
     callback reset-peaks;
@@ -134,31 +141,23 @@ export component LxLedPeakMeter inherits Rectangle {
 
     VerticalLayout {
         padding: 6px;
-        spacing: 4px;
+        spacing: 2px;
 
+        // Meter face only — scale height matches LED columns.
         HorizontalLayout {
             spacing: 6px;
             vertical-stretch: 1;
 
-            VerticalLayout {
-                spacing: 2px;
+            LxLedColumn {
                 horizontal-stretch: 1;
-                LxLedColumn {
-                    level: root.level-l;
-                    hold: root.hold-l;
-                    segments: root.segments;
-                    channel: "L";
-                }
-                Text {
-                    text: "L";
-                    font-size: Lx.font-xs;
-                    color: Lx.text-dim;
-                    horizontal-alignment: center;
-                    vertical-stretch: 0;
-                }
+                level: root.level-l;
+                hold: root.hold-l;
+                segments: root.segments;
+                channel: "L";
             }
 
             // Scale ticks: y = 1 − (db + 60) / 66  (top of column = +6 dB headroom)
+            // + balance dot (vizia StereoMeterView: y ≈ 0.82, green if |bal| < 0.08).
             Rectangle {
                 width: 28px;
                 horizontal-stretch: 0;
@@ -170,24 +169,54 @@ export component LxLedPeakMeter inherits Rectangle {
                 Text { y: parent.height * (1.0 - 48.0 / 66.0) - 4px; width: 100%; text: "-12"; font-size: 8px; color: Lx.tick; horizontal-alignment: center; }
                 Text { y: parent.height * (1.0 - 36.0 / 66.0) - 4px; width: 100%; text: "-24"; font-size: 8px; color: Lx.tick; horizontal-alignment: center; }
                 Text { y: parent.height * (1.0 - 12.0 / 66.0) - 4px; width: 100%; text: "-48"; font-size: 8px; color: Lx.tick; horizontal-alignment: center; }
+
+                // Balance cursor: (rms_l − rms_r)/sum → +1 = L, −1 = R.
+                // canvas: cursor_x = center − balance * (gap * 0.35)
+                Rectangle {
+                    property <float> bn: clamp(root.balance, -1, 1);
+                    x: parent.width * 0.5 - bn * (parent.width * 0.35) - 3.5px;
+                    // 10px below the −48 tick label (was y ≈ 0.82, exactly on it).
+                    y: parent.height * 0.82 + 6.5px;
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 3.5px;
+                    background: abs(bn) < 0.08 ? Lx.green-soft : Lx.amber;
+                    border-width: 1px;
+                    border-color: #00000066;
+                    drop-shadow-offset-x: 0px;
+                    drop-shadow-offset-y: 1px;
+                    drop-shadow-blur: 2px;
+                    drop-shadow-color: #00000088;
+                }
             }
 
-            VerticalLayout {
-                spacing: 2px;
+            LxLedColumn {
                 horizontal-stretch: 1;
-                LxLedColumn {
-                    level: root.level-r;
-                    hold: root.hold-r;
-                    segments: root.segments;
-                    channel: "R";
-                }
-                Text {
-                    text: "R";
-                    font-size: Lx.font-xs;
-                    color: Lx.text-dim;
-                    horizontal-alignment: center;
-                    vertical-stretch: 0;
-                }
+                level: root.level-r;
+                hold: root.hold-r;
+                segments: root.segments;
+                channel: "R";
+            }
+        }
+
+        // Channel labels under the LED columns (not under the scale).
+        HorizontalLayout {
+            spacing: 6px;
+            vertical-stretch: 0;
+            Text {
+                text: "L";
+                font-size: Lx.font-xs;
+                color: Lx.text-dim;
+                horizontal-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Rectangle { width: 28px; horizontal-stretch: 0; background: transparent; }
+            Text {
+                text: "R";
+                font-size: Lx.font-xs;
+                color: Lx.text-dim;
+                horizontal-alignment: center;
+                horizontal-stretch: 1;
             }
         }
 
@@ -237,7 +266,7 @@ export component LxCorrelation inherits VerticalLayout {
     spacing: 4px;
 
     Text {
-        text: root.text != "" ? root.text : "corr: " + round(root.correlation * 100) / 100;
+        text: root.text != "" ? root.text : "correlation: " + round(root.correlation * 100) / 100;
         font-size: Lx.font-sm;
         color: Lx.text-muted;
     }
