@@ -2,6 +2,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use slint::{ModelRc, SharedString, VecModel};
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
 use truce_params::FloatParam;
@@ -9,9 +10,19 @@ use lx_slint_editor::{LxSlintEditor, PluginContext};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
+use crate::presets::{
+    apply_profile, export_meridian_markdown, find_profile, merge_preset_names, preset_save_dir,
+    profile_from_params, snap_filename, snap_markdown, spawn_vault_scan, PendingPresets,
+    PresetEntry,
+};
 use lx_dsp::{Biquad, TiltEq};
 
 slint::include_modules!();
+
+fn names_model(names: &[String]) -> ModelRc<SharedString> {
+    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
+    ModelRc::new(VecModel::from(v))
+}
 
 // Frozen vault size (ui-layout-spec): 990 × 660
 const WINDOW_W: u32 = 990;
@@ -98,6 +109,9 @@ struct SyncCache {
     hold_r_db_q: f32,
     auto_loud: Option<bool>,
     spectrum_fill_q: f32,
+    /// Previous tick SNAP active — falling edge writes SNAPSHOT-*.md
+    snap_was_active: bool,
+    snap_blink: u32,
 }
 
 impl SyncCache {
@@ -128,6 +142,8 @@ impl SyncCache {
             hold_r_db_q: f32::NAN,
             auto_loud: None,
             spectrum_fill_q: f32::NAN,
+            snap_was_active: false,
+            snap_blink: 0,
         }
     }
 
@@ -269,52 +285,12 @@ macro_rules! sync_bools_dirty {
     };
 }
 
-// Vault UI helpers (build-time callbacks only)
 struct VaultUiState {
     vault_path: Option<String>,
     names: Vec<String>,
-    cache: Vec<(String, std::path::PathBuf, ())>,
+    cache: Vec<PresetEntry>,
     pending: Arc<PendingPresets>,
     scanning_for: Option<String>,
-}
-struct PendingPresets {
-    ready: std::sync::atomic::AtomicBool,
-    generation: std::sync::atomic::AtomicU32,
-    presets: Mutex<Option<(u32, Vec<(String, std::path::PathBuf, ())>)>>,
-}
-impl PendingPresets {
-    fn new() -> Self {
-        Self {
-            ready: std::sync::atomic::AtomicBool::new(false),
-            generation: std::sync::atomic::AtomicU32::new(0),
-            presets: Mutex::new(None),
-        }
-    }
-    fn bump_generation(&self) -> u32 {
-        let new = self
-            .generation
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .wrapping_add(1);
-        self.generation
-            .store(new, std::sync::atomic::Ordering::Release);
-        self.ready
-            .store(false, std::sync::atomic::Ordering::Release);
-        if let Ok(mut guard) = self.presets.lock() {
-            *guard = None;
-        }
-        new
-    }
-}
-fn spawn_vault_scan(_vp: String, pending: Arc<PendingPresets>, generation: u32) {
-    std::thread::spawn(move || {
-        // Minimal scan: just mark ready
-        if let Ok(mut guard) = pending.presets.lock() {
-            *guard = Some((generation, Vec::new()));
-        }
-        pending
-            .ready
-            .store(true, std::sync::atomic::Ordering::Release);
-    });
 }
 
 pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
@@ -324,14 +300,42 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
     // Mutex: LxSlintEditor SyncFn is Send+Sync.
     let sync_cache = Mutex::new(SyncCache::new());
 
+    // Shared between build callbacks and per-frame sync (scan drain, SNAP write).
+    let init_cfg = lx_analysis::load_config("Meridian");
+    let init_vp = init_cfg.vault_path.clone();
+    let vault_pending = Arc::new(PendingPresets::new());
+    {
+        let scan_gen = vault_pending.bump_generation();
+        spawn_vault_scan(
+            init_vp.clone().unwrap_or_default(),
+            vault_pending.clone(),
+            scan_gen,
+        );
+    }
+    let vault_state = Arc::new(Mutex::new(VaultUiState {
+        vault_path: init_vp.clone(),
+        names: Vec::new(),
+        cache: Vec::new(),
+        pending: vault_pending,
+        scanning_for: init_vp.clone(),
+    }));
+
     LxSlintEditor::new(
         params.clone(),
         (WINDOW_W, WINDOW_H),
         {
             let params = params.clone();
             let shared = shared.clone();
+            let vault_state = vault_state.clone();
+            let init_vp = init_vp.clone();
             move |state: PluginContext<MeridianParams>| {
                 let ui = MeridianUi::new().unwrap();
+
+                // SMOOTH default ON (display-only; not a host param).
+                shared
+                    .spectrum_smooth
+                    .store(true, Ordering::Release);
+                ui.set_spectrum_smooth(true);
 
                 // Right-click reset targets: real defaults via range.normalize
                 // (Slint `*_default` props were stubbed at 0.5 → mid-position jumps).
@@ -421,12 +425,35 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     P::InflateClip => inflate_clip,
                 );
 
-                // --- vault / preset / reset callbacks (UI actions, not parameters) ---
+                // --- vault / preset / SNAP (Vizia parity) ---
+                if let Some(ref vp) = init_vp {
+                    ui.set_vault_path(SharedString::from(vp.as_str()));
+                }
+                if init_vp.as_ref().is_none_or(|v| v.is_empty()) {
+                    ui.set_snap_label(SharedString::from("SET VAULT"));
+                }
+
                 let snap_shared = shared.clone();
+                let snap_vs = vault_state.clone();
+                let snap_ui = ui.as_weak();
                 ui.on_snap_clicked(move || {
-                    snap_shared
-                        .snap_active
-                        .store(true, std::sync::atomic::Ordering::Release);
+                    let no_vault = snap_vs
+                        .lock()
+                        .ok()
+                        .and_then(|g| g.vault_path.clone())
+                        .is_none_or(|v| v.is_empty());
+                    if no_vault {
+                        if let Some(ui) = snap_ui.upgrade() {
+                            ui.set_vault_setup_open(true);
+                            ui.set_snap_label(SharedString::from("SET VAULT"));
+                        }
+                        return;
+                    }
+                    snap_shared.snap_active.store(true, Ordering::Release);
+                    snap_shared.snap_phase.store(1, Ordering::Release);
+                    if let Some(ui) = snap_ui.upgrade() {
+                        ui.set_snap_label(SharedString::from("ANALYZE..."));
+                    }
                     tracing::info!("SNAP triggered");
                 });
 
@@ -435,7 +462,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 ui.on_spectrum_smooth_changed(move |on: bool| {
                     smooth_shared
                         .spectrum_smooth
-                        .store(on, std::sync::atomic::Ordering::Release);
+                        .store(on, Ordering::Release);
                 });
 
                 // Peak-hold reset (click on readouts / double-click on meter).
@@ -443,120 +470,77 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 ui.on_reset_peaks(move || {
                     reset_shared
                         .reset_peak
-                        .store(true, std::sync::atomic::Ordering::Release);
+                        .store(true, Ordering::Release);
                 });
 
                 let save_params = params.clone();
+                let save_vs = vault_state.clone();
+                let save_ui = ui.as_weak();
                 ui.on_save_clicked(move || {
-                    // Minimal preset save: store current parameter values in a plain text file
-                    // under the plugin's local presets directory.
-                    let dir = lx_analysis::get_plugin_dir("Meridian").join("presets");
-                    let _ = std::fs::create_dir_all(&dir);
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    let name = format!("meridian_preset_{now}");
-                    let fp = dir.join(format!("{name}.txt"));
-                    let mut lines = Vec::new();
-                    macro_rules! store_float {
-                        ($p:ident) => {
-                            lines.push(format!("{}={}", stringify!($p), save_params.$p.raw_target()));
+                    let Some(ui) = save_ui.upgrade() else { return };
+                    let name_input = ui.get_preset_name().to_string();
+                    let name = {
+                        let mut vs = match save_vs.lock() {
+                            Ok(g) => g,
+                            Err(_) => return,
                         };
-                    }
-                    store_float!(hpf_freq);
-                    store_float!(lpf_freq);
-                    store_float!(bass_gain);
-                    store_float!(lo_mid_gain);
-                    store_float!(mid_gain);
-                    store_float!(high_gain);
-                    store_float!(excite_gain);
-                    store_float!(eq_freq_1);
-                    store_float!(eq_freq_2);
-                    store_float!(eq_freq_3);
-                    store_float!(eq_freq_4);
-                    store_float!(eq_freq_5);
-                    store_float!(tilt_gain);
-                    store_float!(warmth_drive);
-                    store_float!(warmth_mix);
-                    store_float!(excite_amount);
-                    store_float!(excite_blend);
-                    store_float!(excite_freq);
-                    store_float!(comp_threshold);
-                    store_float!(comp_mix);
-                    store_float!(comp_attack);
-                    store_float!(comp_release);
-                    store_float!(comp_character);
-                    store_float!(comp_makeup);
-                    store_float!(inflate_effect);
-                    store_float!(inflate_curve);
-                    store_float!(stereo_width);
-                    store_float!(pan);
-                    store_float!(output_gain);
-                    macro_rules! store_int {
-                        ($p:ident) => {
-                            lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
+                        let name = if name_input.trim().is_empty() {
+                            format!("User Preset {}", vs.cache.len() + 1)
+                        } else {
+                            name_input.trim().to_string()
                         };
-                    }
-                    store_int!(cut_slope);
-                    store_int!(bass_slope);
-                    store_int!(lo_mid_slope);
-                    store_int!(mid_slope);
-                    store_int!(high_slope);
-                    store_int!(excite_slope);
-                    macro_rules! store_bool {
-                        ($p:ident) => {
-                            lines.push(format!("{}={}", stringify!($p), save_params.$p.value()));
-                        };
-                    }
-                    store_bool!(mono_active);
-                    store_bool!(delta_active);
-                    store_bool!(bypass_active);
-                    store_bool!(inflate_band_split);
-                    store_bool!(inflate_clip);
-                    let content = lines.join("\n");
-                    if std::fs::write(&fp, content).is_ok() {
-                        tracing::info!("SAVE preset to {}", fp.display());
-                    }
+                        let profile = profile_from_params(&save_params, &name);
+                        let dir = preset_save_dir(&vs.vault_path);
+                        let _ = std::fs::create_dir_all(&dir);
+                        let safe_name = name.replace(
+                            |c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_',
+                            "",
+                        );
+                        let fp = dir.join(format!("{safe_name}.md"));
+                        let md = export_meridian_markdown(&profile);
+                        if std::fs::write(&fp, md).is_ok() {
+                            if let Some(pos) = vs.cache.iter().position(|(n, _, _)| n == &name) {
+                                vs.cache[pos] = (name.clone(), fp.clone(), profile.clone());
+                            } else {
+                                vs.cache.push((name.clone(), fp.clone(), profile.clone()));
+                            }
+                            vs.names = merge_preset_names(&vs.cache);
+                            ui.set_preset_names(names_model(&vs.names));
+                            ui.set_preset_name(SharedString::from(name.as_str()));
+                            tracing::info!("SAVE preset to {}", fp.display());
+                            if let Some(ref vault) = vs.vault_path.clone() {
+                                if !vault.is_empty() {
+                                    let scan_gen = vs.pending.bump_generation();
+                                    vs.scanning_for = Some(vault.clone());
+                                    spawn_vault_scan(vault.clone(), vs.pending.clone(), scan_gen);
+                                }
+                            }
+                        }
+                        name
+                    };
+                    let _ = name;
                 });
 
-                // Restore persisted vault path — without this the path was
-                // saved on change but never loaded → "lost" on every reopen
-                // (Aether parity).
-                let init_cfg = lx_analysis::load_config("Meridian");
-                let init_vp = init_cfg.vault_path.clone();
-                if let Some(ref vp) = init_vp {
-                    ui.set_vault_path(slint::SharedString::from(vp.as_str()));
-                }
-                let vault_pending = Arc::new(PendingPresets::new());
-                if let Some(ref vp) = init_vp {
-                    let scan_gen = vault_pending.bump_generation();
-                    spawn_vault_scan(vp.clone(), vault_pending.clone(), scan_gen);
-                }
-                let vault_state = Arc::new(Mutex::new(VaultUiState {
-                    vault_path: init_vp.clone(),
-                    names: Vec::new(),
-                    cache: Vec::new(),
-                    pending: vault_pending,
-                    scanning_for: init_vp,
-                }));
-                let vault_state_clone = vault_state.clone();
-                ui.on_vault_path_changed(move |path: slint::SharedString| {
+                let vs_path = vault_state.clone();
+                let ui_path = ui.as_weak();
+                ui.on_vault_path_changed(move |path: SharedString| {
                     let path = path.to_string().trim().to_string();
                     let new_vp = if path.is_empty() { None } else { Some(path) };
-                    if let Ok(mut vs) = vault_state_clone.lock() {
+                    if let Ok(mut vs) = vs_path.lock() {
                         vs.vault_path = new_vp.clone();
                         let mut cfg = lx_analysis::load_config("Meridian");
                         cfg.vault_path = new_vp.clone();
                         let _ = lx_analysis::save_config("Meridian", &cfg);
                         let scan_gen = vs.pending.bump_generation();
-                        if let Some(ref _vp) = new_vp {
-                            vs.scanning_for = Some(_vp.clone());
-                            spawn_vault_scan(_vp.clone(), vs.pending.clone(), scan_gen);
-                        } else {
-                            vs.names = Vec::new();
-                            vs.cache.clear();
-                            vs.scanning_for = None;
+                        let scan_arg = new_vp.clone().unwrap_or_default();
+                        vs.scanning_for = new_vp.clone();
+                        spawn_vault_scan(scan_arg, vs.pending.clone(), scan_gen);
+                        if let Some(ui) = ui_path.upgrade() {
+                            if new_vp.as_ref().is_none_or(|v| v.is_empty()) {
+                                ui.set_snap_label(SharedString::from("SET VAULT"));
+                            } else {
+                                ui.set_snap_label(SharedString::from("SNAP"));
+                            }
                         }
                     }
                 });
@@ -566,16 +550,37 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let paste_ui = ui.as_weak();
                 ui.on_vault_paste_requested(move || {
                     let Some(ui) = paste_ui.upgrade() else { return };
-                    // Retry: OpenClipboard can flake under DAW message loops.
                     match lx_slint_editor::clipboard_get_retry() {
                         Some(s) => {
-                            ui.set_vault_path(slint::SharedString::from(s));
-                            ui.set_vault_paste_status(slint::SharedString::new());
+                            ui.set_vault_path(SharedString::from(s));
+                            ui.set_vault_paste_status(SharedString::new());
                         }
                         None => {
-                            ui.set_vault_paste_status(slint::SharedString::from(
+                            ui.set_vault_paste_status(SharedString::from(
                                 "Clipboard empty or unavailable — copy a path and try PASTE again",
                             ));
+                        }
+                    }
+                });
+
+                let sel_state = state.clone();
+                let sel_params = params.clone();
+                let sel_vs = vault_state.clone();
+                let sel_ui = ui.as_weak();
+                ui.on_preset_selected(move |name: SharedString| {
+                    let name = name.to_string();
+                    let profile = {
+                        let vs = sel_vs.lock().ok();
+                        let (vp, cache) = vs
+                            .as_ref()
+                            .map(|g| (g.vault_path.clone(), g.cache.clone()))
+                            .unwrap_or((None, vec![]));
+                        find_profile(&name, &vp, &cache)
+                    };
+                    if let Some(profile) = profile {
+                        apply_profile(&sel_state, &sel_params, &profile);
+                        if let Some(ui) = sel_ui.upgrade() {
+                            ui.set_preset_name(SharedString::from(profile.name.as_str()));
                         }
                     }
                 });
@@ -647,6 +652,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
         {
             let shared_for_sync = shared.clone();
             let params_for_curve = params.clone();
+            let vault_state_sync = vault_state.clone();
             move |ui: &MeridianUi, state: &PluginContext<MeridianParams>| {
                 let Ok(mut cache) = sync_cache.lock() else {
                     return;
@@ -654,6 +660,27 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 // Vizia Ticker: heavy host→UI work at ~30 Hz only.
                 if !cache.due() {
                     return;
+                }
+
+                // Drain background vault scan (non-blocking).
+                if let Ok(mut vs) = vault_state_sync.try_lock() {
+                    if vs.pending.ready.swap(false, Ordering::Acquire) {
+                        let current_gen = vs.pending.generation.load(Ordering::Acquire);
+                        let scanned = {
+                            let guard = vs.pending.presets.try_lock().ok();
+                            guard.and_then(|g| match &*g {
+                                Some((scan_gen, scanned)) if *scan_gen == current_gen => {
+                                    Some(scanned.clone())
+                                }
+                                _ => None,
+                            })
+                        };
+                        if let Some(scanned) = scanned {
+                            vs.cache = scanned;
+                            vs.names = merge_preset_names(&vs.cache);
+                            ui.set_preset_names(names_model(&vs.names));
+                        }
+                    }
                 }
 
                 // --- host → UI normalized values (dirty) ---
@@ -810,6 +837,72 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     }
                 }
                 cache.was_measuring = measuring;
+
+                // --- SNAP: label blink + write SNAPSHOT-*.md on complete ---
+                let snap_now = shared.snap_active.load(Ordering::Acquire);
+                let vault_path = vault_state_sync
+                    .try_lock()
+                    .ok()
+                    .and_then(|g| g.vault_path.clone());
+                if snap_now {
+                    cache.snap_blink = cache.snap_blink.wrapping_add(1);
+                    // Blink label while analyzing (vizia: alternate color; we flip text).
+                    let label = if (cache.snap_blink / 8).is_multiple_of(2) {
+                        "ANALYZE..."
+                    } else {
+                        "ANALYZE· · ·"
+                    };
+                    ui.set_snap_label(SharedString::from(label));
+                } else if cache.snap_was_active {
+                    // Falling edge: write snapshot file (vizia tick parity).
+                    if let Some(vp) = vault_path.as_ref().filter(|v| !v.is_empty()) {
+                        let stereo = shared
+                            .snap_stereo_snap
+                            .try_lock()
+                            .ok()
+                            .map(|v| v.clone())
+                            .unwrap_or_else(|| vec![-90.0; 1024]);
+                        let mono = shared
+                            .snap_mono_snap
+                            .try_lock()
+                            .ok()
+                            .map(|v| v.clone())
+                            .unwrap_or_else(|| vec![-90.0; 1024]);
+                        let delta = shared
+                            .snap_delta_snap
+                            .try_lock()
+                            .ok()
+                            .map(|v| v.clone())
+                            .unwrap_or_else(|| vec![-90.0; 1024]);
+                        let mut band_levels = [0.0f32; 5];
+                        for b in 0..5 {
+                            band_levels[b] = shared.band_levels[b].load(Ordering::Acquire);
+                        }
+                        let md = snap_markdown(
+                            &stereo,
+                            &mono,
+                            &delta,
+                            band_levels,
+                            corr,
+                            peak_l_db,
+                            peak_r_db,
+                            sr,
+                        );
+                        let fname = snap_filename(vp);
+                        let path = std::path::Path::new(vp).join(&fname);
+                        if std::fs::write(&path, &md).is_ok() {
+                            tracing::info!("SNAP saved {}", path.display());
+                        }
+                    }
+                    cache.snap_blink = 0;
+                    let label = if vault_path.as_ref().is_none_or(|v| v.is_empty()) {
+                        "SET VAULT"
+                    } else {
+                        "SNAP"
+                    };
+                    ui.set_snap_label(SharedString::from(label));
+                }
+                cache.snap_was_active = snap_now;
 
                 // --- spectrum & goniometer at tick rate only (~30 Hz, vizia parity) ---
                 // path-h must match LxSpectrum path-h / FFT card height (165).

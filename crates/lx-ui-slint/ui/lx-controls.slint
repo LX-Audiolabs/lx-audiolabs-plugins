@@ -265,6 +265,11 @@ export component LxLineEdit inherits Rectangle {
     // host-side live flags must gate automate (see aether editor).
     in-out property <bool> allow-commit: true;
 
+    // pony: programmatic focus for overlays/dialogs that don't auto-focus.
+    public function focus-input() {
+        ti.focus();
+    }
+
     HorizontalLayout {
         padding-left: 6px;
         padding-right: 6px;
@@ -301,6 +306,14 @@ export component LxLineEdit inherits Rectangle {
                     }
                     root.was-focused = self.has-focus;
                 }
+            }
+
+            // pony: safety-net — click-to-focus when TextInput doesn't
+            // naturally get it (overlays, FocusScope transitions).
+            if !ti.has-focus: TouchArea {
+                width: 100%;
+                height: 100%;
+                clicked => { root.focus-input(); }
             }
         }
     }

@@ -2,7 +2,7 @@ import {
     Lx, LxShellHeader, LxShellBody, LxShellMain, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn, LxDangerBtn,
     LxLineEdit, LxEqCurve,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
-import { LxVaultSetupPopup } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
+import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
 // Aether window: 720 × 395 (do not grow canvas).
 export component AetherUi inherits Window {
@@ -89,6 +89,7 @@ export component AetherUi inherits Window {
     callback vault_path_changed(string);
     callback vault_paste_requested();
     in property <string> vault_paste_status: "";
+    in-out property <bool> vault_setup_open: false;
     callback preset_selected(string);
 
     title: "Aether";
@@ -178,7 +179,7 @@ export component AetherUi inherits Window {
                     vertical-stretch: 0;
                     height: Lx.button-h-lg;
                     min-width: 56px;
-                    clicked => { setup_popup.show(); }
+                    clicked => { root.vault_setup_open = true; }
                 }
 
                 LxToggleBtn {
@@ -541,16 +542,22 @@ export component AetherUi inherits Window {
         }
     }
 
-    // Full-window dimmer keeps dialog above Path layers (spectrum/EQ).
-    setup_popup := LxVaultSetupPopup {
+    // Full-window overlay (not PopupWindow — Popup ate hits in DAW hosts).
+    vault_setup := LxVaultSetupOverlay {
         x: 0;
         y: 0;
-        width: root.width;
-        height: root.height;
-        path <=> root.vault_path;
+        width: 100%;
+        height: 100%;
+        open <=> root.vault_setup_open;
+        // pony: one-way — typing only mutates dialog.path, not vault_path.
+        // SAVE explicitly writes back so cancel discards edits.
+        path: root.vault_path;
         plugin-label: "Aether";
         paste-status: root.vault_paste_status;
         paste-requested => { root.vault_paste_requested(); }
-        saved(p) => { root.vault_path_changed(p); }
+        saved(p) => {
+            root.vault_path = p;
+            root.vault_path_changed(p);
+        }
     }
 }

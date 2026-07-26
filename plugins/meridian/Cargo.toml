@@ -1,6 +1,6 @@
 [package]
 name = "meridian"
-version = "1.9.8"
+version = "1.10.0"
 edition = "2024"
 description = "LX Audiolabs — Meridian"
 license = "GPL-3.0-or-later"

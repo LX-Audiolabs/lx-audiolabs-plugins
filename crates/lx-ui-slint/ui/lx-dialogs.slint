@@ -4,50 +4,91 @@ import { Lx } from "lx-theme.slint";
 import { LxButton } from "lx-chrome.slint";
 import { LxLineEdit } from "lx-controls.slint";
 
-/// Full-window vault path dialog (Aether CI).
-/// Parent must size it to the window so the dimmer covers FFT/EQ Path layers:
+/// Full-window vault path overlay (Rectangle, not PopupWindow).
 ///
-///   setup_popup := LxVaultSetupPopup {
-///       width: root.width; height: root.height; x: 0; y: 0;
+/// PopupWindow + full-window dimmer TouchArea ate all hits in embedded
+/// DAW hosts (TextInput + PASTE dead). Stack this last on the Window.
+///
+///   vault_setup := LxVaultSetupOverlay {
+///       width: 100%; height: 100%;
+///       open <=> root.vault_setup_open;
 ///       path <=> root.vault_path;
 ///       plugin-label: "Meridian";
+///       paste-status: root.vault_paste_status;
+///       paste-requested => { root.vault_paste_requested(); }
 ///       saved(p) => { root.vault_path_changed(p); }
 ///   }
-///   // setup_popup.show();
-///
-/// Full-window + solid dimmer keeps the card above software-renderer Path draws.
-export component LxVaultSetupPopup inherits PopupWindow {
+///   // open: root.vault_setup_open = true;
+export component LxVaultSetupOverlay inherits Rectangle {
+    in-out property <bool> open: false;
     in-out property <string> path: "";
-    // Shown in subtitle: "Configure your Vault path for {plugin-label}:"
     in property <string> plugin-label: "Plugin";
-    // Host sets this after reading OS clipboard (Ctrl+V often stolen by DAW).
     in property <string> paste-status: "";
 
     callback saved(string);
-    // Host must read OS clipboard and assign `path` (see plugin editor).
     callback paste-requested();
+    callback closed();
 
-    close-policy: close-on-click-outside;
+    visible: root.open;
+    z: 1000;
+    width: 100%;
+    height: 100%;
+    background: #000000b3;
 
-    // Dimmer fills the popup area (parent sets width/height = window).
-    Rectangle {
+    // Margin strips only — never cover the card (full-size TA steals hits).
+    TouchArea {
+        x: 0px;
+        y: 0px;
         width: 100%;
-        height: 100%;
-        background: #000000b3;
+        height: max(0px, card.y);
+        clicked => { root.open = false; root.closed(); }
+    }
+    TouchArea {
+        x: 0px;
+        y: card.y + card.height;
+        width: 100%;
+        height: max(0px, parent.height - (card.y + card.height));
+        clicked => { root.open = false; root.closed(); }
+    }
+    TouchArea {
+        x: 0px;
+        y: card.y;
+        width: max(0px, card.x);
+        height: card.height;
+        clicked => { root.open = false; root.closed(); }
+    }
+    TouchArea {
+        x: card.x + card.width;
+        y: card.y;
+        width: max(0px, parent.width - (card.x + card.width));
+        height: card.height;
+        clicked => { root.open = false; root.closed(); }
+    }
 
-        // Centered card — Aether setup chrome
-        Rectangle {
-            x: (parent.width - self.width) / 2;
-            y: (parent.height - self.height) / 2;
-            width: 420px;
-            // Content-fit: fixed heights let the layout distribute leftover
-            // space into the gaps. preferred-height keeps gaps at gap-md.
-            height: vl.preferred-height;
-            background: Lx.panel;
-            border-radius: Lx.radius-md;
-            border-width: 1px;
-            border-color: Lx.steel;
+    // FocusScope replaces PopupWindow's built-in focus management.
+    // Ensures TextInput can receive keyboard focus in Rectangle overlay.
+    card := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 420px;
+        height: vl.preferred-height;
+        background: Lx.panel;
+        border-radius: Lx.radius-md;
+        border-width: 1px;
+        border-color: Lx.steel;
 
+        // One-shot timer: focus path-input after overlay renders.
+        // PopupWindow auto-focused; Rectangle overlay needs explicit focus.
+        focus-timer := Timer {
+            interval: 0ms;
+            running: false;
+            triggered => {
+                path-input.focus-input();
+                focus-timer.running = false;
+            }
+        }
+
+        FocusScope {
             vl := VerticalLayout {
                 padding: Lx.pad-md;
                 spacing: Lx.gap-md;
@@ -68,12 +109,11 @@ export component LxVaultSetupPopup inherits PopupWindow {
                 HorizontalLayout {
                     spacing: Lx.gap-sm;
                     vertical-stretch: 0;
-                    LxLineEdit {
+                    path-input := LxLineEdit {
                         placeholder-text: "Enter Vault absolute path...";
                         text <=> root.path;
                         horizontal-stretch: 1;
                     }
-                    // DAW hosts often steal Ctrl+V — explicit paste via OS clipboard.
                     LxButton {
                         text: "PASTE";
                         min-width: 64px;
@@ -95,15 +135,28 @@ export component LxVaultSetupPopup inherits PopupWindow {
                         primary: true;
                         clicked => {
                             root.saved(root.path);
-                            root.close();
+                            root.open = false;
+                            root.closed();
                         }
                     }
                     LxButton {
                         text: "CANCEL";
-                        clicked => { root.close(); }
+                        clicked => {
+                            root.open = false;
+                            root.closed();
+                        }
                     }
                 }
             }
         }
     }
+
+    changed open => {
+        if root.open {
+            focus-timer.running = true;
+        }
+    }
 }
+
+/// Alias — same overlay (old name). Toggle with `open = true`, not `.show()`.
+export component LxVaultSetupPopup inherits LxVaultSetupOverlay { }

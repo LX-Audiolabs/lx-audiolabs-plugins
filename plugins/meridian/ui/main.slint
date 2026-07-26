@@ -4,7 +4,7 @@ import {
     LxSection, LxKnob, LxSlider, LxEqBandColumn, LxSegmentedButton, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
     LxSpectrum, LxEqCurve, LxGoniometer, LxLedPeakMeter, LxGrMeter, LxCorrelation, LxCompDisplay,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
-import { LxVaultSetupPopup } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
+import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
 export component MeridianUi inherits Window {
     // --- float params (normalized) + formatted text ---
@@ -100,8 +100,8 @@ export component MeridianUi inherits Window {
     in property <brush> spectrum_fill: @linear-gradient(180deg, #7df3ddff 0%, #19e6b3f0 55%, #19e6b3b3 85%, #19e6b300 100%);
     in property <string> curve_cmds: "";
     in property <string> gonio_path: "";
-    // Display-only 1/3-oct spectrum smoothing (Lucent parity, not a param).
-    in-out property <bool> spectrum_smooth: false;
+    // Display-only 1/3-oct spectrum smoothing (default ON; user can switch off).
+    in-out property <bool> spectrum_smooth: true;
     callback spectrum_smooth_changed(bool);
     in property <float> meter_l: 0.0;
     in property <float> meter_r: 0.0;
@@ -119,14 +119,18 @@ export component MeridianUi inherits Window {
     in property <string> peak_l_text: "";
     in property <string> peak_r_text: "";
 
-    // Preset UI state (local for now — vault wiring later)
+    // Vault / presets
     in-out property <string> preset_name: "";
     in-out property <string> vault_path: "";
+    in property <[string]> preset_names: [];
     in property <string> snap_label: "SNAP";
+    // Vault setup overlay (Rectangle, not PopupWindow — Popup ate hits in DAW).
+    in-out property <bool> vault_setup_open: false;
 
     callback reset_peaks;
     callback snap_clicked;
     callback save_clicked;
+    callback preset_selected(string);
     callback vault_path_changed(string);
     // Vault Setup PASTE button (DAWs often steal Ctrl+V from the plugin).
     callback vault_paste_requested();
@@ -161,7 +165,7 @@ export component MeridianUi inherits Window {
         // ── HEADER ───────────────────────────────────────────────────────
         LxShellHeader {
             plugin-name: "MERIDIAN";
-            version: "1.9.7";
+            version: "1.10.0";
 
             HorizontalLayout {
                 spacing: 4px;
@@ -222,42 +226,65 @@ export component MeridianUi inherits Window {
                 LxButton {
                     text: "VAULT SETUP";
                     vertical-stretch: 0;
-                    clicked => { vault_setup_popup.show(); }
+                    clicked => { root.vault_setup_open = true; }
                 }
 
 
-                // Preset list placeholder
+                // Preset list (local + vault .md, SNAPSHOT-* excluded)
                 Rectangle {
                     vertical-stretch: 1;
                     background: Lx.void;
                     border-radius: Lx.radius-sm;
+                    clip: true;
 
-                    VerticalLayout {
-                        padding: 6px;
-                        spacing: 4px;
-                        alignment: start;
+                    Flickable {
+                        width: 100%;
+                        height: 100%;
+                        viewport-height: max(self.height, 8px + root.preset_names.length * 22px);
 
-                        Text {
-                            text: "── Factory ──";
-                            font-size: Lx.font-xs;
-                            font-weight: 700;
-                            color: Lx.amber;
-                        }
-                        Text {
-                            text: "  (vault wiring soon)";
-                            font-size: Lx.font-xs;
-                            color: Lx.text-muted;
-                        }
-                        Text {
-                            text: "── User ──";
-                            font-size: Lx.font-xs;
-                            font-weight: 700;
-                            color: Lx.amber;
-                        }
-                        Text {
-                            text: "  (empty)";
-                            font-size: Lx.font-xs;
-                            color: Lx.text-muted;
+                        VerticalLayout {
+                            padding: 6px;
+                            spacing: 0;
+                            alignment: start;
+
+                            if root.preset_names.length == 0: Text {
+                                text: root.vault_path == "" ? "Set Vault-path first" : "  (empty)";
+                                font-size: Lx.font-xs;
+                                color: Lx.text-muted;
+                                vertical-stretch: 0;
+                            }
+
+                            if root.preset_names.length > 0: Text {
+                                text: "── Vault Presets ──";
+                                font-size: Lx.font-xs;
+                                font-weight: 700;
+                                color: Lx.amber;
+                                vertical-stretch: 0;
+                            }
+
+                            for name[idx] in root.preset_names: Rectangle {
+                                height: 22px;
+                                vertical-stretch: 0;
+                                background: row_ta.has-hover ? Lx.panel : transparent;
+
+                                HorizontalLayout {
+                                    padding-left: 4px;
+                                    Text {
+                                        text: name;
+                                        font-size: Lx.font-xs;
+                                        color: root.preset_name == name ? Lx.amber : Lx.text;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                row_ta := TouchArea {
+                                    clicked => {
+                                        root.preset_name = name;
+                                        root.preset_selected(name);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -727,16 +754,22 @@ export component MeridianUi inherits Window {
         }
     }
 
-    // Full-window dimmer keeps dialog above Path layers (spectrum/EQ).
-    vault_setup_popup := LxVaultSetupPopup {
+    // Full-window overlay last in tree → above Path layers (spectrum/EQ).
+    vault_setup := LxVaultSetupOverlay {
         x: 0;
         y: 0;
-        width: root.width;
-        height: root.height;
-        path <=> root.vault_path;
+        width: 100%;
+        height: 100%;
+        open <=> root.vault_setup_open;
+        // pony: one-way — typing only mutates dialog.path, not vault_path.
+        // SAVE explicitly writes back so cancel discards edits.
+        path: root.vault_path;
         plugin-label: "Meridian";
         paste-status: root.vault_paste_status;
         paste-requested => { root.vault_paste_requested(); }
-        saved(p) => { root.vault_path_changed(p); }
+        saved(p) => {
+            root.vault_path = p;
+            root.vault_path_changed(p);
+        }
     }
 }

@@ -19,6 +19,7 @@ use lx_analysis::{SPECTRUM_BINS, SharedState, SnapFFT};
 use lx_dsp::{AutoLoudMeter, Biquad, Compressor, LR2Crossover, TiltEq};
 
 mod editor;
+mod presets;
 mod process;
 
 // Window size is defined in editor.rs for the Slint UI.

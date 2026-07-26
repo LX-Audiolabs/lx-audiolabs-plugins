@@ -13,10 +13,10 @@ name = "aether-slint"
 version = "1.2.8"
 dependencies = [
  "clap-sys",
- "copypasta",
  "lx-analysis",
  "lx-dsp",
  "lx-slint-build",
+ "lx-slint-editor",
  "serde",
  "serde_json",
  "slint",
@@ -27,7 +27,6 @@ dependencies = [
  "truce-loader",
  "truce-lv2",
  "truce-params",
- "truce-slint",
  "truce-test",
  "truce-vst3",
 ]
@@ -3029,7 +3028,7 @@ dependencies = [
 
 [[package]]
 name = "meridian"
-version = "1.9.8"
+version = "1.10.0"
 dependencies = [
  "clap-sys",
  "lx-analysis",
