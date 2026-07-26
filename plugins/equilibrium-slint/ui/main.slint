@@ -1,206 +1,470 @@
+import { Palette } from "std-widgets.slint";
 import {
-    Lx, LxShellHeader, LxShellBody, LxShellMain, LxShellRight,
-    LxKnob, LxToggleBtn, LxGoniometer, LxStereoMeter,
+    Lx, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+    LxSection, LxKnob, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
+    LxGoniometer, LxLedPeakMeter, LxCorrelation,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
+import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
-// v0: 5-band gain/width/pan + monitor + output. Spectrum/preset polish later.
+// 5-band level bar (mean-normalized height 0..1 + target marker).
+component BandBar inherits Rectangle {
+    in property <float> level: 0.0;   // 0..1
+    in property <float> target: 0.5;  // 0..1
+    in property <float> listen: 0.0;  // 0..1 (optional listen profile)
+    in property <bool> show-listen: false;
+    in property <string> label: "";
+    in property <string> hz: "";
+
+    width: 72px;
+    vertical-stretch: 1;
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 2px;
+        alignment: center;
+
+        Text {
+            text: root.label;
+            font-size: Lx.font-xs;
+            color: Lx.amber;
+            horizontal-alignment: center;
+            vertical-stretch: 0;
+        }
+        Text {
+            text: root.hz;
+            font-size: 8px;
+            color: Lx.text-muted;
+            horizontal-alignment: center;
+            vertical-stretch: 0;
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            min-height: 80px;
+            background: Lx.void;
+            border-radius: Lx.radius-sm;
+            border-width: 1px;
+            border-color: Lx.edge-dark;
+            clip: true;
+
+            // Level fill from bottom
+            Rectangle {
+                width: 100%;
+                height: parent.height * root.level.clamp(0.0, 1.0);
+                y: parent.height - self.height;
+                background: @linear-gradient(0deg, #19e6b388 0%, #7df3ddcc 100%);
+            }
+            // Listen fill (dimmer)
+            if root.show-listen: Rectangle {
+                width: 100%;
+                height: parent.height * root.listen.clamp(0.0, 1.0);
+                y: parent.height - self.height;
+                background: #e6a31944;
+            }
+            // Target line
+            Rectangle {
+                width: 100%;
+                height: 2px;
+                y: parent.height * (1.0 - root.target.clamp(0.0, 1.0)) - 1px;
+                background: Lx.amber;
+            }
+        }
+    }
+}
+
 export component EquilibriumUi inherits Window {
-    preferred-width: 990px;
-    preferred-height: 660px;
-    title: "Equilibrium";
-    background: Lx.window;
-
-    in property <string> version: "1.6.10";
-    in property <string> meter_line: "";
-    in property <string> gonio_cmds: "";
-
-    // Monitor
-    in-out property <bool> mono_active: false;
-    callback mono_active_changed(bool);
-    in-out property <bool> delta_active: false;
-    callback delta_active_changed(bool);
-    in-out property <bool> listen_active: false;
-    callback listen_active_changed(bool);
-    in-out property <bool> auto_gain_active: false;
-    callback auto_gain_active_changed(bool);
-    in-out property <bool> bypass_active: false;
-    callback bypass_active_changed(bool);
-    in-out property <bool> pre_master_active: false;
-    callback pre_master_active_changed(bool);
-
-    // Output
-    in-out property <float> output_gain: 0.5;
-    in property <string> output_gain_text: "0.0 dB";
-    callback output_gain_changed(float);
-    in-out property <float> mono_floor: 0.0;
-    in property <string> mono_floor_text: "off";
-    callback mono_floor_changed(float);
-    in-out property <float> pre_master_target_db: 0.5;
-    in property <string> pre_master_target_db_text: "-14";
-    callback pre_master_target_db_changed(float);
-
-    // Band gains (norm)
-    in-out property <float> low_gain: 0.5; in property <string> low_gain_text: "0 dB";
+    // --- floats (normalized) + text ---
+    in-out property <float> low_gain: 0.5; in property <string> low_gain_text: "";
     callback low_gain_changed(float);
-    in-out property <float> bass_gain: 0.5; in property <string> bass_gain_text: "0 dB";
+    in-out property <float> bass_gain: 0.5; in property <string> bass_gain_text: "";
     callback bass_gain_changed(float);
-    in-out property <float> mid_gain: 0.5; in property <string> mid_gain_text: "0 dB";
+    in-out property <float> mid_gain: 0.5; in property <string> mid_gain_text: "";
     callback mid_gain_changed(float);
-    in-out property <float> high_mid_gain: 0.5; in property <string> high_mid_gain_text: "0 dB";
+    in-out property <float> high_mid_gain: 0.5; in property <string> high_mid_gain_text: "";
     callback high_mid_gain_changed(float);
-    in-out property <float> high_gain: 0.5; in property <string> high_gain_text: "0 dB";
+    in-out property <float> high_gain: 0.5; in property <string> high_gain_text: "";
     callback high_gain_changed(float);
 
-    // Widths
-    in-out property <float> low_width: 0.666; in property <string> low_width_text: "100%";
+    in-out property <float> low_width: 0.666; in property <string> low_width_text: "";
     callback low_width_changed(float);
-    in-out property <float> bass_width: 0.666; in property <string> bass_width_text: "100%";
+    in-out property <float> bass_width: 0.666; in property <string> bass_width_text: "";
     callback bass_width_changed(float);
-    in-out property <float> mid_width: 0.666; in property <string> mid_width_text: "100%";
+    in-out property <float> mid_width: 0.666; in property <string> mid_width_text: "";
     callback mid_width_changed(float);
-    in-out property <float> high_mid_width: 0.666; in property <string> high_mid_width_text: "100%";
+    in-out property <float> high_mid_width: 0.666; in property <string> high_mid_width_text: "";
     callback high_mid_width_changed(float);
-    in-out property <float> high_width: 0.666; in property <string> high_width_text: "100%";
+    in-out property <float> high_width: 0.666; in property <string> high_width_text: "";
     callback high_width_changed(float);
 
-    // Pans (norm 0..1 maps -1..1)
-    in-out property <float> low_pan: 0.5; in property <string> low_pan_text: "C";
+    in-out property <float> low_pan: 0.5; in property <string> low_pan_text: "";
     callback low_pan_changed(float);
-    in-out property <float> bass_pan: 0.5; in property <string> bass_pan_text: "C";
+    in-out property <float> bass_pan: 0.5; in property <string> bass_pan_text: "";
     callback bass_pan_changed(float);
-    in-out property <float> mid_pan: 0.5; in property <string> mid_pan_text: "C";
+    in-out property <float> mid_pan: 0.5; in property <string> mid_pan_text: "";
     callback mid_pan_changed(float);
-    in-out property <float> high_mid_pan: 0.5; in property <string> high_mid_pan_text: "C";
+    in-out property <float> high_mid_pan: 0.5; in property <string> high_mid_pan_text: "";
     callback high_mid_pan_changed(float);
-    in-out property <float> high_pan: 0.5; in property <string> high_pan_text: "C";
+    in-out property <float> high_pan: 0.5; in property <string> high_pan_text: "";
     callback high_pan_changed(float);
 
-    // Solo
+    in-out property <float> output_gain: 0.5; in property <string> output_gain_text: "";
+    callback output_gain_changed(float);
+    in-out property <float> mono_floor: 0.0; in property <string> mono_floor_text: "";
+    callback mono_floor_changed(float);
+    in-out property <float> pre_master_target_db: 1.0; in property <string> pre_master_target_db_text: "";
+    callback pre_master_target_db_changed(float);
+
+    // bools
+    in-out property <bool> mono_active: false; callback mono_active_changed(bool);
+    in-out property <bool> delta_active: false; callback delta_active_changed(bool);
+    in-out property <bool> listen_active: false; callback listen_active_changed(bool);
+    in-out property <bool> auto_gain_active: false; callback auto_gain_active_changed(bool);
+    in-out property <bool> bypass_active: false; callback bypass_active_changed(bool);
+    in-out property <bool> pre_master_active: false; callback pre_master_active_changed(bool);
     in-out property <bool> solo_low: false; callback solo_low_changed(bool);
     in-out property <bool> solo_bass: false; callback solo_bass_changed(bool);
     in-out property <bool> solo_mid: false; callback solo_mid_changed(bool);
     in-out property <bool> solo_high_mid: false; callback solo_high_mid_changed(bool);
     in-out property <bool> solo_high: false; callback solo_high_changed(bool);
 
+    // telemetry
+    in property <float> band0: 0.0; in property <float> band1: 0.0; in property <float> band2: 0.0;
+    in property <float> band3: 0.0; in property <float> band4: 0.0;
+    in property <float> tgt0: 0.5; in property <float> tgt1: 0.5; in property <float> tgt2: 0.5;
+    in property <float> tgt3: 0.5; in property <float> tgt4: 0.5;
+    in property <float> lis0: 0.0; in property <float> lis1: 0.0; in property <float> lis2: 0.0;
+    in property <float> lis3: 0.0; in property <float> lis4: 0.0;
+    in property <float> meter_l: 0.0; in property <float> meter_r: 0.0;
+    in property <float> peak_hold_l: 0.0; in property <float> peak_hold_r: 0.0;
+    in property <float> correlation: 0.0; in property <string> corr_text: "";
+    in property <float> balance: 0.0; in property <string> balance_text: "";
+    in property <string> peak_l_text: ""; in property <string> peak_r_text: "";
+    in property <string> gonio_path: "";
+    in property <bool> auto_loud_measuring: false;
+    in property <string> auto_loud_label: "AUTO LOUD";
+
+    // vault / presets
+    in-out property <string> preset_name: "";
+    in-out property <string> vault_path: "";
+    in property <[string]> preset_names: ["Pink Noise"];
+    in property <string> snap_label: "SNAP";
+    in-out property <bool> vault_setup_open: false;
+    in-out property <string> vault_setup_path: "";
+    in property <string> vault_paste_status: "";
+    in property <string> version: "1.6.11";
+
+    callback snap_clicked();
+    callback save_clicked();
+    callback preset_selected(string);
+    callback vault_path_changed(string);
+    callback vault_paste_requested();
+    callback reset_clicked();
+    callback reset_peaks();
+    callback auto_loud_clicked();
+    callback apply_analysis_clicked();
+    callback reset_analysis_clicked();
+
+    init => { Palette.color-scheme = ColorScheme.dark; }
+
+    title: "Equilibrium";
+    background: Lx.window;
+    preferred-width: Lx.window-w;
+    preferred-height: Lx.window-h;
+    min-width: Lx.window-w;
+    min-height: Lx.window-h;
+
     VerticalLayout {
-        padding: 0;
         spacing: 0;
 
         LxShellHeader {
-            plugin-name: "Equilibrium";
+            plugin-name: "EQUILIBRIUM";
             version: root.version;
+
             HorizontalLayout {
                 spacing: 4px;
-                LxToggleBtn { label: "MONO"; small: true; active <=> root.mono_active; toggled => { root.mono_active_changed(self.active); } }
-                LxToggleBtn { label: "DELTA"; small: true; active <=> root.delta_active; toggled => { root.delta_active_changed(self.active); } }
-                LxToggleBtn { label: "LISTEN"; small: true; active <=> root.listen_active; toggled => { root.listen_active_changed(self.active); } }
-                LxToggleBtn { label: "AUTO"; small: true; active <=> root.auto_gain_active; toggled => { root.auto_gain_active_changed(self.active); } }
-                LxToggleBtn { label: "PRE"; small: true; active <=> root.pre_master_active; toggled => { root.pre_master_active_changed(self.active); } }
-                LxToggleBtn { label: "BYPASS"; small: true; danger: true; active <=> root.bypass_active; toggled => { root.bypass_active_changed(self.active); } }
+                alignment: center;
+                LxDangerBtn { label: "RESET"; clicked => { root.reset_clicked(); } }
+                LxToggleBtn { label: "MONO"; active <=> root.mono_active; toggled(v) => { root.mono_active_changed(v); } }
+                LxToggleBtn { label: "DELTA"; active <=> root.delta_active; toggled(v) => { root.delta_active_changed(v); } }
+                LxToggleBtn { label: "LISTEN"; active <=> root.listen_active; toggled(v) => { root.listen_active_changed(v); } }
+                LxToggleBtn { label: "PRE"; active <=> root.pre_master_active; toggled(v) => { root.pre_master_active_changed(v); } }
+                LxToggleBtn { label: "BYPASS"; danger: true; active <=> root.bypass_active; toggled(v) => { root.bypass_active_changed(v); } }
             }
         }
 
         LxShellBody {
+            LxShellLeft {
+                title: "TARGET PROFILES";
+
+                LxLineEdit {
+                    placeholder-text: "Preset Name...";
+                    text <=> root.preset_name;
+                    vertical-stretch: 0;
+                }
+
+                HorizontalLayout {
+                    spacing: Lx.gap-sm;
+                    vertical-stretch: 0;
+                    LxButton {
+                        text: root.snap_label;
+                        primary: true;
+                        horizontal-stretch: 1;
+                        clicked => { root.snap_clicked(); }
+                    }
+                    LxButton {
+                        text: "SAVE";
+                        horizontal-stretch: 1;
+                        clicked => { root.save_clicked(); }
+                    }
+                }
+
+                LxButton {
+                    text: "VAULT SETUP";
+                    vertical-stretch: 0;
+                    clicked => {
+                        root.vault_setup_path = root.vault_path;
+                        root.vault_setup_open = true;
+                    }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: Lx.void;
+                    border-radius: Lx.radius-sm;
+                    clip: true;
+
+                    Flickable {
+                        width: 100%;
+                        height: 100%;
+                        viewport-height: max(self.height, 8px + root.preset_names.length * 22px);
+
+                        VerticalLayout {
+                            padding: 4px;
+                            spacing: 0;
+                            alignment: start;
+
+                            if root.vault_path == "" && root.preset_names.length <= 1: Text {
+                                text: "Set Vault-path first";
+                                font-size: Lx.font-xs;
+                                color: Lx.amber;
+                                vertical-stretch: 0;
+                            }
+
+                            for name[i] in root.preset_names: Rectangle {
+                                height: 22px;
+                                vertical-stretch: 0;
+                                background: ta.has-hover ? Lx.control : transparent;
+                                border-radius: 2px;
+
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    padding-right: 4px;
+                                    Text {
+                                        text: name;
+                                        font-size: Lx.font-md;
+                                        color: Lx.text;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+                                ta := TouchArea {
+                                    clicked => {
+                                        root.preset_name = name;
+                                        root.preset_selected(name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             LxShellMain {
                 VerticalLayout {
                     padding: 8px;
-                    spacing: 10px;
+                    spacing: 8px;
 
-                    Text {
-                        text: root.meter_line;
-                        color: Lx.text-secondary;
-                        font-size: Lx.font-sm;
-                    }
-
-                    // Gain row
-                    Text { text: "GAIN"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; }
+                    // 5-band meters
                     HorizontalLayout {
-                        spacing: 10px;
-                        LxKnob { label: "Sub"; value <=> root.low_gain; value-text: root.low_gain_text; changed => { root.low_gain_changed(self.value); } }
-                        LxKnob { label: "Bass"; value <=> root.bass_gain; value-text: root.bass_gain_text; changed => { root.bass_gain_changed(self.value); } }
-                        LxKnob { label: "Mid"; value <=> root.mid_gain; value-text: root.mid_gain_text; changed => { root.mid_gain_changed(self.value); } }
-                        LxKnob { label: "Pres"; value <=> root.high_mid_gain; value-text: root.high_mid_gain_text; changed => { root.high_mid_gain_changed(self.value); } }
-                        LxKnob { label: "Air"; value <=> root.high_gain; value-text: root.high_gain_text; changed => { root.high_gain_changed(self.value); } }
+                        spacing: 8px;
+                        height: 140px;
+                        vertical-stretch: 0;
+                        alignment: center;
+                        BandBar { label: "Sub"; hz: "0-80"; level: root.band0; target: root.tgt0; listen: root.lis0; show-listen: root.listen_active; }
+                        BandBar { label: "Bass"; hz: "80-300"; level: root.band1; target: root.tgt1; listen: root.lis1; show-listen: root.listen_active; }
+                        BandBar { label: "Mid"; hz: "300-2k"; level: root.band2; target: root.tgt2; listen: root.lis2; show-listen: root.listen_active; }
+                        BandBar { label: "Pres"; hz: "2-6k"; level: root.band3; target: root.tgt3; listen: root.lis3; show-listen: root.listen_active; }
+                        BandBar { label: "Air"; hz: ">6k"; level: root.band4; target: root.tgt4; listen: root.lis4; show-listen: root.listen_active; }
                     }
 
-                    // Width row
-                    Text { text: "WIDTH"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; }
+                    Text { text: "GAIN"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; vertical-stretch: 0; }
                     HorizontalLayout {
-                        spacing: 10px;
-                        LxKnob { label: "Sub"; value <=> root.low_width; value-text: root.low_width_text; changed => { root.low_width_changed(self.value); } }
-                        LxKnob { label: "Bass"; value <=> root.bass_width; value-text: root.bass_width_text; changed => { root.bass_width_changed(self.value); } }
-                        LxKnob { label: "Mid"; value <=> root.mid_width; value-text: root.mid_width_text; changed => { root.mid_width_changed(self.value); } }
-                        LxKnob { label: "Pres"; value <=> root.high_mid_width; value-text: root.high_mid_width_text; changed => { root.high_mid_width_changed(self.value); } }
-                        LxKnob { label: "Air"; value <=> root.high_width; value-text: root.high_width_text; changed => { root.high_width_changed(self.value); } }
+                        spacing: 6px; vertical-stretch: 0; alignment: center;
+                        LxKnob { label: "Sub"; small: true; value <=> root.low_gain; value-text: root.low_gain_text; changed(v) => { root.low_gain_changed(v); } }
+                        LxKnob { label: "Bass"; small: true; value <=> root.bass_gain; value-text: root.bass_gain_text; changed(v) => { root.bass_gain_changed(v); } }
+                        LxKnob { label: "Mid"; small: true; value <=> root.mid_gain; value-text: root.mid_gain_text; changed(v) => { root.mid_gain_changed(v); } }
+                        LxKnob { label: "Pres"; small: true; value <=> root.high_mid_gain; value-text: root.high_mid_gain_text; changed(v) => { root.high_mid_gain_changed(v); } }
+                        LxKnob { label: "Air"; small: true; value <=> root.high_gain; value-text: root.high_gain_text; changed(v) => { root.high_gain_changed(v); } }
                     }
 
-                    // Pan + solo
-                    Text { text: "PAN / SOLO"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; }
+                    Text { text: "WIDTH"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; vertical-stretch: 0; }
                     HorizontalLayout {
-                        spacing: 10px;
-                        VerticalLayout {
-                            spacing: 4px;
-                            LxKnob { label: "Sub"; value <=> root.low_pan; value-text: root.low_pan_text; changed => { root.low_pan_changed(self.value); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_low; toggled => { root.solo_low_changed(self.active); } }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            LxKnob { label: "Bass"; value <=> root.bass_pan; value-text: root.bass_pan_text; changed => { root.bass_pan_changed(self.value); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_bass; toggled => { root.solo_bass_changed(self.active); } }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            LxKnob { label: "Mid"; value <=> root.mid_pan; value-text: root.mid_pan_text; changed => { root.mid_pan_changed(self.value); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_mid; toggled => { root.solo_mid_changed(self.active); } }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            LxKnob { label: "Pres"; value <=> root.high_mid_pan; value-text: root.high_mid_pan_text; changed => { root.high_mid_pan_changed(self.value); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high_mid; toggled => { root.solo_high_mid_changed(self.active); } }
-                        }
-                        VerticalLayout {
-                            spacing: 4px;
-                            LxKnob { label: "Air"; value <=> root.high_pan; value-text: root.high_pan_text; changed => { root.high_pan_changed(self.value); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high; toggled => { root.solo_high_changed(self.active); } }
-                        }
+                        spacing: 6px; vertical-stretch: 0; alignment: center;
+                        LxKnob { label: "Sub"; small: true; value <=> root.low_width; value-text: root.low_width_text; changed(v) => { root.low_width_changed(v); } }
+                        LxKnob { label: "Bass"; small: true; value <=> root.bass_width; value-text: root.bass_width_text; changed(v) => { root.bass_width_changed(v); } }
+                        LxKnob { label: "Mid"; small: true; value <=> root.mid_width; value-text: root.mid_width_text; changed(v) => { root.mid_width_changed(v); } }
+                        LxKnob { label: "Pres"; small: true; value <=> root.high_mid_width; value-text: root.high_mid_width_text; changed(v) => { root.high_mid_width_changed(v); } }
+                        LxKnob { label: "Air"; small: true; value <=> root.high_width; value-text: root.high_width_text; changed(v) => { root.high_width_changed(v); } }
                     }
 
-                    Text {
-                        text: "0–80 · 80–300 · 300–2k · 2–6k · >6k Hz";
-                        color: Lx.text-secondary;
-                        font-size: Lx.font-xs;
+                    Text { text: "PAN / SOLO"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; vertical-stretch: 0; }
+                    HorizontalLayout {
+                        spacing: 6px; vertical-stretch: 0; alignment: center;
+                        VerticalLayout {
+                            spacing: 2px; alignment: center;
+                            LxKnob { label: "Sub"; small: true; value <=> root.low_pan; value-text: root.low_pan_text; changed(v) => { root.low_pan_changed(v); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_low; toggled(v) => { root.solo_low_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 2px; alignment: center;
+                            LxKnob { label: "Bass"; small: true; value <=> root.bass_pan; value-text: root.bass_pan_text; changed(v) => { root.bass_pan_changed(v); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_bass; toggled(v) => { root.solo_bass_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 2px; alignment: center;
+                            LxKnob { label: "Mid"; small: true; value <=> root.mid_pan; value-text: root.mid_pan_text; changed(v) => { root.mid_pan_changed(v); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_mid; toggled(v) => { root.solo_mid_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 2px; alignment: center;
+                            LxKnob { label: "Pres"; small: true; value <=> root.high_mid_pan; value-text: root.high_mid_pan_text; changed(v) => { root.high_mid_pan_changed(v); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high_mid; toggled(v) => { root.solo_high_mid_changed(v); } }
+                        }
+                        VerticalLayout {
+                            spacing: 2px; alignment: center;
+                            LxKnob { label: "Air"; small: true; value <=> root.high_pan; value-text: root.high_pan_text; changed(v) => { root.high_pan_changed(v); } }
+                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high; toggled(v) => { root.solo_high_changed(v); } }
+                        }
                     }
                 }
             }
 
             LxShellRight {
                 VerticalLayout {
-                    padding: 8px;
-                    spacing: 10px;
+                    padding: 6px;
+                    spacing: 6px;
+
                     LxKnob {
-                        label: "Out";
+                        label: "OUT";
                         value <=> root.output_gain;
                         value-text: root.output_gain_text;
-                        changed => { root.output_gain_changed(self.value); }
+                        changed(v) => { root.output_gain_changed(v); }
                     }
                     LxKnob {
-                        label: "Mono Floor";
+                        label: "MONO FLOOR";
                         value <=> root.mono_floor;
                         value-text: root.mono_floor_text;
-                        changed => { root.mono_floor_changed(self.value); }
+                        changed(v) => { root.mono_floor_changed(v); }
                     }
                     LxKnob {
-                        label: "Pre tgt";
+                        label: "PRE TGT";
                         value <=> root.pre_master_target_db;
                         value-text: root.pre_master_target_db_text;
-                        changed => { root.pre_master_target_db_changed(self.value); }
+                        changed(v) => { root.pre_master_target_db_changed(v); }
                     }
+
+                    LxButton {
+                        text: root.auto_loud_label;
+                        primary: root.auto_loud_measuring;
+                        vertical-stretch: 0;
+                        clicked => { root.auto_loud_clicked(); }
+                    }
+
+                    LxLedPeakMeter {
+                        vertical-stretch: 0;
+                        level-l: root.meter_l;
+                        level-r: root.meter_r;
+                        hold-l: root.peak_hold_l;
+                        hold-r: root.peak_hold_r;
+                        balance: root.balance;
+                        reset-peaks => { root.reset_peaks(); }
+                    }
+                    Text {
+                        text: root.peak_l_text + "  " + root.peak_r_text;
+                        font-size: Lx.font-xs;
+                        color: Lx.text-secondary;
+                        horizontal-alignment: center;
+                        vertical-stretch: 0;
+                    }
+
                     LxGoniometer {
                         min-height: 120px;
-                        commands: root.gonio_cmds;
+                        vertical-stretch: 1;
+                        commands: root.gonio_path;
+                    }
+
+                    LxCorrelation {
+                        correlation: root.correlation;
+                        text: root.corr_text;
+                        vertical-stretch: 0;
+                    }
+                    Text {
+                        text: root.corr_text;
+                        font-size: Lx.font-xs;
+                        color: Lx.text-muted;
+                        horizontal-alignment: center;
+                        vertical-stretch: 0;
+                    }
+                    Text {
+                        text: root.balance_text;
+                        font-size: Lx.font-xs;
+                        color: Lx.text-muted;
+                        horizontal-alignment: center;
+                        vertical-stretch: 0;
                     }
                 }
             }
+        }
+
+        LxShellFooter {
+            HorizontalLayout {
+                padding: 8px;
+                spacing: 10px;
+                alignment: center;
+
+                Text {
+                    text: "ANALYZE";
+                    color: Lx.amber;
+                    font-size: Lx.font-xs;
+                    font-weight: 700;
+                    vertical-stretch: 0;
+                    vertical-alignment: center;
+                }
+                LxButton {
+                    text: "APPLY ANALYSIS";
+                    min-width: 120px;
+                    clicked => { root.apply_analysis_clicked(); }
+                }
+                LxButton {
+                    text: "RESET ANALYSIS";
+                    min-width: 120px;
+                    clicked => { root.reset_analysis_clicked(); }
+                }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+            }
+        }
+    }
+
+    vault_setup := LxVaultSetupOverlay {
+        x: 0; y: 0; width: 100%; height: 100%;
+        open <=> root.vault_setup_open;
+        path <=> root.vault_setup_path;
+        plugin-label: "Equilibrium";
+        paste-status: root.vault_paste_status;
+        paste-requested => { root.vault_paste_requested(); }
+        saved(p) => {
+            root.vault_path = p;
+            root.vault_path_changed(p);
         }
     }
 }

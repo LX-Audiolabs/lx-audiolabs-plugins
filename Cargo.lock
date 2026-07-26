@@ -1195,6 +1195,7 @@ dependencies = [
  "lx-analysis",
  "lx-dsp",
  "lx-slint-build",
+ "lx-slint-editor",
  "slint",
  "tracing",
  "truce",
@@ -1203,7 +1204,6 @@ dependencies = [
  "truce-loader",
  "truce-lv2",
  "truce-params",
- "truce-slint",
  "truce-test",
  "truce-vst3",
 ]

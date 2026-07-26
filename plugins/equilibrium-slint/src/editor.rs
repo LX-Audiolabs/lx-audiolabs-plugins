@@ -1,33 +1,31 @@
-//! Equilibrium Slint editor — 5-band gain/width/pan + monitor.
-//! truce-slint software renderer. Spectrum/preset polish later.
+//! Equilibrium Slint editor — lx-slint-editor, Vizia feature parity (vault/SNAP/telemetry).
 
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
-use slint::SharedString;
-use truce::prelude::*;
+use lx_slint_editor::{LxSlintEditor, PluginContext};
+use slint::{ModelRc, SharedString, VecModel};
 use truce_core::editor::{Editor, PluginContextReadF32};
-use truce_slint::{PluginContext, SlintEditor, SyncFn};
+use truce_params::FloatParam;
 
-use crate::{EquilibriumParams, EquilibriumParamsParamId as P};
+use crate::presets::{
+    apply_stereo_from_preset, load_presets, param_norm, pink_noise_preset, preset_names,
+    preset_save_dir, profile_for_save, snap_filename, snap_markdown, PresetEntry,
+};
+use crate::EquilibriumParams;
+use crate::EquilibriumParamsParamId as P;
 
 slint::include_modules!();
 
 const WINDOW_W: u32 = 990;
 const WINDOW_H: u32 = 660;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const TICK_INTERVAL: Duration = Duration::from_millis(33);
 
-macro_rules! bind_bool {
-    ($ui:expr, $state:expr, $p:expr, $on:ident) => {{
-        let s = $state.clone();
-        $ui.$on(move |v: bool| s.automate($p, if v { 1.0 } else { 0.0 }));
-    }};
-}
-macro_rules! bind_float {
-    ($ui:expr, $state:expr, $p:expr, $on:ident) => {{
-        let s = $state.clone();
-        $ui.$on(move |v: f32| s.automate($p, v as f64));
-    }};
+fn names_model(names: &[String]) -> ModelRc<SharedString> {
+    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
+    ModelRc::new(VecModel::from(v))
 }
 
 fn format_pan(plain: f32) -> String {
@@ -40,185 +38,864 @@ fn format_pan(plain: f32) -> String {
     }
 }
 
+fn float_default_norm(p: &FloatParam) -> f32 {
+    p.info.range.normalize(p.info.default_plain) as f32
+}
+
+#[inline]
+fn changed_f32(prev: &mut f32, v: f32) -> bool {
+    if *prev != v {
+        *prev = v;
+        true
+    } else {
+        false
+    }
+}
+
+#[inline]
+fn changed_bool(prev: &mut Option<bool>, v: bool) -> bool {
+    if *prev != Some(v) {
+        *prev = Some(v);
+        true
+    } else {
+        false
+    }
+}
+
+#[inline]
+fn changed_str(prev: &mut String, v: &str) -> bool {
+    if prev.as_str() != v {
+        prev.clear();
+        prev.push_str(v);
+        true
+    } else {
+        false
+    }
+}
+
+/// Mean-normalized bar height 0..1 (Vizia canvas window −20…+22 around avg).
+fn band_bar_norm(levels: &[f32; 5], i: usize) -> f32 {
+    let avg: f32 = levels.iter().map(|v| v.max(-50.0)).sum::<f32>() / 5.0;
+    if avg <= -70.0 {
+        return 0.0;
+    }
+    let rel = (levels[i].max(-50.0) - avg).clamp(-20.0, 22.0);
+    ((rel + 20.0) / 42.0).clamp(0.0, 1.0)
+}
+
+fn target_bar_norm(targets: &[f32; 5], i: usize) -> f32 {
+    let avg: f32 = targets.iter().map(|v| v.max(-30.0)).sum::<f32>() / 5.0;
+    let rel = (targets[i].max(-30.0) - avg).clamp(-20.0, 22.0);
+    ((rel + 20.0) / 42.0).clamp(0.0, 1.0)
+}
+
+fn db_to_meter(db: f32) -> f32 {
+    ((db + 60.0) / 66.0).clamp(0.0, 1.0)
+}
+
+fn fmt_db(v: f32) -> String {
+    if v <= -60.0 {
+        "-inf".into()
+    } else {
+        format!("{v:.1}")
+    }
+}
+
+struct SyncCache {
+    last_tick: Instant,
+    primed: bool,
+    floats: [f32; 18],
+    bools: [Option<bool>; 11],
+    texts: [String; 18],
+    meter_l: f32,
+    meter_r: f32,
+    peak_hold_l: f32,
+    peak_hold_r: f32,
+    corr: f32,
+    balance: f32,
+    hold_l_q: f32,
+    hold_r_q: f32,
+    bands: [f32; 5],
+    tgts: [f32; 5],
+    lis: [f32; 5],
+    auto_loud: Option<bool>,
+    snap_was_active: bool,
+    snap_blink: u32,
+    snap_label: String,
+}
+
+impl SyncCache {
+    fn new() -> Self {
+        Self {
+            last_tick: Instant::now()
+                .checked_sub(TICK_INTERVAL)
+                .unwrap_or_else(Instant::now),
+            primed: false,
+            floats: [f32::NAN; 18],
+            bools: [None; 11],
+            texts: std::array::from_fn(|_| String::new()),
+            meter_l: f32::NAN,
+            meter_r: f32::NAN,
+            peak_hold_l: f32::NAN,
+            peak_hold_r: f32::NAN,
+            corr: f32::NAN,
+            balance: f32::NAN,
+            hold_l_q: f32::NAN,
+            hold_r_q: f32::NAN,
+            bands: [f32::NAN; 5],
+            tgts: [f32::NAN; 5],
+            lis: [f32::NAN; 5],
+            auto_loud: None,
+            snap_was_active: false,
+            snap_blink: 0,
+            snap_label: String::new(),
+        }
+    }
+
+    fn due(&mut self) -> bool {
+        let now = Instant::now();
+        if !self.primed || now.duration_since(self.last_tick) >= TICK_INTERVAL {
+            self.last_tick = now;
+            self.primed = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+struct VaultUiState {
+    vault_path: Option<String>,
+    presets: Vec<PresetEntry>,
+}
+
+macro_rules! bind_floats {
+    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
+        $(
+            lx_slint_editor::paste! {
+                let s = $state.clone();
+                $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
+            }
+        )*
+    };
+}
+
+macro_rules! bind_bools {
+    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
+        $(
+            lx_slint_editor::paste! {
+                let s = $state.clone();
+                $ui.[<on_ $name _changed>](move |v: bool| {
+                    s.automate($p, if v { 1.0 } else { 0.0 });
+                });
+            }
+        )*
+    };
+}
+
+macro_rules! sync_floats_dirty {
+    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
+        $(
+            lx_slint_editor::paste! {
+                let v = PluginContextReadF32::get_param($state, $p);
+                if changed_f32(&mut $cache.floats[$idx], v) {
+                    $ui.[<set_ $name>](v);
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! sync_bools_dirty {
+    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
+        $(
+            lx_slint_editor::paste! {
+                let v = PluginContextReadF32::get_param($state, $p) > 0.5;
+                if changed_bool(&mut $cache.bools[$idx], v) {
+                    $ui.[<set_ $name>](v);
+                }
+            }
+        )*
+    };
+}
+
 pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
-    SlintEditor::new(
+    let sync_cache = Mutex::new(SyncCache::new());
+
+    let init_cfg = lx_analysis::load_config("Equilibrium");
+    let init_vp = init_cfg.vault_path.clone();
+    let init_presets = load_presets(init_vp.as_deref());
+    // Seed Pink Noise targets if nothing selected yet.
+    {
+        let pink = pink_noise_preset();
+        for b in 0..5 {
+            shared.target_levels[b].store(pink.bands[b], Ordering::Release);
+            shared.target_tolerances[b].store(pink.tolerances[b], Ordering::Release);
+        }
+        shared.selected_preset_index.store(0, Ordering::Release);
+    }
+
+    let vault_state = Arc::new(Mutex::new(VaultUiState {
+        vault_path: init_vp.clone(),
+        presets: init_presets,
+    }));
+
+    LxSlintEditor::new(
         params.clone(),
         (WINDOW_W, WINDOW_H),
-        move |state: PluginContext<EquilibriumParams>| -> SyncFn<EquilibriumParams> {
-            let ui = match EquilibriumUi::new() {
-                Ok(u) => u,
-                Err(e) => {
-                    tracing::error!("EquilibriumUi::new failed: {e:?}");
-                    return Box::new(|_: &PluginContext<EquilibriumParams>| {});
+        {
+            let params = params.clone();
+            let shared = shared.clone();
+            let vault_state = vault_state.clone();
+            let init_vp = init_vp.clone();
+            move |state: PluginContext<EquilibriumParams>| {
+                let ui = EquilibriumUi::new().expect("EquilibriumUi::new");
+                ui.set_version(SharedString::from(VERSION));
+
+                if let Some(ref vp) = init_vp {
+                    ui.set_vault_path(SharedString::from(vp.as_str()));
                 }
-            };
-            ui.set_version(SharedString::from(VERSION));
+                if init_vp.as_ref().is_none_or(|v| v.is_empty()) {
+                    ui.set_snap_label(SharedString::from("SET VAULT"));
+                }
 
-            bind_bool!(ui, state, P::MonoActive, on_mono_active_changed);
-            bind_bool!(ui, state, P::DeltaActive, on_delta_active_changed);
-            bind_bool!(ui, state, P::ListenActive, on_listen_active_changed);
-            bind_bool!(ui, state, P::AutoGainActive, on_auto_gain_active_changed);
-            bind_bool!(ui, state, P::BypassActive, on_bypass_active_changed);
-            bind_bool!(ui, state, P::PreMasterActive, on_pre_master_active_changed);
+                {
+                    let vs = vault_state.lock().ok();
+                    let names = vs
+                        .as_ref()
+                        .map(|g| preset_names(&g.presets))
+                        .unwrap_or_else(|| vec!["Pink Noise".into()]);
+                    ui.set_preset_names(names_model(&names));
+                }
 
-            bind_float!(ui, state, P::OutputGain, on_output_gain_changed);
-            bind_float!(ui, state, P::MonoFloor, on_mono_floor_changed);
-            bind_float!(
-                ui,
-                state,
-                P::PreMasterTargetDb,
-                on_pre_master_target_db_changed
-            );
+                bind_floats!(ui, state,
+                    P::LowGain => low_gain,
+                    P::BassGain => bass_gain,
+                    P::MidGain => mid_gain,
+                    P::HighMidGain => high_mid_gain,
+                    P::HighGain => high_gain,
+                    P::LowWidth => low_width,
+                    P::BassWidth => bass_width,
+                    P::MidWidth => mid_width,
+                    P::HighMidWidth => high_mid_width,
+                    P::HighWidth => high_width,
+                    P::LowPan => low_pan,
+                    P::BassPan => bass_pan,
+                    P::MidPan => mid_pan,
+                    P::HighMidPan => high_mid_pan,
+                    P::HighPan => high_pan,
+                    P::OutputGain => output_gain,
+                    P::MonoFloor => mono_floor,
+                    P::PreMasterTargetDb => pre_master_target_db,
+                );
 
-            bind_float!(ui, state, P::LowGain, on_low_gain_changed);
-            bind_float!(ui, state, P::BassGain, on_bass_gain_changed);
-            bind_float!(ui, state, P::MidGain, on_mid_gain_changed);
-            bind_float!(ui, state, P::HighMidGain, on_high_mid_gain_changed);
-            bind_float!(ui, state, P::HighGain, on_high_gain_changed);
+                bind_bools!(ui, state,
+                    P::MonoActive => mono_active,
+                    P::DeltaActive => delta_active,
+                    P::ListenActive => listen_active,
+                    P::AutoGainActive => auto_gain_active,
+                    P::BypassActive => bypass_active,
+                    P::PreMasterActive => pre_master_active,
+                    P::SoloLow => solo_low,
+                    P::SoloBass => solo_bass,
+                    P::SoloMid => solo_mid,
+                    P::SoloHighMid => solo_high_mid,
+                    P::SoloHigh => solo_high,
+                );
 
-            bind_float!(ui, state, P::LowWidth, on_low_width_changed);
-            bind_float!(ui, state, P::BassWidth, on_bass_width_changed);
-            bind_float!(ui, state, P::MidWidth, on_mid_width_changed);
-            bind_float!(ui, state, P::HighMidWidth, on_high_mid_width_changed);
-            bind_float!(ui, state, P::HighWidth, on_high_width_changed);
+                // SNAP
+                {
+                    let snap_shared = shared.clone();
+                    let snap_vs = vault_state.clone();
+                    let snap_ui = ui.as_weak();
+                    ui.on_snap_clicked(move || {
+                        let no_vault = snap_vs
+                            .lock()
+                            .ok()
+                            .and_then(|g| g.vault_path.clone())
+                            .is_none_or(|v| v.is_empty());
+                        if no_vault {
+                            if let Some(ui) = snap_ui.upgrade() {
+                                ui.set_vault_setup_path(SharedString::new());
+                                ui.set_vault_setup_open(true);
+                                ui.set_snap_label(SharedString::from("SET VAULT"));
+                            }
+                            return;
+                        }
+                        snap_shared.snap_active.store(true, Ordering::Release);
+                        snap_shared.snap_phase.store(1, Ordering::Release);
+                        if let Some(ui) = snap_ui.upgrade() {
+                            ui.set_snap_label(SharedString::from("ANALYZE..."));
+                        }
+                    });
+                }
 
-            bind_float!(ui, state, P::LowPan, on_low_pan_changed);
-            bind_float!(ui, state, P::BassPan, on_bass_pan_changed);
-            bind_float!(ui, state, P::MidPan, on_mid_pan_changed);
-            bind_float!(ui, state, P::HighMidPan, on_high_mid_pan_changed);
-            bind_float!(ui, state, P::HighPan, on_high_pan_changed);
+                // SAVE — target profile bands, not gain knobs
+                {
+                    let params_save = params.clone();
+                    let shared_save = shared.clone();
+                    let vs_save = vault_state.clone();
+                    let ui_weak = ui.as_weak();
+                    ui.on_save_clicked(move || {
+                        let Some(ui) = ui_weak.upgrade() else { return };
+                        let name_input = ui.get_preset_name().to_string();
+                        let mut vs = match vs_save.lock() {
+                            Ok(g) => g,
+                            Err(_) => return,
+                        };
+                        let name = if name_input.trim().is_empty() {
+                            format!("User Preset {}", vs.presets.len())
+                        } else {
+                            name_input.trim().to_string()
+                        };
+                        let mut bands = [0.0f32; 5];
+                        let mut tols = [0.0f32; 5];
+                        for b in 0..5 {
+                            bands[b] = shared_save.target_levels[b].load(Ordering::Acquire);
+                            tols[b] = shared_save.target_tolerances[b].load(Ordering::Acquire);
+                        }
+                        let prof = profile_for_save(&name, bands, tols, &params_save);
+                        let dir = preset_save_dir(&vs.vault_path);
+                        let _ = std::fs::create_dir_all(&dir);
+                        let safe = name.replace(
+                            |c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_',
+                            "",
+                        );
+                        let fp = dir.join(format!("{safe}.md"));
+                        let md = lx_analysis::export_preset_to_markdown(&prof);
+                        if std::fs::write(&fp, md).is_ok() {
+                            vs.presets = load_presets(vs.vault_path.as_deref());
+                            ui.set_preset_names(names_model(&preset_names(&vs.presets)));
+                            ui.set_preset_name(SharedString::from(name.as_str()));
+                            tracing::info!("SAVE Equilibrium preset {}", fp.display());
+                        }
+                    });
+                }
 
-            bind_bool!(ui, state, P::SoloLow, on_solo_low_changed);
-            bind_bool!(ui, state, P::SoloBass, on_solo_bass_changed);
-            bind_bool!(ui, state, P::SoloMid, on_solo_mid_changed);
-            bind_bool!(ui, state, P::SoloHighMid, on_solo_high_mid_changed);
-            bind_bool!(ui, state, P::SoloHigh, on_solo_high_changed);
+                // vault path
+                {
+                    let vs_path = vault_state.clone();
+                    let ui_path = ui.as_weak();
+                    ui.on_vault_path_changed(move |path: SharedString| {
+                        let path = path.to_string().trim().to_string();
+                        let new_vp = if path.is_empty() { None } else { Some(path) };
+                        if let Ok(mut vs) = vs_path.lock() {
+                            vs.vault_path = new_vp.clone();
+                            let mut cfg = lx_analysis::load_config("Equilibrium");
+                            cfg.vault_path = new_vp.clone();
+                            let _ = lx_analysis::save_config("Equilibrium", &cfg);
+                            vs.presets = load_presets(new_vp.as_deref());
+                            if let Some(ui) = ui_path.upgrade() {
+                                ui.set_preset_names(names_model(&preset_names(&vs.presets)));
+                                if new_vp.as_ref().is_none_or(|v| v.is_empty()) {
+                                    ui.set_snap_label(SharedString::from("SET VAULT"));
+                                } else {
+                                    ui.set_snap_label(SharedString::from("SNAP"));
+                                }
+                            }
+                        }
+                    });
+                }
 
-            let shared_sync = shared.clone();
-            Box::new(move |state: &PluginContext<EquilibriumParams>| {
-                let g = |p: P| PluginContextReadF32::get_param(state, p);
+                // PASTE → draft path
+                {
+                    let paste_ui = ui.as_weak();
+                    ui.on_vault_paste_requested(move || {
+                        let Some(ui) = paste_ui.upgrade() else { return };
+                        match lx_slint_editor::clipboard_get_retry() {
+                            Some(s) => {
+                                ui.set_vault_setup_path(SharedString::from(s));
+                                ui.set_vault_paste_status(SharedString::new());
+                            }
+                            None => {
+                                ui.set_vault_paste_status(SharedString::from(
+                                    "Clipboard empty or unavailable — copy a path and try PASTE again",
+                                ));
+                            }
+                        }
+                    });
+                }
+
+                // preset select
+                {
+                    let sel_state = state.clone();
+                    let sel_shared = shared.clone();
+                    let sel_vs = vault_state.clone();
+                    let sel_ui = ui.as_weak();
+                    ui.on_preset_selected(move |name: SharedString| {
+                        let name = name.to_string();
+                        let profile = {
+                            let vs = sel_vs.lock().ok();
+                            vs.and_then(|g| {
+                                g.presets
+                                    .iter()
+                                    .find(|(n, _, _)| n == &name)
+                                    .map(|(_, _, p)| p.clone())
+                            })
+                        };
+                        if let Some(prof) = profile {
+                            for b in 0..5 {
+                                sel_shared.target_levels[b]
+                                    .store(prof.bands[b], Ordering::Release);
+                                sel_shared.target_tolerances[b]
+                                    .store(prof.tolerances[b], Ordering::Release);
+                            }
+                            apply_stereo_from_preset(&sel_state, &prof);
+                            if let Some(ui) = sel_ui.upgrade() {
+                                ui.set_preset_name(SharedString::from(prof.name.as_str()));
+                            }
+                        }
+                    });
+                }
+
+                // RESET
+                {
+                    let reset_state = state.clone();
+                    let reset_params = params.clone();
+                    let reset_shared = shared.clone();
+                    let reset_vs = vault_state.clone();
+                    ui.on_reset_clicked(move || {
+                        for (id, plain) in [
+                            (P::LowGain, 0.0),
+                            (P::BassGain, 0.0),
+                            (P::MidGain, 0.0),
+                            (P::HighMidGain, 0.0),
+                            (P::HighGain, 0.0),
+                            (P::LowWidth, 100.0),
+                            (P::BassWidth, 100.0),
+                            (P::MidWidth, 100.0),
+                            (P::HighMidWidth, 100.0),
+                            (P::HighWidth, 100.0),
+                            (P::LowPan, 0.0),
+                            (P::BassPan, 0.0),
+                            (P::MidPan, 0.0),
+                            (P::HighMidPan, 0.0),
+                            (P::HighPan, 0.0),
+                            (P::OutputGain, 0.0),
+                            (P::MonoFloor, 0.0),
+                            (P::PreMasterTargetDb, -3.0),
+                        ] {
+                            reset_state.automate(id, param_norm(id, plain));
+                        }
+                        for id in [
+                            P::MonoActive,
+                            P::DeltaActive,
+                            P::BypassActive,
+                            P::PreMasterActive,
+                            P::ListenActive,
+                            P::AutoGainActive,
+                            P::SoloLow,
+                            P::SoloBass,
+                            P::SoloMid,
+                            P::SoloHighMid,
+                            P::SoloHigh,
+                        ] {
+                            reset_state.automate(id, 0.0);
+                        }
+                        let pink = pink_noise_preset();
+                        for b in 0..5 {
+                            reset_shared.target_levels[b].store(pink.bands[b], Ordering::Release);
+                            reset_shared.target_tolerances[b]
+                                .store(pink.tolerances[b], Ordering::Release);
+                        }
+                        reset_shared.selected_preset_index.store(0, Ordering::Release);
+                        reset_shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
+                        reset_shared.reset_analysis.store(true, Ordering::Release);
+                        let _ = (&reset_params, &reset_vs);
+                        tracing::info!("RESET clicked");
+                    });
+                }
+
+                // peaks
+                {
+                    let s = shared.clone();
+                    ui.on_reset_peaks(move || {
+                        s.reset_peak.store(true, Ordering::Release);
+                    });
+                }
+
+                // auto loud
+                {
+                    let s = shared.clone();
+                    ui.on_auto_loud_clicked(move || {
+                        if s.auto_loud_measuring.load(Ordering::Acquire) {
+                            return;
+                        }
+                        s.auto_loud_trigger.store(true, Ordering::Release);
+                    });
+                }
+
+                // apply / reset analysis
+                {
+                    let s = shared.clone();
+                    ui.on_apply_analysis_clicked(move || {
+                        if s.listen_samples.load(Ordering::Acquire) <= 100.0 {
+                            return;
+                        }
+                        for b in 0..5 {
+                            let lv = s.listen_levels[b].load(Ordering::Acquire);
+                            let tol = s.listen_tolerances[b].load(Ordering::Acquire);
+                            s.target_levels[b].store(lv, Ordering::Release);
+                            s.target_tolerances[b].store(tol, Ordering::Release);
+                        }
+                    });
+                }
+                {
+                    let s = shared.clone();
+                    ui.on_reset_analysis_clicked(move || {
+                        s.reset_analysis.store(true, Ordering::Release);
+                        s.listen_samples.store(0.0, Ordering::Release);
+                        for b in 0..5 {
+                            s.listen_levels[b].store(-90.0, Ordering::Release);
+                            s.listen_tolerances[b].store(0.0, Ordering::Release);
+                        }
+                    });
+                }
+
+                let _ = float_default_norm; // keep helper for future right-click defaults
+                ui
+            }
+        },
+        {
+            let shared = shared.clone();
+            let vault_state = vault_state.clone();
+            move |ui: &EquilibriumUi, state: &PluginContext<EquilibriumParams>| {
+                let Ok(mut cache) = sync_cache.lock() else {
+                    return;
+                };
+                if !cache.due() {
+                    return;
+                }
+
+                sync_floats_dirty!(ui, state, cache,
+                    0, P::LowGain => low_gain,
+                    1, P::BassGain => bass_gain,
+                    2, P::MidGain => mid_gain,
+                    3, P::HighMidGain => high_mid_gain,
+                    4, P::HighGain => high_gain,
+                    5, P::LowWidth => low_width,
+                    6, P::BassWidth => bass_width,
+                    7, P::MidWidth => mid_width,
+                    8, P::HighMidWidth => high_mid_width,
+                    9, P::HighWidth => high_width,
+                    10, P::LowPan => low_pan,
+                    11, P::BassPan => bass_pan,
+                    12, P::MidPan => mid_pan,
+                    13, P::HighMidPan => high_mid_pan,
+                    14, P::HighPan => high_pan,
+                    15, P::OutputGain => output_gain,
+                    16, P::MonoFloor => mono_floor,
+                    17, P::PreMasterTargetDb => pre_master_target_db,
+                );
+
+                sync_bools_dirty!(ui, state, cache,
+                    0, P::MonoActive => mono_active,
+                    1, P::DeltaActive => delta_active,
+                    2, P::ListenActive => listen_active,
+                    3, P::AutoGainActive => auto_gain_active,
+                    4, P::BypassActive => bypass_active,
+                    5, P::PreMasterActive => pre_master_active,
+                    6, P::SoloLow => solo_low,
+                    7, P::SoloBass => solo_bass,
+                    8, P::SoloMid => solo_mid,
+                    9, P::SoloHighMid => solo_high_mid,
+                    10, P::SoloHigh => solo_high,
+                );
+
                 let p = state.params();
-
-                ui.set_mono_active(g(P::MonoActive) > 0.5);
-                ui.set_delta_active(g(P::DeltaActive) > 0.5);
-                ui.set_listen_active(g(P::ListenActive) > 0.5);
-                ui.set_auto_gain_active(g(P::AutoGainActive) > 0.5);
-                ui.set_bypass_active(g(P::BypassActive) > 0.5);
-                ui.set_pre_master_active(g(P::PreMasterActive) > 0.5);
-
-                ui.set_output_gain(g(P::OutputGain));
-                ui.set_mono_floor(g(P::MonoFloor));
-                ui.set_pre_master_target_db(g(P::PreMasterTargetDb));
-
-                ui.set_low_gain(g(P::LowGain));
-                ui.set_bass_gain(g(P::BassGain));
-                ui.set_mid_gain(g(P::MidGain));
-                ui.set_high_mid_gain(g(P::HighMidGain));
-                ui.set_high_gain(g(P::HighGain));
-
-                ui.set_low_width(g(P::LowWidth));
-                ui.set_bass_width(g(P::BassWidth));
-                ui.set_mid_width(g(P::MidWidth));
-                ui.set_high_mid_width(g(P::HighMidWidth));
-                ui.set_high_width(g(P::HighWidth));
-
-                ui.set_low_pan(g(P::LowPan));
-                ui.set_bass_pan(g(P::BassPan));
-                ui.set_mid_pan(g(P::MidPan));
-                ui.set_high_mid_pan(g(P::HighMidPan));
-                ui.set_high_pan(g(P::HighPan));
-
-                ui.set_solo_low(g(P::SoloLow) > 0.5);
-                ui.set_solo_bass(g(P::SoloBass) > 0.5);
-                ui.set_solo_mid(g(P::SoloMid) > 0.5);
-                ui.set_solo_high_mid(g(P::SoloHighMid) > 0.5);
-                ui.set_solo_high(g(P::SoloHigh) > 0.5);
-
-                ui.set_output_gain_text(SharedString::from(format!(
-                    "{:.1} dB",
-                    p.output_gain.raw_target()
-                )));
+                let set_txt = |ui: &EquilibriumUi, cache: &mut SyncCache, i: usize, s: String| {
+                    if changed_str(&mut cache.texts[i], &s) {
+                        let ss = SharedString::from(s.as_str());
+                        match i {
+                            0 => ui.set_low_gain_text(ss),
+                            1 => ui.set_bass_gain_text(ss),
+                            2 => ui.set_mid_gain_text(ss),
+                            3 => ui.set_high_mid_gain_text(ss),
+                            4 => ui.set_high_gain_text(ss),
+                            5 => ui.set_low_width_text(ss),
+                            6 => ui.set_bass_width_text(ss),
+                            7 => ui.set_mid_width_text(ss),
+                            8 => ui.set_high_mid_width_text(ss),
+                            9 => ui.set_high_width_text(ss),
+                            10 => ui.set_low_pan_text(ss),
+                            11 => ui.set_bass_pan_text(ss),
+                            12 => ui.set_mid_pan_text(ss),
+                            13 => ui.set_high_mid_pan_text(ss),
+                            14 => ui.set_high_pan_text(ss),
+                            15 => ui.set_output_gain_text(ss),
+                            16 => ui.set_mono_floor_text(ss),
+                            17 => ui.set_pre_master_target_db_text(ss),
+                            _ => {}
+                        }
+                    }
+                };
+                set_txt(ui, &mut cache, 0, format!("{:.1} dB", p.low_gain.raw_target()));
+                set_txt(ui, &mut cache, 1, format!("{:.1} dB", p.bass_gain.raw_target()));
+                set_txt(ui, &mut cache, 2, format!("{:.1} dB", p.mid_gain.raw_target()));
+                set_txt(ui, &mut cache, 3, format!("{:.1} dB", p.high_mid_gain.raw_target()));
+                set_txt(ui, &mut cache, 4, format!("{:.1} dB", p.high_gain.raw_target()));
+                set_txt(ui, &mut cache, 5, format!("{:.0}%", p.low_width.raw_target()));
+                set_txt(ui, &mut cache, 6, format!("{:.0}%", p.bass_width.raw_target()));
+                set_txt(ui, &mut cache, 7, format!("{:.0}%", p.mid_width.raw_target()));
+                set_txt(ui, &mut cache, 8, format!("{:.0}%", p.high_mid_width.raw_target()));
+                set_txt(ui, &mut cache, 9, format!("{:.0}%", p.high_width.raw_target()));
+                set_txt(ui, &mut cache, 10, format_pan(p.low_pan.raw_target() as f32));
+                set_txt(ui, &mut cache, 11, format_pan(p.bass_pan.raw_target() as f32));
+                set_txt(ui, &mut cache, 12, format_pan(p.mid_pan.raw_target() as f32));
+                set_txt(ui, &mut cache, 13, format_pan(p.high_mid_pan.raw_target() as f32));
+                set_txt(ui, &mut cache, 14, format_pan(p.high_pan.raw_target() as f32));
+                set_txt(ui, &mut cache, 15, format!("{:.1} dB", p.output_gain.raw_target()));
                 let mf = p.mono_floor.raw_target() as f32;
-                ui.set_mono_floor_text(SharedString::from(if mf < 0.5 {
-                    "off".into()
-                } else {
-                    format!("{mf:.0} Hz")
-                }));
-                ui.set_pre_master_target_db_text(SharedString::from(format!(
-                    "{:.0}",
-                    p.pre_master_target_db.raw_target()
-                )));
+                set_txt(
+                    ui,
+                    &mut cache,
+                    16,
+                    if mf < 0.5 {
+                        "off".into()
+                    } else {
+                        format!("{mf:.0} Hz")
+                    },
+                );
+                set_txt(
+                    ui,
+                    &mut cache,
+                    17,
+                    format!("{:.0}", p.pre_master_target_db.raw_target()),
+                );
 
-                ui.set_low_gain_text(SharedString::from(format!(
-                    "{:.1} dB",
-                    p.low_gain.raw_target()
-                )));
-                ui.set_bass_gain_text(SharedString::from(format!(
-                    "{:.1} dB",
-                    p.bass_gain.raw_target()
-                )));
-                ui.set_mid_gain_text(SharedString::from(format!(
-                    "{:.1} dB",
-                    p.mid_gain.raw_target()
-                )));
-                ui.set_high_mid_gain_text(SharedString::from(format!(
-                    "{:.1} dB",
-                    p.high_mid_gain.raw_target()
-                )));
-                ui.set_high_gain_text(SharedString::from(format!(
-                    "{:.1} dB",
-                    p.high_gain.raw_target()
-                )));
+                // --- telemetry ---
+                let mut band_levels = [0.0f32; 5];
+                let mut target_levels = [0.0f32; 5];
+                let mut listen_levels = [0.0f32; 5];
+                for b in 0..5 {
+                    band_levels[b] = shared.band_levels[b].load(Ordering::Acquire);
+                    target_levels[b] = shared.target_levels[b].load(Ordering::Acquire);
+                    listen_levels[b] = shared.listen_levels[b].load(Ordering::Acquire);
+                }
 
-                ui.set_low_width_text(SharedString::from(format!(
-                    "{:.0}%",
-                    p.low_width.raw_target()
-                )));
-                ui.set_bass_width_text(SharedString::from(format!(
-                    "{:.0}%",
-                    p.bass_width.raw_target()
-                )));
-                ui.set_mid_width_text(SharedString::from(format!(
-                    "{:.0}%",
-                    p.mid_width.raw_target()
-                )));
-                ui.set_high_mid_width_text(SharedString::from(format!(
-                    "{:.0}%",
-                    p.high_mid_width.raw_target()
-                )));
-                ui.set_high_width_text(SharedString::from(format!(
-                    "{:.0}%",
-                    p.high_width.raw_target()
-                )));
+                let bn = [
+                    band_bar_norm(&band_levels, 0),
+                    band_bar_norm(&band_levels, 1),
+                    band_bar_norm(&band_levels, 2),
+                    band_bar_norm(&band_levels, 3),
+                    band_bar_norm(&band_levels, 4),
+                ];
+                let tn = [
+                    target_bar_norm(&target_levels, 0),
+                    target_bar_norm(&target_levels, 1),
+                    target_bar_norm(&target_levels, 2),
+                    target_bar_norm(&target_levels, 3),
+                    target_bar_norm(&target_levels, 4),
+                ];
+                let ln = [
+                    band_bar_norm(&listen_levels, 0),
+                    band_bar_norm(&listen_levels, 1),
+                    band_bar_norm(&listen_levels, 2),
+                    band_bar_norm(&listen_levels, 3),
+                    band_bar_norm(&listen_levels, 4),
+                ];
+                for i in 0..5 {
+                    if changed_f32(&mut cache.bands[i], bn[i]) {
+                        match i {
+                            0 => ui.set_band0(bn[i]),
+                            1 => ui.set_band1(bn[i]),
+                            2 => ui.set_band2(bn[i]),
+                            3 => ui.set_band3(bn[i]),
+                            4 => ui.set_band4(bn[i]),
+                            _ => {}
+                        }
+                    }
+                    if changed_f32(&mut cache.tgts[i], tn[i]) {
+                        match i {
+                            0 => ui.set_tgt0(tn[i]),
+                            1 => ui.set_tgt1(tn[i]),
+                            2 => ui.set_tgt2(tn[i]),
+                            3 => ui.set_tgt3(tn[i]),
+                            4 => ui.set_tgt4(tn[i]),
+                            _ => {}
+                        }
+                    }
+                    if changed_f32(&mut cache.lis[i], ln[i]) {
+                        match i {
+                            0 => ui.set_lis0(ln[i]),
+                            1 => ui.set_lis1(ln[i]),
+                            2 => ui.set_lis2(ln[i]),
+                            3 => ui.set_lis3(ln[i]),
+                            4 => ui.set_lis4(ln[i]),
+                            _ => {}
+                        }
+                    }
+                }
 
-                ui.set_low_pan_text(SharedString::from(
-                    format_pan(p.low_pan.raw_target() as f32),
-                ));
-                ui.set_bass_pan_text(SharedString::from(format_pan(
-                    p.bass_pan.raw_target() as f32
-                )));
-                ui.set_mid_pan_text(SharedString::from(
-                    format_pan(p.mid_pan.raw_target() as f32),
-                ));
-                ui.set_high_mid_pan_text(SharedString::from(format_pan(
-                    p.high_mid_pan.raw_target() as f32,
-                )));
-                ui.set_high_pan_text(SharedString::from(format_pan(
-                    p.high_pan.raw_target() as f32
-                )));
+                let peak_l = shared.output_peak_l.load(Ordering::Acquire);
+                let peak_r = shared.output_peak_r.load(Ordering::Acquire);
+                let hold_l = shared.peak_hold_l.load(Ordering::Acquire);
+                let hold_r = shared.peak_hold_r.load(Ordering::Acquire);
+                let corr = shared.phase_correlation.load(Ordering::Acquire);
+                let balance = shared.balance.load(Ordering::Acquire);
 
-                let peak = shared_sync.input_peak.load(Ordering::Relaxed);
-                ui.set_meter_line(SharedString::from(if peak <= -90.0 {
-                    "in: —".to_string()
-                } else {
-                    format!("in: {peak:.1} dB")
-                }));
-                // Gonio path filled later when scope buffer wiring is ready
-                ui.set_gonio_cmds(SharedString::from(""));
-            })
+                let ml = db_to_meter(peak_l);
+                let mr = db_to_meter(peak_r);
+                let phl = db_to_meter(hold_l);
+                let phr = db_to_meter(hold_r);
+                if changed_f32(&mut cache.meter_l, ml) {
+                    ui.set_meter_l(ml);
+                }
+                if changed_f32(&mut cache.meter_r, mr) {
+                    ui.set_meter_r(mr);
+                }
+                if changed_f32(&mut cache.peak_hold_l, phl) {
+                    ui.set_peak_hold_l(phl);
+                }
+                if changed_f32(&mut cache.peak_hold_r, phr) {
+                    ui.set_peak_hold_r(phr);
+                }
+                if changed_f32(&mut cache.corr, corr) {
+                    ui.set_correlation(corr);
+                    ui.set_corr_text(SharedString::from(format!("corr: {corr:.2}")));
+                }
+                if changed_f32(&mut cache.balance, balance) {
+                    ui.set_balance(balance);
+                    ui.set_balance_text(SharedString::from(format!("bal: {balance:.2}")));
+                }
+                let hlq = (hold_l * 10.0).round() / 10.0;
+                let hrq = (hold_r * 10.0).round() / 10.0;
+                if changed_f32(&mut cache.hold_l_q, hlq) {
+                    ui.set_peak_l_text(SharedString::from(fmt_db(hold_l)));
+                }
+                if changed_f32(&mut cache.hold_r_q, hrq) {
+                    ui.set_peak_r_text(SharedString::from(fmt_db(hold_r)));
+                }
+
+                // Auto loud: apply gain offset when measure ends
+                let measuring = shared.auto_loud_measuring.load(Ordering::Acquire);
+                if changed_bool(&mut cache.auto_loud, measuring) {
+                    ui.set_auto_loud_measuring(measuring);
+                    ui.set_auto_loud_label(SharedString::from(if measuring {
+                        "MEASURING..."
+                    } else {
+                        "AUTO LOUD"
+                    }));
+                }
+                // Falling edge handled by checking offset when not measuring
+                if !measuring {
+                    let offset = shared.auto_loud_gain_offset.load(Ordering::Acquire);
+                    if offset.abs() > 0.05 {
+                        shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
+                        let cur = p.output_gain.raw_target() as f32;
+                        let new_db = (cur + offset).clamp(-12.0, 12.0);
+                        let norm = ((new_db + 12.0) / 24.0) as f64;
+                        state.automate(P::OutputGain, norm.clamp(0.0, 1.0));
+                    }
+                }
+
+                // SNAP label + write file on complete
+                let snap_now = shared.snap_active.load(Ordering::Acquire);
+                let vault_path = vault_state
+                    .try_lock()
+                    .ok()
+                    .and_then(|g| g.vault_path.clone());
+                if snap_now {
+                    cache.snap_blink = cache.snap_blink.wrapping_add(1);
+                    let label = if (cache.snap_blink / 8).is_multiple_of(2) {
+                        "ANALYZE..."
+                    } else {
+                        "ANALYZE· · ·"
+                    };
+                    if changed_str(&mut cache.snap_label, label) {
+                        ui.set_snap_label(SharedString::from(label));
+                    }
+                } else if cache.snap_was_active {
+                    if let Some(vp) = vault_path.as_ref().filter(|v| !v.is_empty()) {
+                        let stereo = shared
+                            .snap_stereo_snap
+                            .try_lock()
+                            .ok()
+                            .map(|v| v.clone())
+                            .unwrap_or_else(|| vec![-90.0; 1024]);
+                        let mono = shared
+                            .snap_mono_snap
+                            .try_lock()
+                            .ok()
+                            .map(|v| v.clone())
+                            .unwrap_or_else(|| vec![-90.0; 1024]);
+                        let delta = shared
+                            .snap_delta_snap
+                            .try_lock()
+                            .ok()
+                            .map(|v| v.clone())
+                            .unwrap_or_else(|| vec![-90.0; 1024]);
+                        let sr = shared.sample_rate.load(Ordering::Acquire).max(1.0);
+                        let md = snap_markdown(
+                            &stereo,
+                            &mono,
+                            &delta,
+                            band_levels,
+                            corr,
+                            peak_l,
+                            peak_r,
+                            sr,
+                        );
+                        let fname = snap_filename(vp);
+                        let path = std::path::Path::new(vp).join(&fname);
+                        if std::fs::write(&path, &md).is_ok() {
+                            tracing::info!("SNAP saved {}", path.display());
+                        }
+                    }
+                    cache.snap_blink = 0;
+                    let label = if vault_path.as_ref().is_none_or(|v| v.is_empty()) {
+                        "SET VAULT"
+                    } else {
+                        "SNAP"
+                    };
+                    cache.snap_label.clear();
+                    cache.snap_label.push_str(label);
+                    ui.set_snap_label(SharedString::from(label));
+                }
+                cache.snap_was_active = snap_now;
+
+                ui.set_gonio_path(SharedString::from(gonio_path(&shared, 139.0, 139.0)));
+            }
         },
     )
-    .resizable(false)
-    .into_editor()
+    .resizable(true)
+    .into()
+}
+
+fn gonio_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
+    use lx_analysis::SCOPE_BUFFER_LEN;
+    let (samples, write_pos) = {
+        let pos = shared.scope_write_pos.load(Ordering::Relaxed);
+        let samples = match shared.scope_samples.try_lock() {
+            Ok(v) => v.clone(),
+            Err(_) => return String::new(),
+        };
+        (samples, pos)
+    };
+    if samples.is_empty() {
+        return String::new();
+    }
+    let points_to_take = 512usize.min(SCOPE_BUFFER_LEN);
+    let mut s = String::with_capacity(points_to_take * 24);
+    let cx = w * 0.5;
+    let cy = h * 0.5;
+    let scale = cx.min(cy) * 0.9;
+    let inv_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
+    let n = samples.len();
+    for i in 0..points_to_take {
+        let age = points_to_take - 1 - i;
+        let idx = (write_pos + n - age - 1) % n;
+        let [l, r] = samples[idx];
+        let m = (l + r) * inv_sqrt2;
+        let side = (l - r) * inv_sqrt2;
+        let x = cx - side * scale;
+        let y = cy - m * scale;
+        if i == 0 {
+            s.push_str(&format!("M {x:.1} {y:.1}"));
+        } else {
+            s.push_str(&format!(" L {x:.1} {y:.1}"));
+        }
+    }
+    s
 }

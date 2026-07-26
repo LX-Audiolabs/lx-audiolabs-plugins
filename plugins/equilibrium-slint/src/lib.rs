@@ -20,6 +20,7 @@ use lx_analysis::{SharedState, SnapFFT};
 use lx_dsp::{AutoLoudMeter, Biquad, LR2Crossover};
 
 mod editor;
+mod presets;
 mod process;
 
 pub(crate) const BAND_COUNT: usize = 5;
