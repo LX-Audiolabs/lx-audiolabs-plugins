@@ -10,8 +10,9 @@ use lx_analysis::{relay_hub, SPECTRUM_BINS};
 use lx_dsp::FtzDazGuard;
 
 use crate::{
-    attribute_contributors, gain_to_db, power_sum_named_into, publish_masking, publish_resonance,
-    sensitivity_thresholds, suppress_harmonics, LucentDspState, LucentParams, ResonanceLists,
+    attribute_contributors, gain_to_db, power_sum_named_into, publish_masking, publish_relays,
+    publish_resonance, sensitivity_thresholds, suppress_harmonics, LucentDspState, LucentParams,
+    ResonanceLists,
 };
 
 pub(crate) fn run(
@@ -127,6 +128,8 @@ pub(crate) fn run(
 
                 match mode {
                     0 => {
+                        // Standalone: no relay interaction — UI registry cleared.
+                        publish_relays(state.instance_key, &[]);
                         let peaks =
                             state.peak_tracker
                                 .find_peaks(&frame, &sensitivity, sample_rate);
@@ -183,6 +186,10 @@ pub(crate) fn run(
                         } else {
                             state.relay_scratch.clear();
                         }
+
+                        // Relay feeds for the editor (curves + toggle bar +
+                        // "N relays online") — before the active-mask filter.
+                        publish_relays(state.instance_key, &state.relay_scratch);
 
                         // Group-level resonance: power-sum of Relay tracks (scratch buf).
                         power_sum_named_into(
@@ -267,6 +274,7 @@ pub(crate) fn run(
                         } else {
                             state.relay_scratch.clear();
                         }
+                        publish_relays(state.instance_key, &state.relay_scratch);
 
                         // RELAY mode: group resonance from Relay sum only.
                         power_sum_named_into(

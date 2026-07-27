@@ -1,6 +1,6 @@
 //! Lucent Relay — lx-slint-editor (name, target, connection status).
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use lx_analysis::relay_hub;
 use lx_slint_editor::{LxSlintEditor, PluginContext};
@@ -20,7 +20,22 @@ fn names_model(names: &[String]) -> ModelRc<SharedString> {
     ModelRc::new(VecModel::from(v))
 }
 
+/// Last values pushed to the UI — setters only fire on change so the
+/// names model is not rebuilt every frame.
+struct SyncCache {
+    opts: Vec<String>,
+    idx: Option<i32>,
+    connected: Option<bool>,
+    status: String,
+}
+
 pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
+    let sync_cache = Mutex::new(SyncCache {
+        opts: Vec::new(),
+        idx: None,
+        connected: None,
+        status: String::new(),
+    });
     LxSlintEditor::new(
         params.clone(),
         (WINDOW_W, WINDOW_H),
@@ -42,7 +57,7 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
             });
 
             let p = params.clone();
-            ui.on_target_index_changed(move |idx: i32| {
+            ui.on_target_selected(move |idx: i32| {
                 let idx = idx.max(0) as usize;
                 // 0 = broadcast (empty target); 1.. = consumer from last options
                 // Options are rebuilt in sync; store by index into current hub list.
@@ -100,9 +115,14 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                     .map(|s| s.clone())
                     .unwrap_or_default();
 
+                let mut cache = sync_cache.lock().unwrap();
+
                 let mut opts = vec!["(broadcast)".to_string()];
                 opts.extend(lucent_list.iter().cloned());
-                ui.set_target_names(names_model(&opts));
+                if cache.opts != opts {
+                    ui.set_target_names(names_model(&opts));
+                    cache.opts = opts;
+                }
 
                 let idx = if current.is_empty() {
                     0
@@ -113,7 +133,10 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                         .map(|i| i + 1)
                         .unwrap_or(0)
                 };
-                ui.set_target_index(idx as i32);
+                if cache.idx != Some(idx as i32) {
+                    ui.set_target_index(idx as i32);
+                    cache.idx = Some(idx as i32);
+                }
 
                 let connected = relay_hub()
                     .map(|hub| {
@@ -124,14 +147,21 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                         }
                     })
                     .unwrap_or(false);
-                ui.set_connected(connected);
-                ui.set_status_text(SharedString::from(if connected {
+                if cache.connected != Some(connected) {
+                    ui.set_connected(connected);
+                    cache.connected = Some(connected);
+                }
+                let status = if connected {
                     "connected"
                 } else if lucent_list.is_empty() {
                     "no Lucent online"
                 } else {
                     "select target"
-                }));
+                };
+                if cache.status != status {
+                    ui.set_status_text(SharedString::from(status));
+                    cache.status = status.to_string();
+                }
             }
         },
     )

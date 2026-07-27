@@ -17,10 +17,6 @@ pub(crate) const FFT_SIZE: usize = 2048;
 /// consumer table. Well under `STALE_MS` (500), so heartbeats never go stale;
 /// target-param changes bypass the interval and resolve immediately.
 const RESOLVE_INTERVAL_MS: u64 = 250;
-#[allow(dead_code)]
-const WINDOW_W: u32 = 260;
-#[allow(dead_code)]
-const WINDOW_H: u32 = 160;
 
 // ─── Parameters ──────────────────────────────────────────────────────────────
 // Truce requires at least one Param field. `process()` always copies input to
@@ -162,8 +158,6 @@ pub struct LucentRelayDspState {
     pub(crate) last_resolve_ms: Option<u64>,
     /// Reused consumer-list buffer for `read_consumers_into` (no per-resolve alloc).
     pub(crate) consumers_scratch: Vec<String>,
-    #[allow(dead_code)]
-    pub(crate) target_buf: [u8; lx_analysis::shm::MAX_NAME_LEN],
     pub(crate) liveness: Option<Arc<std::sync::atomic::AtomicBool>>,
     pub(crate) instance_key: usize,
 }
@@ -204,7 +198,6 @@ impl Default for LucentRelayDspState {
             resolved_target: String::new(),
             last_resolve_ms: None,
             consumers_scratch: Vec::new(),
-            target_buf: [0u8; lx_analysis::shm::MAX_NAME_LEN],
             liveness: None,
             instance_key: 0,
         }

@@ -1,6 +1,5 @@
-import { ComboBox } from "std-widgets.slint";
 import {
-    Lx, LxShellHeader, LxShellBody, LxShellMain, LxLineEdit,
+    Lx, LxShellHeader, LxShellBody, LxShellMain, LxLineEdit, LxSelectTrigger,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 
 export component LucentRelayUi inherits Window {
@@ -12,13 +11,13 @@ export component LucentRelayUi inherits Window {
     in-out property <string> relay_name: "";
     callback relay_name_changed(string);
 
-    in-out property <int> target_index: 0;
+    in property <int> target_index: 0;
     in property <[string]> target_names: ["(broadcast)"];
-    callback target_index_changed(int);
+    callback target_selected(int);
 
     in property <string> status_text: "—";
     in property <bool> connected: false;
-    in property <string> version: "0.3.6";
+    in property <string> version: "1.0.0";
 
     VerticalLayout {
         padding: 0;
@@ -32,11 +31,11 @@ export component LucentRelayUi inherits Window {
         LxShellBody {
             LxShellMain {
                 VerticalLayout {
-                    padding: 10px;
-                    spacing: 8px;
+                    padding: Lx.pad-md;
+                    spacing: Lx.gap-md;
 
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: Lx.gap-sm;
                         alignment: center;
                         Text {
                             text: "Name";
@@ -54,7 +53,7 @@ export component LucentRelayUi inherits Window {
                     }
 
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: Lx.gap-sm;
                         alignment: center;
                         Text {
                             text: "Target";
@@ -63,17 +62,21 @@ export component LucentRelayUi inherits Window {
                             vertical-alignment: center;
                             min-width: 48px;
                         }
-                        ComboBox {
-                            model: root.target_names;
-                            current-index <=> root.target_index;
+                        Rectangle {
                             horizontal-stretch: 1;
-                            min-height: 24px;
-                            selected => { root.target_index_changed(self.current-index); }
+                            height: Lx.button-h;
+                            background: transparent;
+                            target_dd := LxSelectTrigger {
+                                trigger-width: parent.width;
+                                text: root.target_index >= 0 && root.target_index < root.target_names.length
+                                    ? root.target_names[root.target_index] : "(broadcast)";
+                                clicked => { target_popup.show(); }
+                            }
                         }
                     }
 
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: Lx.gap-sm;
                         alignment: center;
                         Rectangle {
                             width: 8px;
@@ -86,6 +89,56 @@ export component LucentRelayUi inherits Window {
                             color: Lx.text-secondary;
                             font-size: Lx.font-sm;
                             vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Target list popup — anchored under the dropdown trigger (Aether pattern) ──
+    target_popup := PopupWindow {
+        width: max(146px, target_dd.width);
+        x: target_dd.absolute-position.x;
+        y: target_dd.absolute-position.y + target_dd.height + 2px;
+        height: min(160px, 8px + root.target_names.length * 22px);
+
+        Rectangle {
+            background: #ffffff;
+            border-radius: Lx.radius-sm;
+            border-width: 1px;
+            border-color: #8c8c8c;
+            clip: true;
+
+            Flickable {
+                width: 100%;
+                height: 100%;
+                viewport-height: root.target_names.length * 22px;
+
+                VerticalLayout {
+                    alignment: start;
+                    spacing: 0px;
+
+                    for name[i] in root.target_names: Rectangle {
+                        height: 22px;
+                        vertical-stretch: 0;
+                        background: row_ta.has-hover ? #f0f0f0 : #ffffff;
+
+                        HorizontalLayout {
+                            padding-left: Lx.pad-sm;
+                            Text {
+                                text: name;
+                                font-size: Lx.font-md;
+                                color: #282828;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        row_ta := TouchArea {
+                            clicked => {
+                                root.target_selected(i);
+                                target_popup.close();
+                            }
                         }
                     }
                 }

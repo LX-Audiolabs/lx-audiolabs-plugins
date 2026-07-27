@@ -139,6 +139,69 @@ pub fn remove_masking(key: usize) {
     }
 }
 
+/// One relay feed snapshot for the editor: SHM publisher slot, display name,
+/// fixed-size dB bins (no `Vec` on the publish path).
+#[derive(Clone, Debug)]
+pub struct RelaySlot {
+    pub slot: u8,
+    pub name: String,
+    pub bins: [f32; SPECTRUM_BINS],
+}
+
+/// Max relay feeds shown in the UI (matches the old relay bar cap).
+pub(crate) const MAX_RELAY_SLOTS: usize = 8;
+
+/// Same instance-keyed pattern as `ResonanceRegistry`, for the live relay
+/// spectra the editor draws as overlay curves + toggle bar.
+type RelayRegistry = Arc<Mutex<HashMap<usize, Vec<RelaySlot>>>>;
+
+fn relay_registry() -> &'static RelayRegistry {
+    static REG: OnceLock<RelayRegistry> = OnceLock::new();
+    REG.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+
+/// Publish the relays read this FFT hop (before the active-mask filter — the
+/// UI shows/toggles all discovered relays). In-place update keeps String/Vec
+/// storage hot across hops: no steady-state alloc on the audio thread.
+pub fn publish_relays(key: usize, feeds: &[(u8, String, Vec<f32>)]) {
+    if let Ok(mut m) = relay_registry().try_lock() {
+        let slots = m.entry(key).or_default();
+        let n = feeds.len().min(MAX_RELAY_SLOTS);
+        for (i, (slot, name, bins)) in feeds.iter().take(n).enumerate() {
+            let nb = bins.len().min(SPECTRUM_BINS);
+            if let Some(s) = slots.get_mut(i) {
+                s.slot = *slot;
+                s.name.clear();
+                s.name.push_str(name);
+                s.bins[..nb].copy_from_slice(&bins[..nb]);
+            } else {
+                let mut b = [-90.0f32; SPECTRUM_BINS];
+                b[..nb].copy_from_slice(&bins[..nb]);
+                slots.push(RelaySlot {
+                    slot: *slot,
+                    name: name.clone(),
+                    bins: b,
+                });
+            }
+        }
+        slots.truncate(n);
+    }
+}
+
+pub fn read_relays(key: usize) -> Vec<RelaySlot> {
+    relay_registry()
+        .try_lock()
+        .ok()
+        .and_then(|m| m.get(&key).cloned())
+        .unwrap_or_default()
+}
+
+pub fn remove_relays(key: usize) {
+    if let Ok(mut m) = relay_registry().try_lock() {
+        m.remove(&key);
+    }
+}
+
 /// Per-bin power-sum (linear domain) of named dB spectra, into `out` (no alloc).
 /// Models how tracks combine on a bus — e.g. two -6dB at same bin → ~-3dB.
 /// `mask` filters relay slots (0 = all active).
@@ -149,13 +212,13 @@ pub(crate) fn power_sum_named_into(
 ) {
     let n = out.len().min(SPECTRUM_BINS);
     out[..n].fill(-90.0);
-    for j in 0..n {
+    for (j, o) in out.iter_mut().enumerate().take(n) {
         let sum_lin: f32 = relay_named
             .iter()
             .filter(|(slot, _, _)| mask == 0 || mask & (1u32 << slot) != 0)
             .map(|(_, _, s)| 10f32.powf(s.get(j).copied().unwrap_or(-90.0) / 10.0))
             .sum();
-        out[j] = if sum_lin < 1e-9 {
+        *o = if sum_lin < 1e-9 {
             -90.0
         } else {
             10.0 * sum_lin.log10()
@@ -192,11 +255,13 @@ fn suppress_harmonics(spectrum: &[f32], peaks: Vec<(usize, f32)>) -> Vec<(usize,
 
 mod editor;
 mod process;
+mod relay_state;
 
+// Frozen vault window (ui-layout-spec): 990 × 660
 #[allow(dead_code)]
 const WINDOW_W: u32 = 990;
 #[allow(dead_code)]
-const WINDOW_H: u32 = 550;
+const WINDOW_H: u32 = 660;
 
 // ─── Sensitivity ────────────────────────────────────────────────
 
@@ -881,6 +946,7 @@ impl Drop for LucentDspState {
         }
         remove_resonance(self.instance_key);
         remove_masking(self.instance_key);
+        remove_relays(self.instance_key);
     }
 }
 

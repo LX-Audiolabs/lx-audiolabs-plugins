@@ -1,17 +1,26 @@
+import { Palette } from "std-widgets.slint";
 import {
-    Lx, LxShellHeader, LxShellBody, LxShellMain, LxShellRight, LxShellLeft,
-    LxKnob, LxToggleBtn, LxButton, LxLineEdit, LxSpectrum, LxSegmentedButton, LxPanel, LxSection,
-    LxStereoMeter,
+    Lx, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight,
+    LxSection, LxKnob, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit, LxSegmentedButton,
+    LxSpectrum, LxGoniometer, LxLedPeakMeter, LxCorrelation,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
+import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
-/// Lucent — spectrum analyser UI (Slint-native, not a Vizia port).
+/// Relay overlay curve: Rust-built path + palette color (cycles by active idx).
+export struct RelayCurve { cmds: string, col: color }
+/// Resonance marker: Rust-built path (line + diamond) + per-marker alpha.
+export struct ResMarker { cmds: string, a: float }
+
+/// Lucent — FFT spectrum analyser / masking. Frozen vault layout 990×660.
 export component LucentUi inherits Window {
-    preferred-width: 990px;
-    preferred-height: 550px;
-    min-width: 800px;
-    min-height: 480px;
+    init => { Palette.color-scheme = ColorScheme.dark; }
+
     title: "Lucent";
     background: Lx.window;
+    preferred-width: Lx.window-w;
+    preferred-height: Lx.window-h;
+    min-width: Lx.window-w;
+    min-height: Lx.window-h;
 
     in property <string> version: "1.0.0";
 
@@ -19,8 +28,8 @@ export component LucentUi inherits Window {
     in-out property <string> display_name: "";
     callback display_name_changed(string);
 
-    // Analyze
-    in-out property <float> analyze_mode: 0.0; // Own / Relay / Both
+    // Analyze (0 = own, 1 = hybrid/own+relays, 2 = relay-only)
+    in-out property <float> analyze_mode: 0.0;
     callback analyze_mode_changed(float);
     in-out property <bool> resonance_active: true;
     callback resonance_active_changed(bool);
@@ -32,224 +41,392 @@ export component LucentUi inherits Window {
     in property <string> sensitivity_text: "50%";
     callback sensitivity_changed(float);
 
-    // SPAN-like display: 1/3-oct smooth (default off) + session SNAP
+    // SPAN-like display: 1/3-oct smooth toggle + session SNAP
     in-out property <bool> spectrum_smooth: false;
     callback spectrum_smooth_changed(bool);
     callback snap_clicked();
+    in property <string> snap_label: "SNAP";
     in property <string> snap_status: "";
+    callback reset_peaks();
+
+    // Relay bar + curves (fed from the process-published registry)
+    in property <[string]> relay_names: [];
+    in property <[bool]> relay_actives: [];
+    callback relay_toggled(float);
+    in property <[RelayCurve]> relay_curves: [];
 
     // Viz / telemetry
     in property <string> spectrum_cmds: "";
     in property <string> mask_cmds: "";
-    in property <string> resonance_line: "—";
-    in property <string> masking_line: "—";
+    in property <[ResMarker]> res_markers: [];
+    in property <string> resonance_text: "No resonances detected";
+    in property <string> masking_text: "No masking detected";
     in property <string> status_line: "";
-    in property <string> peak_text: "—";
-    in property <float> peak_l: 0.0;
-    in property <float> peak_r: 0.0;
-    in property <int> relay_count: 0;
-    // SPAN range labels (−18 top … −78 bottom)
-    in property <string> db_top: "-18 dB";
-    in property <string> db_mid: "-48";
-    in property <string> db_bot: "-78";
+    in property <float> meter_l: 0.0;
+    in property <float> meter_r: 0.0;
+    in property <float> hold_l: 0.0;
+    in property <float> hold_r: 0.0;
+    in property <string> peak_l_text: "";
+    in property <string> peak_r_text: "";
+    in property <float> balance: 0.0;
+    in property <float> correlation: 0.0;
+    in property <string> corr_text: "";
+    in property <string> gonio_path: "";
+
+    // Vault setup overlay (draft path pattern — see lx-dialogs.slint)
+    in-out property <string> vault_path: "";
+    in-out property <bool> vault_setup_open: false;
+    in-out property <string> vault_setup_path: "";
+    callback vault_path_changed(string);
+    callback vault_paste_requested();
+    in property <string> vault_paste_status: "";
 
     VerticalLayout {
-        padding: 0;
         spacing: 0;
 
+        // ── HEADER ───────────────────────────────────────────────────────
         LxShellHeader {
             plugin-name: "Lucent";
             version: root.version;
             status-text: root.status_line;
 
             HorizontalLayout {
-                spacing: 6px;
+                spacing: 4px;
                 alignment: center;
-                Text {
-                    text: "Name";
-                    color: Lx.text-muted;
-                    font-size: Lx.font-xs;
-                    vertical-alignment: center;
-                }
+
                 LxLineEdit {
                     text <=> root.display_name;
                     light: true;
-                    field-width: 160px;
-                    accepted => { root.display_name_changed(self.text); }
-                    committed => { root.display_name_changed(self.text); }
+                    field-width: 120px;
+                    accepted(t) => { root.display_name_changed(t); }
+                    committed(t) => { root.display_name_changed(t); }
+                }
+                LxSegmentedButton {
+                    choices: ["Own", "Both", "Relay"];
+                    index <=> root.analyze_mode;
+                    changed(v) => { root.analyze_mode_changed(v); }
                 }
                 LxToggleBtn {
                     label: "SMOOTH";
                     active <=> root.spectrum_smooth;
-                    toggled => { root.spectrum_smooth_changed(self.active); }
-                }
-                LxButton {
-                    text: "SNAP";
-                    clicked => { root.snap_clicked(); }
+                    toggled(v) => { root.spectrum_smooth_changed(v); }
                 }
                 LxToggleBtn {
                     label: "BYPASS";
                     danger: true;
                     active <=> root.bypass_active;
-                    toggled => { root.bypass_active_changed(self.active); }
+                    toggled(v) => { root.bypass_active_changed(v); }
+                }
+                LxDangerBtn {
+                    label: "RESET";
+                    clicked => { root.reset_peaks(); }
                 }
             }
         }
 
+        // ── BODY ─────────────────────────────────────────────────────────
         LxShellBody {
-            // Left: detectors summary
+            // ── LEFT BAR: snapshot/vault + relay toggles ──────────────
             LxShellLeft {
-                VerticalLayout {
-                    padding: Lx.pad-md;
-                    spacing: Lx.gap-md;
+                LxSection {
+                    title: "SNAPSHOT";
+                    vertical-stretch: 0;
 
-                    LxSection {
-                        title: "Detectors";
-                        VerticalLayout {
-                            spacing: 8px;
-                            LxToggleBtn {
-                                label: "Resonance";
-                                active <=> root.resonance_active;
-                                toggled => { root.resonance_active_changed(self.active); }
-                            }
-                            Text {
-                                text: root.resonance_line;
-                                color: Lx.text-secondary;
-                                font-size: Lx.font-xs;
-                                wrap: word-wrap;
-                            }
-                            LxToggleBtn {
-                                label: "Masking";
-                                active <=> root.masking_active;
-                                toggled => { root.masking_active_changed(self.active); }
-                            }
-                            Text {
-                                text: root.masking_line;
-                                color: Lx.text-secondary;
-                                font-size: Lx.font-xs;
-                                wrap: word-wrap;
-                            }
+                    LxButton {
+                        text: root.snap_label;
+                        primary: true;
+                        clicked => { root.snap_clicked(); }
+                    }
+                    LxButton {
+                        text: "VAULT SETUP";
+                        clicked => {
+                            root.vault_setup_path = root.vault_path;
+                            root.vault_setup_open = true;
                         }
                     }
-
-                    LxSection {
-                        title: "Network";
-                        Text {
-                            text: root.relay_count == 0
-                                ? "No relays online"
-                                : root.relay_count == 1
-                                    ? "1 relay online"
-                                    : root.relay_count + " relays online";
-                            color: root.relay_count > 0 ? Lx.green : Lx.text-muted;
-                            font-size: Lx.font-sm;
-                        }
+                    if root.snap_status != "": Text {
+                        text: root.snap_status;
+                        color: Lx.amber;
+                        font-size: Lx.font-xs;
+                        wrap: word-wrap;
                     }
                 }
+
+                LxSection {
+                    title: "RELAYS";
+                    vertical-stretch: 0;
+
+                    Text {
+                        text: root.relay_names.length == 0
+                            ? "No relays online"
+                            : root.relay_names.length == 1
+                                ? "1 relay online"
+                                : root.relay_names.length + " relays online";
+                        color: root.relay_names.length > 0 ? Lx.green : Lx.text-muted;
+                        font-size: Lx.font-sm;
+                    }
+                    if root.relay_names.length == 0: Text {
+                        text: "— send a relay from another LX plugin —";
+                        color: Lx.text-dim;
+                        font-size: Lx.font-xs;
+                        wrap: word-wrap;
+                    }
+                    for name[idx] in root.relay_names: LxToggleBtn {
+                        small: true;
+                        label: name;
+                        active: root.relay_actives[idx];
+                        toggled(v) => { root.relay_toggled(idx); }
+                    }
+                }
+
+                Rectangle { vertical-stretch: 1; background: transparent; }
             }
 
-            // Main: spectrum stage
+            // ── MAIN: spectrum pit + analyzer panels ──────────────────
             LxShellMain {
-                VerticalLayout {
-                    padding: Lx.pad-md;
-                    spacing: Lx.gap-sm;
+                // Spectrum pit: own curve + fill, relay curves, masking bars,
+                // resonance markers (all path-driven from Rust).
+                LxSection {
+                    show-title: false;
+                    vertical-stretch: 1;
 
                     Rectangle {
-                        vertical-stretch: 1;
-                        horizontal-stretch: 1;
-                        background: Lx.panel;
-                        border-radius: Lx.radius-md;
+                        background: Lx.void;
+                        border-radius: Lx.radius-sm;
                         clip: true;
 
                         LxSpectrum {
                             width: 100%;
                             height: 100%;
                             commands: root.spectrum_cmds;
-                            path-w: 900;
-                            path-h: 400;
-                            db-top: root.db_top;
-                            db-mid: root.db_mid;
-                            db-bot: root.db_bot;
+                            path-w: 620;
+                            path-h: 300;
+                            fill: @linear-gradient(180deg, #19e6b344 0%, #19e6b300 100%);
+                            stroke-color: #19e6b3;
+                            stroke-width: 1.5px;
+                            db-top: "-18 dB";
+                            db-mid: "-48";
+                            db-bot: "-78";
+                            freq-lo: "20 Hz";
+                            freq-mid: "1 kHz";
+                            freq-hi: "20 kHz";
                         }
 
-                        // Masking overlay path (stroke-only style via second spectrum tint)
-                        if root.mask_cmds != "": Path {
-                            x: 0; y: 0;
+                        for r in root.relay_curves: Path {
+                            x: 0;
+                            y: 0;
                             width: parent.width;
                             height: parent.height;
-                            viewbox-x: 0; viewbox-y: 0;
-                            viewbox-width: 900; viewbox-height: 400;
+                            viewbox-x: 0;
+                            viewbox-y: 0;
+                            viewbox-width: 620;
+                            viewbox-height: 300;
+                            commands: r.cmds;
+                            stroke: r.col;
+                            stroke-width: 1px;
+                            fill: transparent;
+                        }
+
+                        if root.mask_cmds != "": Path {
+                            x: 0;
+                            y: 0;
+                            width: parent.width;
+                            height: parent.height;
+                            viewbox-x: 0;
+                            viewbox-y: 0;
+                            viewbox-width: 620;
+                            viewbox-height: 300;
                             commands: root.mask_cmds;
                             fill: #e0454533;
                             stroke: Lx.crimson;
                             stroke-width: 1px;
                         }
+
+                        for m in root.res_markers: Path {
+                            x: 0;
+                            y: 0;
+                            width: parent.width;
+                            height: parent.height;
+                            viewbox-x: 0;
+                            viewbox-y: 0;
+                            viewbox-width: 620;
+                            viewbox-height: 300;
+                            commands: m.cmds;
+                            stroke: Lx.amber.with-alpha(m.a);
+                            stroke-width: 1px;
+                            fill: Lx.amber.with-alpha(m.a);
+                        }
+                    }
+                }
+
+                // Analyzer panels: top-3 lines, gated by their display toggles.
+                HorizontalLayout {
+                    spacing: Lx.gap-sm;
+                    vertical-stretch: 0;
+
+                    LxSection {
+                        show-title: false;
+                        horizontal-stretch: 1;
+                        vertical-stretch: 0;
+
+                        HorizontalLayout {
+                            spacing: Lx.gap-sm;
+                            VerticalLayout {
+                                spacing: 2px;
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: "RESONANCE";
+                                    font-size: Lx.font-xs;
+                                    font-weight: 700;
+                                    color: Lx.amber;
+                                }
+                                Text {
+                                    text: root.resonance_text;
+                                    font-size: Lx.font-sm;
+                                    color: Lx.text-secondary;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            LxToggleBtn {
+                                label: root.resonance_active ? "ON" : "OFF";
+                                active <=> root.resonance_active;
+                                toggled(v) => { root.resonance_active_changed(v); }
+                            }
+                        }
                     }
 
+                    LxSection {
+                        show-title: false;
+                        horizontal-stretch: 1;
+                        vertical-stretch: 0;
+
+                        HorizontalLayout {
+                            spacing: Lx.gap-sm;
+                            VerticalLayout {
+                                spacing: 2px;
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: "MASKING";
+                                    font-size: Lx.font-xs;
+                                    font-weight: 700;
+                                    color: Lx.crimson;
+                                }
+                                Text {
+                                    text: root.masking_text;
+                                    font-size: Lx.font-sm;
+                                    color: Lx.text-secondary;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            LxToggleBtn {
+                                danger: true;
+                                label: root.masking_active ? "ON" : "OFF";
+                                active <=> root.masking_active;
+                                toggled(v) => { root.masking_active_changed(v); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── RIGHT BAR: sensitivity + meters + gonio ───────────────
+            LxShellRight {
+                title: "";
+
+                LxKnob {
+                    label: "SENSITIVITY";
+                    value <=> root.sensitivity;
+                    value-text: root.sensitivity_text;
+                    changed(v) => { root.sensitivity_changed(v); }
+                }
+
+                Text {
+                    text: "OUTPUT PEAK";
+                    font-size: Lx.font-xs;
+                    color: Lx.text-muted;
+                    vertical-stretch: 0;
+                }
+
+                LxLedPeakMeter {
+                    height: 160px;
+                    vertical-stretch: 0;
+                    level-l: root.meter_l;
+                    level-r: root.meter_r;
+                    hold-l: root.hold_l;
+                    hold-r: root.hold_r;
+                    balance: root.balance;
+                    reset-peaks => { root.reset_peaks(); }
+                }
+
+                // Peak-hold readouts — click resets (DAW-style).
+                TouchArea {
+                    vertical-stretch: 0;
+                    clicked => { root.reset_peaks(); }
                     HorizontalLayout {
-                        spacing: 12px;
+                        spacing: 4px;
                         Text {
-                            text: "Peak " + root.peak_text;
-                            color: Lx.text-secondary;
+                            text: root.peak_l_text != "" ? root.peak_l_text : "L";
                             font-size: Lx.font-sm;
-                            vertical-alignment: center;
-                        }
-                        if root.snap_status != "": Text {
-                            text: root.snap_status;
                             color: Lx.amber;
-                            font-size: Lx.font-xs;
-                            vertical-alignment: center;
+                            horizontal-stretch: 1;
                         }
                         Text {
-                            text: "20 Hz — 20 kHz  ·  −78…−18 dB";
-                            color: Lx.text-dim;
+                            text: "dB";
                             font-size: Lx.font-xs;
-                            vertical-alignment: center;
+                            color: Lx.text-muted;
+                        }
+                        Text {
+                            text: root.peak_r_text != "" ? root.peak_r_text : "R";
+                            font-size: Lx.font-sm;
+                            color: Lx.amber;
                             horizontal-stretch: 1;
                             horizontal-alignment: right;
                         }
                     }
                 }
-            }
 
-            // Right: mode + sensitivity + meters
-            LxShellRight {
-                VerticalLayout {
-                    padding: Lx.pad-md;
-                    spacing: Lx.gap-lg;
-                    alignment: start;
+                LxCorrelation {
+                    correlation: root.correlation;
+                    text: root.corr_text;
+                    vertical-stretch: 0;
+                }
 
-                    Text {
-                        text: "SOURCE";
-                        color: Lx.amber;
-                        font-size: Lx.font-xs;
-                        font-weight: 700;
-                    }
-                    LxSegmentedButton {
-                        choices: ["Own", "Relay", "Both"];
-                        index <=> root.analyze_mode;
-                        changed => { root.analyze_mode_changed(self.index); }
-                    }
+                // Spacer pushes the goniometer to the bottom (Vizia parity).
+                Rectangle { vertical-stretch: 1; background: transparent; }
 
-                    LxKnob {
-                        label: "Sensitivity";
-                        value <=> root.sensitivity;
-                        value-text: root.sensitivity_text;
-                        changed => { root.sensitivity_changed(self.value); }
-                    }
+                Text {
+                    text: "GONIOMETER";
+                    font-size: Lx.font-xs;
+                    color: Lx.text-muted;
+                    vertical-stretch: 0;
+                }
 
-                    Text {
-                        text: "LEVEL";
-                        color: Lx.amber;
-                        font-size: Lx.font-xs;
-                        font-weight: 700;
-                    }
-                    LxStereoMeter {
-                        level-l: root.peak_l;
-                        level-r: root.peak_r;
-                        min-height: 160px;
-                    }
+                LxGoniometer {
+                    height: Lx.gonio-h;
+                    vertical-stretch: 0;
+                    commands: root.gonio_path;
+                    path-w: 139;
+                    path-h: 139;
                 }
             }
+        }
+    }
+
+    // Full-window overlay last in tree → above Path layers.
+    vault_setup := LxVaultSetupOverlay {
+        x: 0;
+        y: 0;
+        width: 100%;
+        height: 100%;
+        open <=> root.vault_setup_open;
+        // Two-way draft only — seed on SETUP click; SAVE commits to vault_path.
+        path <=> root.vault_setup_path;
+        plugin-label: "Lucent";
+        paste-status: root.vault_paste_status;
+        paste-requested => { root.vault_paste_requested(); }
+        saved(p) => {
+            root.vault_path = p;
+            root.vault_path_changed(p);
         }
     }
 }
