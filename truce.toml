@@ -32,13 +32,13 @@ vst3_subcategory = "Fx|Mastering"
 description = "Aurum Slint — all-in-one mastering (M/S EQ, comp, sat, limiters)"
 
 [[plugin]]
-name = "Equilibrium (Slint)"
-bundle_id = "equilibrium-slint"
-crate = "equilibrium-slint"
+name = "Equilibrium"
+bundle_id = "equilibrium"
+crate = "equilibrium"
 category = "effect"
-fourcc = "EqSl"
-vst3_subcategory = "Fx|EQ"
-description = "Equilibrium Slint — pre-master spectral balancer (5-band crossover)"
+fourcc = "Eqlb"
+vst3_subcategory = "Equalizer"
+description = "Pre-master spectral balancer with 5-band crossover and per-band stereo control"
 
 [[plugin]]
 name = "Aether"

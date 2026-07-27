@@ -9,10 +9,10 @@ crates/                 # libraries
   lx-slint-build/       # @truce widgets + font (build)
   lx-ui-slint/          # design system
   lx-dsp/ lx-analysis/ lx-vault/ lx-shm/
-plugins/                # products (truce-slint software renderer)
+plugins/                # products (truce / lx-slint-editor)
   lucent-relay-slint/ lucent-slint/
-  aurum-slint/ equilibrium-slint/
-  aether/ meridian/
+  aurum-slint/
+  aether/ meridian/ equilibrium/
 ```
 Runtime GUI: **truce-slint** (software + wgpu present). Future GPU path if needed: Slint `renderer-skia`, not a local FemtoVG bridge.
 
@@ -42,10 +42,12 @@ import {
 
 - `plugins/aether` — Aether EQ + crossfeed
 - `plugins/meridian` — Meridian channel strip
+- `plugins/equilibrium` — Equilibrium pre-master spectral balancer
 
 ## Build
 
 ```powershell
 cargo build -p aether
 cargo build -p meridian
+cargo build -p equilibrium
 ```

@@ -1125,8 +1125,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "equilibrium-slint"
-version = "1.6.11"
+name = "equilibrium"
+version = "1.7.0"
 dependencies = [
  "clap-sys",
  "lx-analysis",

@@ -12,7 +12,7 @@ members = [
     "plugins/lucent-relay-slint",
     "plugins/lucent-slint",
     "plugins/aurum-slint",
-    "plugins/equilibrium-slint",
+    "plugins/equilibrium",
 ]
 resolver = "3"
 

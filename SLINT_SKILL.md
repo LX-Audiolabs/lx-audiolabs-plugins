@@ -68,7 +68,7 @@ lx-audiolabs-slint/
 │   ├── lucent-slint/       ← Spectrum analyzer
 │   ├── meridian/           ← Channel strip
 │   ├── aether/             ← EQ + crossfeed
-│   ├── equilibrium-slint/  ← Spectral balancer
+│   ├── equilibrium/        ← Spectral balancer (canonical; Vizia retired)
 │   ├── aurum-slint/        ← Saturation
 │   └── lucent-relay-slint/ ← Relay sender
 └── Cargo.toml              ← slint-baseview git-dep, baseview next
