@@ -12,7 +12,7 @@ import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.s
 //   live fill     → Lx.amber  (Vizia rgb 1.0, 0.45, 0.1)
 //   target band   → white wash + white center line
 //   listen range  → soft red wash (min…max excursion)
-//   listen tol    → dark violet corridor around listen mean
+//   listen tol    → violet #7F00FF corridor around listen mean
 //   listen line   → stronger red
 //
 // Norm 0..1 = display window −20…+22 dB around band mean (editor).
@@ -32,7 +32,8 @@ component BandBar inherits Rectangle {
     horizontal-stretch: 1;
     vertical-stretch: 1;
     min-width: 0px;
-    min-height: 100px;
+    // Keep bars readable but leave air for Gain/Width/Pan (was 100 → steal ~20)
+    min-height: 80px;
     background: Lx.void;
     border-radius: Lx.radius-sm;
     border-width: 1px;
@@ -85,12 +86,12 @@ component BandBar inherits Rectangle {
         height: parent.height * max(root.ls-hi - root.ls-lo, 0.02);
         background: #ff4d4d1f;
     }
-    // Listen tolerance corridor (dark violet wash) — distinct from target white + red range
+    // Listen tolerance corridor — brand-adjacent violet #7F00FF (wash alpha ~22%)
     if root.show-listen: Rectangle {
         width: 100%;
         y: parent.height * (1.0 - root.l-hi);
         height: parent.height * max(root.l-hi - root.l-lo, 0.02);
-        background: #4a208033;
+        background: #7F00FF38;
     }
     // Listen mean line (red ~70%)
     if root.show-listen: Rectangle {
@@ -139,7 +140,7 @@ component EqBandSection inherits LxSection {
     min-width: 0px;
 
     VerticalLayout {
-        spacing: 4px;
+        spacing: 6px;
         vertical-stretch: 1;
         horizontal-stretch: 1;
         min-width: 0px;
@@ -152,6 +153,7 @@ component EqBandSection inherits LxSection {
             vertical-stretch: 0;
         }
 
+        // Stretch bar; min 80 (was 100) + denser slider stack steals ~20–28px
         BandBar {
             level: root.level;
             target: root.target;
@@ -166,34 +168,44 @@ component EqBandSection inherits LxSection {
             horizontal-stretch: 1;
         }
 
-        LxSlider {
-            compact: true;
-            label: "Gain";
-            value <=> root.gain;
-            value-text: root.gain-text;
-            default-value: 0.5;
-            changed(v) => { root.gain_changed(v); }
-        }
-        LxSlider {
-            compact: true;
-            label: "Width";
-            value <=> root.width-val;
-            value-text: root.width-text;
-            default-value: 0.666;
-            changed(v) => { root.width_changed(v); }
-        }
-        LxSlider {
-            compact: true;
-            label: "Pan";
-            value <=> root.pan;
-            value-text: root.pan-text;
-            default-value: 0.5;
-            changed(v) => { root.pan_changed(v); }
+        // Gain / Width / Pan — more air between tracks (was crushed at 4px column gap)
+        VerticalLayout {
+            spacing: 10px;
+            vertical-stretch: 0;
+            horizontal-stretch: 1;
+            padding-top: 6px;
+            padding-bottom: 4px;
+
+            LxSlider {
+                compact: true;
+                label: "Gain";
+                value <=> root.gain;
+                value-text: root.gain-text;
+                default-value: 0.5;
+                changed(v) => { root.gain_changed(v); }
+            }
+            LxSlider {
+                compact: true;
+                label: "Width";
+                value <=> root.width-val;
+                value-text: root.width-text;
+                default-value: 0.666;
+                changed(v) => { root.width_changed(v); }
+            }
+            LxSlider {
+                compact: true;
+                label: "Pan";
+                value <=> root.pan;
+                value-text: root.pan-text;
+                default-value: 0.5;
+                changed(v) => { root.pan_changed(v); }
+            }
         }
 
         HorizontalLayout {
             alignment: center;
             vertical-stretch: 0;
+            padding-top: 2px;
             LxToggleBtn {
                 label: root.solo ? "SOLO ON" : "SOLO";
                 small: true;
@@ -307,6 +319,10 @@ export component EquilibriumUi inherits Window {
     callback auto_loud_clicked();
     callback apply_analysis_clicked();
     callback reset_analysis_clicked();
+
+    // Brief post-click flash so APPLY / RESET ANALYSIS feel tactile
+    property <bool> apply_flash: false;
+    property <bool> reset_flash: false;
 
     init => { Palette.color-scheme = ColorScheme.dark; }
 
@@ -717,21 +733,25 @@ export component EquilibriumUi inherits Window {
                         min-width: 100px;
                     }
                     LxButton {
-                        text: "APPLY ANALYSIS";
+                        text: root.apply_flash ? "APPLIED" : "APPLY ANALYSIS";
+                        primary: root.apply_flash;
                         min-width: 120px;
                         opacity: root.listen_active ? 1.0 : 0.45;
                         clicked => {
                             if root.listen_active {
+                                root.apply_flash = true;
                                 root.apply_analysis_clicked();
                             }
                         }
                     }
                     LxButton {
-                        text: "RESET ANALYSIS";
+                        text: root.reset_flash ? "RESET OK" : "RESET ANALYSIS";
+                        primary: root.reset_flash;
                         min-width: 120px;
                         opacity: root.listen_active ? 1.0 : 0.45;
                         clicked => {
                             if root.listen_active {
+                                root.reset_flash = true;
                                 root.reset_analysis_clicked();
                             }
                         }
@@ -784,6 +804,18 @@ export component EquilibriumUi inherits Window {
                 }
             }
         }
+    }
+
+    // Clear flash after short confirm window (amber primary + label swap)
+    Timer {
+        interval: 450ms;
+        running: root.apply_flash;
+        triggered => { root.apply_flash = false; }
+    }
+    Timer {
+        interval: 450ms;
+        running: root.reset_flash;
+        triggered => { root.reset_flash = false; }
     }
 
     vault_setup := LxVaultSetupOverlay {

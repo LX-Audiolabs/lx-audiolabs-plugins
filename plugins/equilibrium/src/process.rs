@@ -740,7 +740,9 @@ fn publish(
         } else {
             48_000.0
         };
-        let measure_samples = (0.200 * sr_safe) as u32;
+        // Peak catch window — was 200ms (too short for sparse transients).
+        // 2s ≈ safer PRE-MASTER gain; still much shorter than AUTO LOUD (5s LUFS).
+        let measure_samples = (2.0 * sr_safe) as u32;
 
         if !state.pre_master_active_prev {
             state.pre_master_measure_peak = 0.0;
