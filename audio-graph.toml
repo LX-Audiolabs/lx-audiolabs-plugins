@@ -1,5 +1,9 @@
 # LX Audiolabs — Slint workspace configuration for lx-audio-graph.
-# project_name and internal_crates are auto-detected.
+# Optional: without this file the tool still applies default migration
+# truce-slint → lx-slint-editor and auto-detects UI/IPC.
+
+ui_crates = ["lx-ui-slint"]
+ipc_hubs = ["lx-shm", "lx-analysis"]
 
 [migrations.truce-slint]
 from = "truce-slint"

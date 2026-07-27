@@ -14,7 +14,7 @@ Not lazy: input validation, error handling preventing data loss, security, acces
 When `graphify-out/graph.json` exists, query/path/explain first before raw grep or source reads. `/graphify` to build/update.
 
 ## audio-graph
-When `audio-graph/audio-graph.json` exists, read it before working on plugins or crates. It contains the detected framework (truce, nih-plug, clack, JUCE), plugin-vs-crate kind, editor migration status (`from` legacy vs `to` migrated), internal dependency edges, and AST-level audio symbols (`PluginLogic`, `process`, `editor`, `Params` structs, `truce::plugin!` macro calls). Use it to avoid framework-confused suggestions or partial migrations that improve one plugin while breaking others. Regenerate with `lx-audio-graph .` (global install), or keep current with `lx-audio-graph --watch .` / `lx-audio-graph install-hook .`.
+When `audio-graph/audio-graph.agent.md` exists, **read it first** before plugin/crate work (token-cheap). Check `audio-graph.delta.md` for what changed since last gen. Escalate to `audio-graph.json` for `params_fields`, `params_unbound`, `public_api`, IPC/UI edges, or full findings. Contains frameworks in use, migration status, internal deps, semantic edges (`uses_ui`, `ipc_peer`, `runtime_depends_on`), file roles, IPC signals, structural findings, and delta. Scope: `lx-audio-graph --plugin <name> .` → `<name>.slice.json`. Regenerate: `lx-audio-graph .` | watch: `lx-audio-graph --watch .`.
 
 ## truce
 When writing, editing, or debugging truce plugin code (Params, PluginLogic, process, state, editor), ALWAYS consult `TRUCE_SKILL.md` — covers param macros, lifecycle, threading rules, common bugs, shared crates, and build workflow.
