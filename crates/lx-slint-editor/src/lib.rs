@@ -4,10 +4,12 @@
 //! DAW hosts; better cross-compile story than Skia. Swap Cargo feature later
 //! for `backend-skia` or `backend-wgpu` A/B.
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use baseview::{dpi::LogicalSize, gl::GlConfig, Window, WindowSettings};
 use slint::ComponentHandle;
+use slint::platform::software_renderer::{MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType};
 use slint_baseview::slint_window::SlintWindow;
 use truce_core::editor::{Editor, RawWindowHandle};
 use truce_params::Params;
@@ -169,6 +171,85 @@ where
 
     fn can_resize(&self) -> bool {
         self.can_resize
+    }
+
+    fn screenshot(
+        &mut self,
+        _params: Arc<dyn truce_params::Params>,
+    ) -> Option<(Vec<u8>, u32, u32)> {
+        let state = truce_core::editor::for_test_params(self.params.clone())
+            .with_params(self.params.clone());
+
+        slint_baseview::platform::ensure_platform();
+
+        // Create software renderer window, keep Rc for direct draw_if_needed.
+        // MinimalSoftwareWindow::new() already returns Rc<MinimalSoftwareWindow>.
+        let msw = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+        // Hand off a clone to the platform so Component::new() attaches to it.
+        let adapter: Rc<dyn slint::platform::WindowAdapter> = msw.clone();
+        slint_baseview::platform::set_next_adapter(adapter);
+
+        // Build the Slint component (attaches to the MinimalSoftwareWindow via platform).
+        let component = (self.build)(state.clone());
+
+        // Sync host params into the component so labels show defaults.
+        (self.sync)(&component, &state);
+
+        // Scale per DEFAULT_SCREENSHOT_SCALE (2.0).
+        let scale: f64 = 2.0;
+        let (w, h) = self.size;
+        let phys_w = (w as f64 * scale).round() as u32;
+        let phys_h = (h as f64 * scale).round() as u32;
+
+        let slint_window = component.window();
+        slint_window.set_size(slint::WindowSize::Physical(
+            slint::PhysicalSize::new(phys_w, phys_h),
+        ));
+        slint_window.dispatch_event(
+            slint::platform::WindowEvent::ScaleFactorChanged {
+                scale_factor: scale as f32,
+            },
+        );
+
+        // Render via the MinimalSoftwareWindow directly.
+        let pixel_count = (phys_w * phys_h) as usize;
+        let mut px_buf = vec![PremultipliedRgbaColor::default(); pixel_count];
+
+        let drew = msw.draw_if_needed(|renderer| {
+            renderer.render(&mut px_buf, phys_w as usize);
+        });
+        if !drew {
+            return None;
+        }
+
+        // Un-premultiply to straight RGBA.
+        let inv_lut: [u32; 256] = {
+            let mut lut = [0u32; 256];
+            let mut i = 1u32;
+            while i < 256 {
+                lut[i as usize] = u32::MAX / i;
+                i += 1;
+            }
+            lut
+        };
+
+        let mut rgba = Vec::with_capacity(pixel_count * 4);
+        for px in &px_buf {
+            if px.alpha == 0 {
+                rgba.extend_from_slice(&[0, 0, 0, 0]);
+            } else if px.alpha == 255 {
+                rgba.extend_from_slice(&[px.red, px.green, px.blue, 255]);
+            } else {
+                #[allow(clippy::cast_possible_truncation)]
+                let inv_a = inv_lut[px.alpha as usize];
+                rgba.push(((u32::from(px.red) * inv_a) >> 16) as u8);
+                rgba.push(((u32::from(px.green) * inv_a) >> 16) as u8);
+                rgba.push(((u32::from(px.blue) * inv_a) >> 16) as u8);
+                rgba.push(px.alpha);
+            }
+        }
+
+        Some((rgba, phys_w, phys_h))
     }
 }
 
