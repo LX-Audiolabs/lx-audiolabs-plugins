@@ -80,7 +80,6 @@ export component LucentUi inherits Window {
                 }
                 LxToggleBtn {
                     label: "SMOOTH";
-                    small: true;
                     active <=> root.spectrum_smooth;
                     toggled => { root.spectrum_smooth_changed(self.active); }
                 }
@@ -90,7 +89,6 @@ export component LucentUi inherits Window {
                 }
                 LxToggleBtn {
                     label: "BYPASS";
-                    small: true;
                     danger: true;
                     active <=> root.bypass_active;
                     toggled => { root.bypass_active_changed(self.active); }

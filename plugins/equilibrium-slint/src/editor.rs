@@ -76,17 +76,25 @@ fn changed_str(prev: &mut String, v: &str) -> bool {
 /// Mean-normalized bar height 0..1 (Vizia canvas window −20…+22 around avg).
 fn band_bar_norm(levels: &[f32; 5], i: usize) -> f32 {
     let avg: f32 = levels.iter().map(|v| v.max(-50.0)).sum::<f32>() / 5.0;
+    band_bar_norm_avg(levels, avg, i, -50.0)
+}
+
+fn band_bar_norm_avg(levels: &[f32; 5], avg: f32, i: usize, floor: f32) -> f32 {
     if avg <= -70.0 {
         return 0.0;
     }
-    let rel = (levels[i].max(-50.0) - avg).clamp(-20.0, 22.0);
+    let rel = (levels[i].max(floor) - avg).clamp(-20.0, 22.0);
     ((rel + 20.0) / 42.0).clamp(0.0, 1.0)
 }
 
 fn target_bar_norm(targets: &[f32; 5], i: usize) -> f32 {
     let avg: f32 = targets.iter().map(|v| v.max(-30.0)).sum::<f32>() / 5.0;
-    let rel = (targets[i].max(-30.0) - avg).clamp(-20.0, 22.0);
-    ((rel + 20.0) / 42.0).clamp(0.0, 1.0)
+    band_bar_norm_avg(targets, avg, i, -30.0)
+}
+
+/// Tolerance half-height in the same −20…+22 (42 dB) display window.
+fn tol_bar_norm(tol_db: f32) -> f32 {
+    (tol_db / 42.0).clamp(0.0, 1.0)
 }
 
 fn db_to_meter(db: f32) -> f32 {
@@ -117,7 +125,13 @@ struct SyncCache {
     hold_r_q: f32,
     bands: [f32; 5],
     tgts: [f32; 5],
+    tgt_tols: [f32; 5],
     lis: [f32; 5],
+    lis_tols: [f32; 5],
+    lis_lo: [f32; 5],
+    lis_hi: [f32; 5],
+    listening: Option<bool>,
+    listen_ready: Option<bool>,
     auto_loud: Option<bool>,
     snap_was_active: bool,
     snap_blink: u32,
@@ -144,7 +158,13 @@ impl SyncCache {
             hold_r_q: f32::NAN,
             bands: [f32::NAN; 5],
             tgts: [f32::NAN; 5],
+            tgt_tols: [f32::NAN; 5],
             lis: [f32::NAN; 5],
+            lis_tols: [f32::NAN; 5],
+            lis_lo: [f32::NAN; 5],
+            lis_hi: [f32::NAN; 5],
+            listening: None,
+            listen_ready: None,
             auto_loud: None,
             snap_was_active: false,
             snap_blink: 0,
@@ -515,10 +535,14 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     });
                 }
 
-                // auto loud
+                // auto loud (blocked while PRE-MASTER owns loudness — Vizia parity)
                 {
                     let s = shared.clone();
+                    let st = state.clone();
                     ui.on_auto_loud_clicked(move || {
+                        if PluginContextReadF32::get_param(&st, P::PreMasterActive) > 0.5 {
+                            return;
+                        }
                         if s.auto_loud_measuring.load(Ordering::Acquire) {
                             return;
                         }
@@ -664,15 +688,35 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     format!("{:.0}", p.pre_master_target_db.raw_target()),
                 );
 
-                // --- telemetry ---
+                // --- telemetry (band bars + Vizia tolerance corridors) ---
                 let mut band_levels = [0.0f32; 5];
                 let mut target_levels = [0.0f32; 5];
+                let mut target_tols = [0.0f32; 5];
                 let mut listen_levels = [0.0f32; 5];
+                let mut listen_tols = [0.0f32; 5];
+                let mut listen_mins = [0.0f32; 5];
+                let mut listen_maxs = [0.0f32; 5];
                 for b in 0..5 {
                     band_levels[b] = shared.band_levels[b].load(Ordering::Acquire);
                     target_levels[b] = shared.target_levels[b].load(Ordering::Acquire);
+                    target_tols[b] = shared.target_tolerances[b].load(Ordering::Acquire);
                     listen_levels[b] = shared.listen_levels[b].load(Ordering::Acquire);
+                    listen_tols[b] = shared.listen_tolerances[b].load(Ordering::Acquire);
+                    listen_mins[b] = shared.listen_level_min[b].load(Ordering::Acquire);
+                    listen_maxs[b] = shared.listen_level_max[b].load(Ordering::Acquire);
                 }
+                let listen_samples = shared.listen_samples.load(Ordering::Acquire);
+                let listening = listen_samples > 0.0;
+                let listen_ready = listen_samples > 100.0;
+                if changed_bool(&mut cache.listening, listening) {
+                    ui.set_listening(listening);
+                }
+                if changed_bool(&mut cache.listen_ready, listen_ready) {
+                    ui.set_listen_ready(listen_ready);
+                }
+
+                let listen_avg: f32 =
+                    listen_levels.iter().map(|v| v.max(-50.0)).sum::<f32>() / 5.0;
 
                 let bn = [
                     band_bar_norm(&band_levels, 0),
@@ -688,12 +732,40 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     target_bar_norm(&target_levels, 3),
                     target_bar_norm(&target_levels, 4),
                 ];
+                let ttn = [
+                    tol_bar_norm(target_tols[0]),
+                    tol_bar_norm(target_tols[1]),
+                    tol_bar_norm(target_tols[2]),
+                    tol_bar_norm(target_tols[3]),
+                    tol_bar_norm(target_tols[4]),
+                ];
                 let ln = [
-                    band_bar_norm(&listen_levels, 0),
-                    band_bar_norm(&listen_levels, 1),
-                    band_bar_norm(&listen_levels, 2),
-                    band_bar_norm(&listen_levels, 3),
-                    band_bar_norm(&listen_levels, 4),
+                    band_bar_norm_avg(&listen_levels, listen_avg, 0, -50.0),
+                    band_bar_norm_avg(&listen_levels, listen_avg, 1, -50.0),
+                    band_bar_norm_avg(&listen_levels, listen_avg, 2, -50.0),
+                    band_bar_norm_avg(&listen_levels, listen_avg, 3, -50.0),
+                    band_bar_norm_avg(&listen_levels, listen_avg, 4, -50.0),
+                ];
+                let ltn = [
+                    tol_bar_norm(listen_tols[0]),
+                    tol_bar_norm(listen_tols[1]),
+                    tol_bar_norm(listen_tols[2]),
+                    tol_bar_norm(listen_tols[3]),
+                    tol_bar_norm(listen_tols[4]),
+                ];
+                let llo = [
+                    band_bar_norm_avg(&listen_mins, listen_avg, 0, -50.0),
+                    band_bar_norm_avg(&listen_mins, listen_avg, 1, -50.0),
+                    band_bar_norm_avg(&listen_mins, listen_avg, 2, -50.0),
+                    band_bar_norm_avg(&listen_mins, listen_avg, 3, -50.0),
+                    band_bar_norm_avg(&listen_mins, listen_avg, 4, -50.0),
+                ];
+                let lhi = [
+                    band_bar_norm_avg(&listen_maxs, listen_avg, 0, -50.0),
+                    band_bar_norm_avg(&listen_maxs, listen_avg, 1, -50.0),
+                    band_bar_norm_avg(&listen_maxs, listen_avg, 2, -50.0),
+                    band_bar_norm_avg(&listen_maxs, listen_avg, 3, -50.0),
+                    band_bar_norm_avg(&listen_maxs, listen_avg, 4, -50.0),
                 ];
                 for i in 0..5 {
                     if changed_f32(&mut cache.bands[i], bn[i]) {
@@ -716,6 +788,16 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                             _ => {}
                         }
                     }
+                    if changed_f32(&mut cache.tgt_tols[i], ttn[i]) {
+                        match i {
+                            0 => ui.set_tgt_tol0(ttn[i]),
+                            1 => ui.set_tgt_tol1(ttn[i]),
+                            2 => ui.set_tgt_tol2(ttn[i]),
+                            3 => ui.set_tgt_tol3(ttn[i]),
+                            4 => ui.set_tgt_tol4(ttn[i]),
+                            _ => {}
+                        }
+                    }
                     if changed_f32(&mut cache.lis[i], ln[i]) {
                         match i {
                             0 => ui.set_lis0(ln[i]),
@@ -723,6 +805,36 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                             2 => ui.set_lis2(ln[i]),
                             3 => ui.set_lis3(ln[i]),
                             4 => ui.set_lis4(ln[i]),
+                            _ => {}
+                        }
+                    }
+                    if changed_f32(&mut cache.lis_tols[i], ltn[i]) {
+                        match i {
+                            0 => ui.set_lis_tol0(ltn[i]),
+                            1 => ui.set_lis_tol1(ltn[i]),
+                            2 => ui.set_lis_tol2(ltn[i]),
+                            3 => ui.set_lis_tol3(ltn[i]),
+                            4 => ui.set_lis_tol4(ltn[i]),
+                            _ => {}
+                        }
+                    }
+                    if changed_f32(&mut cache.lis_lo[i], llo[i]) {
+                        match i {
+                            0 => ui.set_lis_lo0(llo[i]),
+                            1 => ui.set_lis_lo1(llo[i]),
+                            2 => ui.set_lis_lo2(llo[i]),
+                            3 => ui.set_lis_lo3(llo[i]),
+                            4 => ui.set_lis_lo4(llo[i]),
+                            _ => {}
+                        }
+                    }
+                    if changed_f32(&mut cache.lis_hi[i], lhi[i]) {
+                        match i {
+                            0 => ui.set_lis_hi0(lhi[i]),
+                            1 => ui.set_lis_hi1(lhi[i]),
+                            2 => ui.set_lis_hi2(lhi[i]),
+                            3 => ui.set_lis_hi3(lhi[i]),
+                            4 => ui.set_lis_hi4(lhi[i]),
                             _ => {}
                         }
                     }

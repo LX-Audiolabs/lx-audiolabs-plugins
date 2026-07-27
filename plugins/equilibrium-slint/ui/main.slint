@@ -1,72 +1,204 @@
 import { Palette } from "std-widgets.slint";
 import {
     Lx, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
-    LxSection, LxKnob, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
+    LxSection, LxKnob, LxSlider, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit,
     LxGoniometer, LxLedPeakMeter, LxCorrelation,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
-// 5-band level bar (mean-normalized height 0..1 + target marker).
+// Mean-normalized band bar — Vizia EqSpectrumView color + layer parity.
+//
+// Color roles (do NOT reuse spectrum blue / gonio mint here):
+//   live fill     → Lx.amber  (Vizia rgb 1.0, 0.45, 0.1)
+//   target band   → white wash + white center line
+//   listen range  → soft red wash (min…max excursion)
+//   listen tol    → dark violet corridor around listen mean
+//   listen line   → stronger red
+//
+// Norm 0..1 = display window −20…+22 dB around band mean (editor).
 component BandBar inherits Rectangle {
-    in property <float> level: 0.0;   // 0..1
-    in property <float> target: 0.5;  // 0..1
-    in property <float> listen: 0.0;  // 0..1 (optional listen profile)
+    in property <float> level: 0.0;       // live band power 0..1
+    in property <float> target: 0.5;      // target center 0..1
+    in property <float> target-tol: 0.05; // half-height of target corridor (tol_db/42)
+    in property <float> listen: 0.0;      // listen center 0..1
+    in property <float> listen-tol: 0.0;  // half-height of listen corridor
+    in property <float> listen-lo: 0.0;   // listen min range 0..1
+    in property <float> listen-hi: 0.0;   // listen max range 0..1
+    // dim live bar while LISTEN accumulating (any samples)
+    in property <bool> listening: false;
+    // full listen overlay (samples > 100); hides target corridor
     in property <bool> show-listen: false;
-    in property <string> label: "";
-    in property <string> hz: "";
 
-    width: 72px;
+    horizontal-stretch: 1;
     vertical-stretch: 1;
-    background: transparent;
+    min-width: 0px;
+    min-height: 100px;
+    background: Lx.void;
+    border-radius: Lx.radius-sm;
+    border-width: 1px;
+    border-color: Lx.edge-dark;
+    clip: true;
+
+    property <float> lv: root.level.clamp(0.0, 1.0);
+    property <float> tg: root.target.clamp(0.0, 1.0);
+    property <float> tt: root.target-tol.clamp(0.0, 1.0);
+    property <float> tg-hi: (root.tg + root.tt).clamp(0.0, 1.0);
+    property <float> tg-lo: (root.tg - root.tt).clamp(0.0, 1.0);
+    property <float> ls: root.listen.clamp(0.0, 1.0);
+    property <float> lt: root.listen-tol.clamp(0.0, 1.0);
+    property <float> ls-hi: root.listen-hi.clamp(0.0, 1.0);
+    property <float> ls-lo: root.listen-lo.clamp(0.0, 1.0);
+    property <float> l-hi: (root.ls + root.lt).clamp(0.0, 1.0);
+    property <float> l-lo: (root.ls - root.lt).clamp(0.0, 1.0);
+
+    // Live fill — brand amber (not gonio #19e680, not spectrum #4d99f2).
+    // Vizia alpha ~0.55 normal / ~0.12 while listening.
+    Rectangle {
+        x: 4px;
+        width: parent.width - 8px;
+        height: parent.height * root.lv;
+        y: parent.height - self.height;
+        background: root.listening
+            ? @linear-gradient(0deg, #c4501022 0%, #ff731a1f 100%)
+            : @linear-gradient(0deg, Lx.amber-lo 0%, Lx.amber 55%, Lx.amber-hi 100%);
+        opacity: root.listening ? 1.0 : 0.72;
+    }
+
+    // Target corridor (white ~15%) + center line (white ~55%) — Vizia default mode
+    if !root.show-listen: Rectangle {
+        width: 100%;
+        y: parent.height * (1.0 - root.tg-hi);
+        height: parent.height * max(root.tg-hi - root.tg-lo, 0.02);
+        background: #ffffff26;
+    }
+    if !root.show-listen: Rectangle {
+        width: 100%;
+        height: 1.5px;
+        y: parent.height * (1.0 - root.tg) - 0.75px;
+        background: #ffffff8c;
+    }
+
+    // Listen min…max excursion wash (red ~12%)
+    if root.show-listen: Rectangle {
+        width: 100%;
+        y: parent.height * (1.0 - root.ls-hi);
+        height: parent.height * max(root.ls-hi - root.ls-lo, 0.02);
+        background: #ff4d4d1f;
+    }
+    // Listen tolerance corridor (dark violet wash) — distinct from target white + red range
+    if root.show-listen: Rectangle {
+        width: 100%;
+        y: parent.height * (1.0 - root.l-hi);
+        height: parent.height * max(root.l-hi - root.l-lo, 0.02);
+        background: #4a208033;
+    }
+    // Listen mean line (red ~70%)
+    if root.show-listen: Rectangle {
+        width: 100%;
+        height: 2px;
+        y: parent.height * (1.0 - root.ls) - 1px;
+        background: #ff4d4db3;
+    }
+}
+
+// One band column: title + hz + level bar + Gain/Width/Pan sliders + SOLO.
+// Five of these stretch evenly across LxShellMain (optical separation).
+component EqBandSection inherits LxSection {
+    in property <string> band-title: "";
+    in property <string> band-hz: "";
+
+    in property <float> level: 0.0;
+    in property <float> target: 0.5;
+    in property <float> target-tol: 0.05;
+    in property <float> listen: 0.0;
+    in property <float> listen-tol: 0.0;
+    in property <float> listen-lo: 0.0;
+    in property <float> listen-hi: 0.0;
+    in property <bool> listening: false;
+    in property <bool> show-listen: false;
+
+    in-out property <float> gain: 0.5;
+    in property <string> gain-text: "";
+    callback gain_changed(float);
+
+    in-out property <float> width-val: 0.666;
+    in property <string> width-text: "";
+    callback width_changed(float);
+
+    in-out property <float> pan: 0.5;
+    in property <string> pan-text: "";
+    callback pan_changed(float);
+
+    in-out property <bool> solo: false;
+    callback solo_changed(bool);
+
+    title: root.band-title;
+    show-title: true;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+    min-width: 0px;
 
     VerticalLayout {
-        spacing: 2px;
-        alignment: center;
+        spacing: 4px;
+        vertical-stretch: 1;
+        horizontal-stretch: 1;
+        min-width: 0px;
 
         Text {
-            text: root.label;
-            font-size: Lx.font-xs;
-            color: Lx.amber;
-            horizontal-alignment: center;
-            vertical-stretch: 0;
-        }
-        Text {
-            text: root.hz;
+            text: root.band-hz;
             font-size: 8px;
             color: Lx.text-muted;
             horizontal-alignment: center;
             vertical-stretch: 0;
         }
 
-        Rectangle {
+        BandBar {
+            level: root.level;
+            target: root.target;
+            target-tol: root.target-tol;
+            listen: root.listen;
+            listen-tol: root.listen-tol;
+            listen-lo: root.listen-lo;
+            listen-hi: root.listen-hi;
+            listening: root.listening;
+            show-listen: root.show-listen;
             vertical-stretch: 1;
-            min-height: 80px;
-            background: Lx.void;
-            border-radius: Lx.radius-sm;
-            border-width: 1px;
-            border-color: Lx.edge-dark;
-            clip: true;
+            horizontal-stretch: 1;
+        }
 
-            // Level fill from bottom
-            Rectangle {
-                width: 100%;
-                height: parent.height * root.level.clamp(0.0, 1.0);
-                y: parent.height - self.height;
-                background: @linear-gradient(0deg, #19e6b388 0%, #7df3ddcc 100%);
-            }
-            // Listen fill (dimmer)
-            if root.show-listen: Rectangle {
-                width: 100%;
-                height: parent.height * root.listen.clamp(0.0, 1.0);
-                y: parent.height - self.height;
-                background: #e6a31944;
-            }
-            // Target line
-            Rectangle {
-                width: 100%;
-                height: 2px;
-                y: parent.height * (1.0 - root.target.clamp(0.0, 1.0)) - 1px;
-                background: Lx.amber;
+        LxSlider {
+            compact: true;
+            label: "Gain";
+            value <=> root.gain;
+            value-text: root.gain-text;
+            default-value: 0.5;
+            changed(v) => { root.gain_changed(v); }
+        }
+        LxSlider {
+            compact: true;
+            label: "Width";
+            value <=> root.width-val;
+            value-text: root.width-text;
+            default-value: 0.666;
+            changed(v) => { root.width_changed(v); }
+        }
+        LxSlider {
+            compact: true;
+            label: "Pan";
+            value <=> root.pan;
+            value-text: root.pan-text;
+            default-value: 0.5;
+            changed(v) => { root.pan_changed(v); }
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            vertical-stretch: 0;
+            LxToggleBtn {
+                label: root.solo ? "SOLO ON" : "SOLO";
+                small: true;
+                active <=> root.solo;
+                toggled(v) => { root.solo_changed(v); }
             }
         }
     }
@@ -127,13 +259,25 @@ export component EquilibriumUi inherits Window {
     in-out property <bool> solo_high_mid: false; callback solo_high_mid_changed(bool);
     in-out property <bool> solo_high: false; callback solo_high_changed(bool);
 
-    // telemetry
+    // telemetry — bar norms 0..1 (mean-normalized −20…+22 dB window)
     in property <float> band0: 0.0; in property <float> band1: 0.0; in property <float> band2: 0.0;
     in property <float> band3: 0.0; in property <float> band4: 0.0;
     in property <float> tgt0: 0.5; in property <float> tgt1: 0.5; in property <float> tgt2: 0.5;
     in property <float> tgt3: 0.5; in property <float> tgt4: 0.5;
+    // target tolerance half-height (tol_db / 42)
+    in property <float> tgt_tol0: 0.05; in property <float> tgt_tol1: 0.05; in property <float> tgt_tol2: 0.05;
+    in property <float> tgt_tol3: 0.05; in property <float> tgt_tol4: 0.05;
     in property <float> lis0: 0.0; in property <float> lis1: 0.0; in property <float> lis2: 0.0;
     in property <float> lis3: 0.0; in property <float> lis4: 0.0;
+    in property <float> lis_tol0: 0.0; in property <float> lis_tol1: 0.0; in property <float> lis_tol2: 0.0;
+    in property <float> lis_tol3: 0.0; in property <float> lis_tol4: 0.0;
+    in property <float> lis_lo0: 0.0; in property <float> lis_lo1: 0.0; in property <float> lis_lo2: 0.0;
+    in property <float> lis_lo3: 0.0; in property <float> lis_lo4: 0.0;
+    in property <float> lis_hi0: 0.0; in property <float> lis_hi1: 0.0; in property <float> lis_hi2: 0.0;
+    in property <float> lis_hi3: 0.0; in property <float> lis_hi4: 0.0;
+    // listen_samples > 0 / > 100
+    in property <bool> listening: false;
+    in property <bool> listen_ready: false;
     in property <float> meter_l: 0.0; in property <float> meter_r: 0.0;
     in property <float> peak_hold_l: 0.0; in property <float> peak_hold_r: 0.0;
     in property <float> correlation: 0.0; in property <string> corr_text: "";
@@ -173,9 +317,22 @@ export component EquilibriumUi inherits Window {
     min-width: Lx.window-w;
     min-height: Lx.window-h;
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // TABLE LAYOUT (Meridian shell + Equilibrium controls)
+    //   ┌──────────────────────────────────────────────────────────────┐
+    //   │ HEADER 50px — RESET | MONO | DELTA | BYPASS                  │
+    //   ├──────────┬───────────────────────────────────┬───────────────┤
+    //   │ LEFT 180 │ MAIN: 5 band LxSections           │ RIGHT 155     │
+    //   │ TARGET   │ (bar + Gain/Width/Pan + SOLO)     │ = Meridian    │
+    //   ├──────────┴───────────────────────────────────┴───────────────┤
+    //   │ FOOTER 110px — ANALYZE | PRE-MASTER | MONO FLOOR             │
+    //   └──────────────────────────────────────────────────────────────┘
+    // ═══════════════════════════════════════════════════════════════════════
+
     VerticalLayout {
         spacing: 0;
 
+        // ── HEADER (identical control set to Meridian) ────────────────
         LxShellHeader {
             plugin-name: "EQUILIBRIUM";
             version: root.version;
@@ -183,16 +340,32 @@ export component EquilibriumUi inherits Window {
             HorizontalLayout {
                 spacing: 4px;
                 alignment: center;
-                LxDangerBtn { label: "RESET"; clicked => { root.reset_clicked(); } }
-                LxToggleBtn { label: "MONO"; active <=> root.mono_active; toggled(v) => { root.mono_active_changed(v); } }
-                LxToggleBtn { label: "DELTA"; active <=> root.delta_active; toggled(v) => { root.delta_active_changed(v); } }
-                LxToggleBtn { label: "LISTEN"; active <=> root.listen_active; toggled(v) => { root.listen_active_changed(v); } }
-                LxToggleBtn { label: "PRE"; active <=> root.pre_master_active; toggled(v) => { root.pre_master_active_changed(v); } }
-                LxToggleBtn { label: "BYPASS"; danger: true; active <=> root.bypass_active; toggled(v) => { root.bypass_active_changed(v); } }
+
+                LxDangerBtn {
+                    label: "RESET";
+                    clicked => { root.reset_clicked(); }
+                }
+                LxToggleBtn {
+                    label: "MONO";
+                    active <=> root.mono_active;
+                    toggled(v) => { root.mono_active_changed(v); }
+                }
+                LxToggleBtn {
+                    label: "DELTA";
+                    active <=> root.delta_active;
+                    toggled(v) => { root.delta_active_changed(v); }
+                }
+                LxToggleBtn {
+                    label: "BYPASS";
+                    active <=> root.bypass_active;
+                    toggled(v) => { root.bypass_active_changed(v); }
+                }
             }
         }
 
+        // ── BODY ─────────────────────────────────────────────────────
         LxShellBody {
+            // ── LEFT: TARGET PROFILES (vault / SNAP / presets) ──
             LxShellLeft {
                 title: "TARGET PROFILES";
 
@@ -250,6 +423,14 @@ export component EquilibriumUi inherits Window {
                                 vertical-stretch: 0;
                             }
 
+                            if root.preset_names.length > 0: Text {
+                                text: "── Vault Presets ──";
+                                font-size: Lx.font-xs;
+                                font-weight: 700;
+                                color: Lx.amber;
+                                vertical-stretch: 0;
+                            }
+
                             for name[i] in root.preset_names: Rectangle {
                                 height: 22px;
                                 vertical-stretch: 0;
@@ -262,7 +443,7 @@ export component EquilibriumUi inherits Window {
                                     Text {
                                         text: name;
                                         font-size: Lx.font-md;
-                                        color: Lx.text;
+                                        color: root.preset_name == name ? Lx.amber : Lx.text;
                                         vertical-alignment: center;
                                         overflow: elide;
                                     }
@@ -279,178 +460,328 @@ export component EquilibriumUi inherits Window {
                 }
             }
 
+            // ── MAIN: five equal band sections ───────────────────
             LxShellMain {
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 8px;
+                HorizontalLayout {
+                    spacing: 4px;
+                    alignment: stretch;
+                    vertical-stretch: 1;
+                    horizontal-stretch: 1;
+                    min-width: 0px;
 
-                    // 5-band meters
-                    HorizontalLayout {
-                        spacing: 8px;
-                        height: 140px;
-                        vertical-stretch: 0;
-                        alignment: center;
-                        BandBar { label: "Sub"; hz: "0-80"; level: root.band0; target: root.tgt0; listen: root.lis0; show-listen: root.listen_active; }
-                        BandBar { label: "Bass"; hz: "80-300"; level: root.band1; target: root.tgt1; listen: root.lis1; show-listen: root.listen_active; }
-                        BandBar { label: "Mid"; hz: "300-2k"; level: root.band2; target: root.tgt2; listen: root.lis2; show-listen: root.listen_active; }
-                        BandBar { label: "Pres"; hz: "2-6k"; level: root.band3; target: root.tgt3; listen: root.lis3; show-listen: root.listen_active; }
-                        BandBar { label: "Air"; hz: ">6k"; level: root.band4; target: root.tgt4; listen: root.lis4; show-listen: root.listen_active; }
+                    EqBandSection {
+                        band-title: "Sub";
+                        band-hz: "0–80 Hz";
+                        level: root.band0;
+                        target: root.tgt0;
+                        target-tol: root.tgt_tol0;
+                        listen: root.lis0;
+                        listen-tol: root.lis_tol0;
+                        listen-lo: root.lis_lo0;
+                        listen-hi: root.lis_hi0;
+                        listening: root.listening;
+                        show-listen: root.listen_ready;
+                        gain <=> root.low_gain;
+                        gain-text: root.low_gain_text;
+                        gain_changed(v) => { root.low_gain_changed(v); }
+                        width-val <=> root.low_width;
+                        width-text: root.low_width_text;
+                        width_changed(v) => { root.low_width_changed(v); }
+                        pan <=> root.low_pan;
+                        pan-text: root.low_pan_text;
+                        pan_changed(v) => { root.low_pan_changed(v); }
+                        solo <=> root.solo_low;
+                        solo_changed(v) => { root.solo_low_changed(v); }
                     }
-
-                    Text { text: "GAIN"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; vertical-stretch: 0; }
-                    HorizontalLayout {
-                        spacing: 6px; vertical-stretch: 0; alignment: center;
-                        LxKnob { label: "Sub"; small: true; value <=> root.low_gain; value-text: root.low_gain_text; changed(v) => { root.low_gain_changed(v); } }
-                        LxKnob { label: "Bass"; small: true; value <=> root.bass_gain; value-text: root.bass_gain_text; changed(v) => { root.bass_gain_changed(v); } }
-                        LxKnob { label: "Mid"; small: true; value <=> root.mid_gain; value-text: root.mid_gain_text; changed(v) => { root.mid_gain_changed(v); } }
-                        LxKnob { label: "Pres"; small: true; value <=> root.high_mid_gain; value-text: root.high_mid_gain_text; changed(v) => { root.high_mid_gain_changed(v); } }
-                        LxKnob { label: "Air"; small: true; value <=> root.high_gain; value-text: root.high_gain_text; changed(v) => { root.high_gain_changed(v); } }
+                    EqBandSection {
+                        band-title: "Bass";
+                        band-hz: "80–300 Hz";
+                        level: root.band1;
+                        target: root.tgt1;
+                        target-tol: root.tgt_tol1;
+                        listen: root.lis1;
+                        listen-tol: root.lis_tol1;
+                        listen-lo: root.lis_lo1;
+                        listen-hi: root.lis_hi1;
+                        listening: root.listening;
+                        show-listen: root.listen_ready;
+                        gain <=> root.bass_gain;
+                        gain-text: root.bass_gain_text;
+                        gain_changed(v) => { root.bass_gain_changed(v); }
+                        width-val <=> root.bass_width;
+                        width-text: root.bass_width_text;
+                        width_changed(v) => { root.bass_width_changed(v); }
+                        pan <=> root.bass_pan;
+                        pan-text: root.bass_pan_text;
+                        pan_changed(v) => { root.bass_pan_changed(v); }
+                        solo <=> root.solo_bass;
+                        solo_changed(v) => { root.solo_bass_changed(v); }
                     }
-
-                    Text { text: "WIDTH"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; vertical-stretch: 0; }
-                    HorizontalLayout {
-                        spacing: 6px; vertical-stretch: 0; alignment: center;
-                        LxKnob { label: "Sub"; small: true; value <=> root.low_width; value-text: root.low_width_text; changed(v) => { root.low_width_changed(v); } }
-                        LxKnob { label: "Bass"; small: true; value <=> root.bass_width; value-text: root.bass_width_text; changed(v) => { root.bass_width_changed(v); } }
-                        LxKnob { label: "Mid"; small: true; value <=> root.mid_width; value-text: root.mid_width_text; changed(v) => { root.mid_width_changed(v); } }
-                        LxKnob { label: "Pres"; small: true; value <=> root.high_mid_width; value-text: root.high_mid_width_text; changed(v) => { root.high_mid_width_changed(v); } }
-                        LxKnob { label: "Air"; small: true; value <=> root.high_width; value-text: root.high_width_text; changed(v) => { root.high_width_changed(v); } }
+                    EqBandSection {
+                        band-title: "Mid";
+                        band-hz: "300 Hz–2 kHz";
+                        level: root.band2;
+                        target: root.tgt2;
+                        target-tol: root.tgt_tol2;
+                        listen: root.lis2;
+                        listen-tol: root.lis_tol2;
+                        listen-lo: root.lis_lo2;
+                        listen-hi: root.lis_hi2;
+                        listening: root.listening;
+                        show-listen: root.listen_ready;
+                        gain <=> root.mid_gain;
+                        gain-text: root.mid_gain_text;
+                        gain_changed(v) => { root.mid_gain_changed(v); }
+                        width-val <=> root.mid_width;
+                        width-text: root.mid_width_text;
+                        width_changed(v) => { root.mid_width_changed(v); }
+                        pan <=> root.mid_pan;
+                        pan-text: root.mid_pan_text;
+                        pan_changed(v) => { root.mid_pan_changed(v); }
+                        solo <=> root.solo_mid;
+                        solo_changed(v) => { root.solo_mid_changed(v); }
                     }
-
-                    Text { text: "PAN / SOLO"; color: Lx.amber; font-size: Lx.font-xs; font-weight: 700; vertical-stretch: 0; }
-                    HorizontalLayout {
-                        spacing: 6px; vertical-stretch: 0; alignment: center;
-                        VerticalLayout {
-                            spacing: 2px; alignment: center;
-                            LxKnob { label: "Sub"; small: true; value <=> root.low_pan; value-text: root.low_pan_text; changed(v) => { root.low_pan_changed(v); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_low; toggled(v) => { root.solo_low_changed(v); } }
-                        }
-                        VerticalLayout {
-                            spacing: 2px; alignment: center;
-                            LxKnob { label: "Bass"; small: true; value <=> root.bass_pan; value-text: root.bass_pan_text; changed(v) => { root.bass_pan_changed(v); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_bass; toggled(v) => { root.solo_bass_changed(v); } }
-                        }
-                        VerticalLayout {
-                            spacing: 2px; alignment: center;
-                            LxKnob { label: "Mid"; small: true; value <=> root.mid_pan; value-text: root.mid_pan_text; changed(v) => { root.mid_pan_changed(v); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_mid; toggled(v) => { root.solo_mid_changed(v); } }
-                        }
-                        VerticalLayout {
-                            spacing: 2px; alignment: center;
-                            LxKnob { label: "Pres"; small: true; value <=> root.high_mid_pan; value-text: root.high_mid_pan_text; changed(v) => { root.high_mid_pan_changed(v); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high_mid; toggled(v) => { root.solo_high_mid_changed(v); } }
-                        }
-                        VerticalLayout {
-                            spacing: 2px; alignment: center;
-                            LxKnob { label: "Air"; small: true; value <=> root.high_pan; value-text: root.high_pan_text; changed(v) => { root.high_pan_changed(v); } }
-                            LxToggleBtn { label: "S"; small: true; active <=> root.solo_high; toggled(v) => { root.solo_high_changed(v); } }
-                        }
+                    EqBandSection {
+                        band-title: "Pres";
+                        band-hz: "2–6 kHz";
+                        level: root.band3;
+                        target: root.tgt3;
+                        target-tol: root.tgt_tol3;
+                        listen: root.lis3;
+                        listen-tol: root.lis_tol3;
+                        listen-lo: root.lis_lo3;
+                        listen-hi: root.lis_hi3;
+                        listening: root.listening;
+                        show-listen: root.listen_ready;
+                        gain <=> root.high_mid_gain;
+                        gain-text: root.high_mid_gain_text;
+                        gain_changed(v) => { root.high_mid_gain_changed(v); }
+                        width-val <=> root.high_mid_width;
+                        width-text: root.high_mid_width_text;
+                        width_changed(v) => { root.high_mid_width_changed(v); }
+                        pan <=> root.high_mid_pan;
+                        pan-text: root.high_mid_pan_text;
+                        pan_changed(v) => { root.high_mid_pan_changed(v); }
+                        solo <=> root.solo_high_mid;
+                        solo_changed(v) => { root.solo_high_mid_changed(v); }
+                    }
+                    EqBandSection {
+                        band-title: "Air";
+                        band-hz: ">6 kHz";
+                        level: root.band4;
+                        target: root.tgt4;
+                        target-tol: root.tgt_tol4;
+                        listen: root.lis4;
+                        listen-tol: root.lis_tol4;
+                        listen-lo: root.lis_lo4;
+                        listen-hi: root.lis_hi4;
+                        listening: root.listening;
+                        show-listen: root.listen_ready;
+                        gain <=> root.high_gain;
+                        gain-text: root.high_gain_text;
+                        gain_changed(v) => { root.high_gain_changed(v); }
+                        width-val <=> root.high_width;
+                        width-text: root.high_width_text;
+                        width_changed(v) => { root.high_width_changed(v); }
+                        pan <=> root.high_pan;
+                        pan-text: root.high_pan_text;
+                        pan_changed(v) => { root.high_pan_changed(v); }
+                        solo <=> root.solo_high;
+                        solo_changed(v) => { root.solo_high_changed(v); }
                     }
                 }
             }
 
+            // ── RIGHT: OUTPUT LEVEL (identical to Meridian) ──
             LxShellRight {
-                VerticalLayout {
-                    padding: 6px;
+                title: "OUTPUT LEVEL";
+
+                HorizontalLayout {
                     spacing: 6px;
+                    alignment: center;
+                    vertical-stretch: 0;
 
                     LxKnob {
-                        label: "OUT";
+                        label: "OUT GAIN";
                         value <=> root.output_gain;
                         value-text: root.output_gain_text;
+                        default-value: 0.5;
                         changed(v) => { root.output_gain_changed(v); }
-                    }
-                    LxKnob {
-                        label: "MONO FLOOR";
-                        value <=> root.mono_floor;
-                        value-text: root.mono_floor_text;
-                        changed(v) => { root.mono_floor_changed(v); }
-                    }
-                    LxKnob {
-                        label: "PRE TGT";
-                        value <=> root.pre_master_target_db;
-                        value-text: root.pre_master_target_db_text;
-                        changed(v) => { root.pre_master_target_db_changed(v); }
+                        horizontal-stretch: 0;
                     }
 
                     LxButton {
-                        text: root.auto_loud_label;
+                        text: root.auto_loud_measuring ? "MEAS…" : root.auto_loud_label;
                         primary: root.auto_loud_measuring;
+                        min-width: 72px;
+                        horizontal-stretch: 0;
                         vertical-stretch: 0;
-                        clicked => { root.auto_loud_clicked(); }
+                        // PRE-MASTER owns loudness — grey out (Vizia parity)
+                        opacity: root.pre_master_active ? 0.35 : 1.0;
+                        clicked => {
+                            if !root.pre_master_active {
+                                root.auto_loud_clicked();
+                            }
+                        }
                     }
+                }
 
-                    LxLedPeakMeter {
-                        vertical-stretch: 0;
-                        level-l: root.meter_l;
-                        level-r: root.meter_r;
-                        hold-l: root.peak_hold_l;
-                        hold-r: root.peak_hold_r;
-                        balance: root.balance;
-                        reset-peaks => { root.reset_peaks(); }
-                    }
-                    Text {
-                        text: root.peak_l_text + "  " + root.peak_r_text;
-                        font-size: Lx.font-xs;
-                        color: Lx.text-secondary;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
+                Text {
+                    text: "OUTPUT PEAK";
+                    font-size: Lx.font-xs;
+                    color: Lx.text-muted;
+                    vertical-stretch: 0;
+                }
 
-                    LxGoniometer {
-                        min-height: 120px;
-                        vertical-stretch: 1;
-                        commands: root.gonio_path;
-                    }
+                LxLedPeakMeter {
+                    height: 160px;
+                    vertical-stretch: 0;
+                    level-l: root.meter_l;
+                    level-r: root.meter_r;
+                    hold-l: root.peak_hold_l;
+                    hold-r: root.peak_hold_r;
+                    balance: root.balance;
+                    reset-peaks => { root.reset_peaks(); }
+                }
 
-                    LxCorrelation {
-                        correlation: root.correlation;
-                        text: root.corr_text;
-                        vertical-stretch: 0;
+                TouchArea {
+                    vertical-stretch: 0;
+                    clicked => { root.reset_peaks(); }
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: root.peak_l_text != "" ? root.peak_l_text : "L";
+                            font-size: Lx.font-sm;
+                            color: Lx.amber;
+                            horizontal-stretch: 1;
+                        }
+                        Text {
+                            text: "dB";
+                            font-size: Lx.font-xs;
+                            color: Lx.text-muted;
+                        }
+                        Text {
+                            text: root.peak_r_text != "" ? root.peak_r_text : "R";
+                            font-size: Lx.font-sm;
+                            color: Lx.amber;
+                            horizontal-stretch: 1;
+                            horizontal-alignment: right;
+                        }
                     }
-                    Text {
-                        text: root.corr_text;
-                        font-size: Lx.font-xs;
-                        color: Lx.text-muted;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
-                    Text {
-                        text: root.balance_text;
-                        font-size: Lx.font-xs;
-                        color: Lx.text-muted;
-                        horizontal-alignment: center;
-                        vertical-stretch: 0;
-                    }
+                }
+
+                LxCorrelation {
+                    correlation: root.correlation;
+                    text: root.corr_text;
+                    vertical-stretch: 0;
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: transparent;
+                }
+
+                Text {
+                    text: "GONIOMETER";
+                    font-size: Lx.font-xs;
+                    color: Lx.text-muted;
+                    vertical-stretch: 0;
+                }
+
+                LxGoniometer {
+                    height: Lx.gonio-h;
+                    vertical-stretch: 0;
+                    commands: root.gonio_path;
+                    path-w: 139;
+                    path-h: 139;
                 }
             }
         }
 
+        // ── FOOTER 110px (Lx.footer-h, same as Meridian) ──
+        // ANALYZE | PRE-MASTER | MONO FLOOR
         LxShellFooter {
-            HorizontalLayout {
-                padding: 8px;
-                spacing: 10px;
-                alignment: center;
+            LxSection {
+                title: "ANALYZE";
+                horizontal-stretch: 3;
+                vertical-stretch: 1;
 
-                Text {
-                    text: "ANALYZE";
-                    color: Lx.amber;
-                    font-size: Lx.font-xs;
-                    font-weight: 700;
-                    vertical-stretch: 0;
-                    vertical-alignment: center;
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: center;
+
+                    LxToggleBtn {
+                        label: root.listen_active ? "LISTEN ON" : "LISTEN";
+                        active <=> root.listen_active;
+                        toggled(v) => { root.listen_active_changed(v); }
+                        min-width: 100px;
+                    }
+                    LxButton {
+                        text: "APPLY ANALYSIS";
+                        min-width: 120px;
+                        opacity: root.listen_active ? 1.0 : 0.45;
+                        clicked => {
+                            if root.listen_active {
+                                root.apply_analysis_clicked();
+                            }
+                        }
+                    }
+                    LxButton {
+                        text: "RESET ANALYSIS";
+                        min-width: 120px;
+                        opacity: root.listen_active ? 1.0 : 0.45;
+                        clicked => {
+                            if root.listen_active {
+                                root.reset_analysis_clicked();
+                            }
+                        }
+                    }
                 }
-                LxButton {
-                    text: "APPLY ANALYSIS";
-                    min-width: 120px;
-                    clicked => { root.apply_analysis_clicked(); }
+            }
+
+            LxSection {
+                title: "PRE-MASTER";
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: center;
+
+                    LxToggleBtn {
+                        label: root.pre_master_active ? "ON" : "OFF";
+                        active <=> root.pre_master_active;
+                        toggled(v) => { root.pre_master_active_changed(v); }
+                        min-width: 48px;
+                    }
+                    LxKnob {
+                        label: "TARGET";
+                        small: true;
+                        value <=> root.pre_master_target_db;
+                        value-text: root.pre_master_target_db_text;
+                        default-value: 0.0;
+                        changed(v) => { root.pre_master_target_db_changed(v); }
+                    }
                 }
-                LxButton {
-                    text: "RESET ANALYSIS";
-                    min-width: 120px;
-                    clicked => { root.reset_analysis_clicked(); }
+            }
+
+            LxSection {
+                title: "MONO FLOOR";
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+
+                HorizontalLayout {
+                    spacing: 4px;
+                    alignment: center;
+                    LxKnob {
+                        label: "Hz";
+                        small: true;
+                        value <=> root.mono_floor;
+                        value-text: root.mono_floor_text;
+                        default-value: 0.0;
+                        changed(v) => { root.mono_floor_changed(v); }
+                    }
                 }
-                Rectangle { horizontal-stretch: 1; background: transparent; }
             }
         }
     }

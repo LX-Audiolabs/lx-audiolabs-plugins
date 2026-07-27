@@ -25,9 +25,10 @@ truce-clap   = { workspace = true, optional = true }
 truce-vst3   = { workspace = true, optional = true }
 truce-lv2    = { workspace = true, optional = true }
 truce-loader = { workspace = true }
-truce-slint  = { workspace = true }
 slint        = { workspace = true }
 clap-sys     = { workspace = true, optional = true }
+
+lx-slint-editor = { path = "../../crates/lx-slint-editor" }
 lx-dsp      = { path = "../../crates/lx-dsp" }
 lx-analysis = { path = "../../crates/lx-analysis" }
 realfft     = "3"

@@ -67,7 +67,7 @@ lx-audiolabs-slint/
 ├── plugins/
 │   ├── lucent-slint/       ← Spectrum analyzer
 │   ├── meridian/           ← Channel strip
-│   ├── aether-slint/       ← EQ
+│   ├── aether/             ← EQ + crossfeed
 │   ├── equilibrium-slint/  ← Spectral balancer
 │   ├── aurum-slint/        ← Saturation
 │   └── lucent-relay-slint/ ← Relay sender

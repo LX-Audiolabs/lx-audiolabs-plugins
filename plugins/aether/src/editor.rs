@@ -18,9 +18,10 @@ use crate::{set_band, Biquad, NUM_BANDS};
 
 slint::include_modules!();
 
-// Original Vizia Aether window size.
-const WINDOW_W: u32 = 720;
+// Slightly wider than original 720 Vizia — section titles need room.
+const WINDOW_W: u32 = 730;
 const WINDOW_H: u32 = 395;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Match Meridian `TICK_INTERVAL` — host→UI poll ~30 Hz.
 const TICK_INTERVAL: Duration = Duration::from_millis(33);
@@ -251,6 +252,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             let init_last = init_cfg.last_preset.clone();
             move |state: PluginContext<AetherParams>| {
                 let ui = AetherUi::new().expect("AetherUi::new");
+                ui.set_version(SharedString::from(VERSION));
 
                 if let Some(ref vp) = init_vp {
                     ui.set_vault_path(SharedString::from(vp.as_str()));

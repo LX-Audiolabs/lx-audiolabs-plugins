@@ -41,13 +41,13 @@ vst3_subcategory = "Fx|EQ"
 description = "Equilibrium Slint — pre-master spectral balancer (5-band crossover)"
 
 [[plugin]]
-name = "Aether (Slint)"
-bundle_id = "aether-slint"
-crate = "aether-slint"
+name = "Aether"
+bundle_id = "aether"
+crate = "aether"
 category = "effect"
-fourcc = "Aslt"
+fourcc = "Aeth"
 vst3_subcategory = "Equalizer"
-description = "Aether test port with Slint UI — Harman 5-band EQ + crossfeed"
+description = "Aether — Harman 5-band EQ + crossfeed (headphone monitoring)"
 
 [[plugin]]
 name = "Meridian"

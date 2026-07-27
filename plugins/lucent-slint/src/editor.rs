@@ -1,5 +1,4 @@
-//! Lucent Slint UI — analyzer layout, not a Vizia port.
-//! truce-slint software renderer.
+//! Lucent — lx-slint-editor. Analyzer layout + vizia feature parity (SMOOTH/SNAP/relay).
 //!
 //! Display chain (dev parity 2026-07):
 //! - Spectrum range SPAN-like −78…−18 dB
@@ -11,16 +10,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use lx_analysis::{get_plugin_dir, relay_hub, SPECTRUM_BINS};
+use lx_slint_editor::{LxSlintEditor, PluginContext};
 use slint::SharedString;
-use truce::prelude::*;
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
-use truce_slint::{PluginContext, SlintEditor, SyncFn};
 
 use crate::{
     editor_ensure_consumer, read_masking, read_resonance, LucentParams, LucentParamsParamId as P,
 };
-use lx_analysis::{get_plugin_dir, relay_hub, SPECTRUM_BINS};
 
 slint::include_modules!();
 
@@ -309,17 +307,15 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
     let snap_request = Arc::new(AtomicBool::new(false));
     let accum = Arc::new(Mutex::new(EditorAccum::default()));
 
-    SlintEditor::new(
+    LxSlintEditor::new(
         params.clone(),
         (WINDOW_W, WINDOW_H),
-        move |state: PluginContext<LucentParams>| -> SyncFn<LucentParams> {
-            let ui = match LucentUi::new() {
-                Ok(u) => u,
-                Err(e) => {
-                    tracing::error!("LucentUi::new failed: {e:?}");
-                    return Box::new(|_: &PluginContext<LucentParams>| {});
-                }
-            };
+        {
+            let params = params.clone();
+            let shared = shared.clone();
+            let snap_request = snap_request.clone();
+            move |state: PluginContext<LucentParams>| {
+            let ui = LucentUi::new().expect("LucentUi::new");
 
             ui.set_version(SharedString::from(VERSION));
             let name0 = params.name.read().map(|s| s.clone()).unwrap_or_default();
@@ -376,11 +372,15 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 snap_arm.store(true, Ordering::Release);
             });
 
+            ui
+            }
+        },
+        {
             let shared_sync = shared.clone();
             let params_sync = params.clone();
             let snap_req = snap_request.clone();
             let accum_sync = accum.clone();
-            Box::new(move |state: &PluginContext<LucentParams>| {
+            move |ui: &LucentUi, state: &PluginContext<LucentParams>| {
                 editor_ensure_consumer(&params_sync, &shared_sync);
 
                 let mode = discrete_index(
@@ -562,9 +562,9 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     .copied()
                     .unwrap_or("?");
                 ui.set_status_line(SharedString::from(mode_s));
-            })
+            }
         },
     )
     .resizable(false)
-    .into_editor()
+    .into()
 }

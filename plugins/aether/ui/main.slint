@@ -1,10 +1,10 @@
 import {
-    Lx, LxShellHeader, LxShellBody, LxShellMain, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn, LxDangerBtn,
-    LxLineEdit, LxEqCurve,
+    Lx, LxShellHeader, LxShellBody, LxShellMain, LxSection, LxKnob, LxBandColumn, LxCycleBtn, LxButton, LxToggleBtn,
+    LxDangerBtn, LxLineEdit, LxSelectTrigger, LxEqCurve,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
-// Aether window: 720 × 395 (do not grow canvas).
+// Aether window: 730 × 395 (slightly wider than original 720 — section titles need room).
 export component AetherUi inherits Window {
     // ── EQ band types (0=OFF, 1=LSC, 2=PK, 3=HSC) ──
     in-out property <int> eq1_type: 1;
@@ -51,7 +51,7 @@ export component AetherUi inherits Window {
     in-out property <string> preset_name: "";
     in-out property <string> vault_path: "";
     in property <[string]> preset_names: ["Harman Flat"];
-    in property <string> version: "1.2.7";
+    in property <string> version: "1.3.0";
 
     // ── callbacks: type cycle ──
     callback eq1_type_changed(int);
@@ -95,9 +95,9 @@ export component AetherUi inherits Window {
     callback preset_selected(string);
 
     title: "Aether";
-    preferred-width: 720px;
+    preferred-width: 730px;
     preferred-height: 395px;
-    min-width: 720px;
+    min-width: 730px;
     min-height: 395px;
     background: #171717;
 
@@ -114,73 +114,33 @@ export component AetherUi inherits Window {
             plugin-name: "AETHER";
             version: root.version;
 
+            // Free choice of controls; style comes from lx-ui-slint defaults (button-h).
             HorizontalLayout {
                 spacing: 4px;
                 alignment: center;
 
-                // Preset dropdown trigger — dark style, matches Meridian
-                preset_dd := Rectangle {
-                    width: 130px;
-                    height: Lx.button-h-lg;
-                    vertical-stretch: 0;
-                    horizontal-stretch: 0;
-                    background: Lx.control;
-                    border-radius: Lx.radius-sm;
-
-                    HorizontalLayout {
-                        padding-left: 6px;
-                        padding-right: 6px;
-                        spacing: 4px;
-                        alignment: center;
-
-                        Text {
-                            text: root.preset_name == "" ? "Select preset" : root.preset_name;
-                            font-size: Lx.font-md;
-                            color: Lx.text;
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                            overflow: elide;
-                        }
-                        Text {
-                            text: "▼";
-                            font-size: 8px;
-                            color: Lx.text-muted;
-                            vertical-alignment: center;
-                            horizontal-stretch: 0;
-                        }
-                    }
-
-                    TouchArea {
-                        clicked => { preset_popup.show(); }
-                    }
+                preset_dd := LxSelectTrigger {
+                    text: root.preset_name;
+                    placeholder: "Select preset";
+                    trigger-width: 130px;
+                    clicked => { preset_popup.show(); }
                 }
 
                 LxLineEdit {
                     text <=> root.preset_name;
                     placeholder-text: "Preset name";
                     field-width: 130px;
-                    height: Lx.button-h-lg;
-                    vertical-stretch: 0;
-                    horizontal-stretch: 0;
                 }
 
                 Rectangle { width: 6px; background: transparent; }
 
                 LxButton {
                     text: "SAVE";
-                    horizontal-stretch: 0;
-                    vertical-stretch: 0;
-                    height: Lx.button-h-lg;
-                    min-width: 56px;
                     clicked => { root.save_clicked(); }
                 }
 
                 LxButton {
                     text: "SETUP";
-                    horizontal-stretch: 0;
-                    vertical-stretch: 0;
-                    height: Lx.button-h-lg;
-                    min-width: 56px;
                     clicked => {
                         root.vault_setup_path = root.vault_path;
                         root.vault_setup_open = true;
@@ -190,19 +150,14 @@ export component AetherUi inherits Window {
                 LxToggleBtn {
                     label: "BYPASS";
                     active <=> root.bypass;
-                    horizontal-stretch: 0;
-                    vertical-stretch: 0;
-                    height: Lx.button-h-lg;
                     toggled(v) => { root.bypass_changed(v); }
                 }
             }
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // MAIN — curve + controls
-        // Fixed column shells (Slint-safe). 340+96+130+100+3 + pad12 = 681 < 720.
-        // Shells lock outer width so preferred-size blowouts cannot hide CF/IO.
-        // Canvas stays 720×395.
+        // MAIN — curve + LxSection cards (Meridian group-frame style).
+        // Canvas 730×395. Card widths fixed so CF/IO never get crushed.
         // ═══════════════════════════════════════════════════════════════════
         VerticalLayout {
             padding: 6px;
@@ -210,142 +165,130 @@ export component AetherUi inherits Window {
             vertical-stretch: 1;
             min-width: 0px;
 
-            LxEqCurve {
-                height: 90px;
+            // Curve + hint as one Meridian-style card.
+            LxSection {
+                title: "EQ RESPONSE";
+                horizontal-stretch: 1;
                 vertical-stretch: 0;
-                commands: root.curve_cmds;
-                path-w: 708;
-                path-h: 90;
-                surface: #141414;
-                db-top: "+6";
-                db-mid: "0";
-                db-bot: "-6";
-                freq-lo: "20Hz";
-                freq-mid: "2kHz";
-                freq-hi: "20kHz";
+
+                VerticalLayout {
+                    spacing: 4px;
+                    vertical-stretch: 0;
+
+                    LxEqCurve {
+                        height: 78px;
+                        vertical-stretch: 0;
+                        commands: root.curve_cmds;
+                        // Inside LxSection pad — slightly under full window width.
+                        path-w: 690;
+                        path-h: 78;
+                        surface: #141414;
+                        db-top: "+6";
+                        db-mid: "0";
+                        db-bot: "-6";
+                        freq-lo: "20Hz";
+                        freq-mid: "2kHz";
+                        freq-hi: "20kHz";
+                    }
+
+                    Text {
+                        text: "5-Band Harman — Enter values from AutoEQ.app";
+                        font-size: Lx.font-md;
+                        color: Lx.amber;
+                        vertical-stretch: 0;
+                    }
+                }
             }
 
-            Text {
-                text: "5-Band Harman — Enter values from AutoEQ.app";
-                font-size: Lx.font-md;
-                color: Lx.amber;
-                vertical-stretch: 0;
-            }
-
-            // ── Control row: EQ | BLEND | CROSSFEED | INPUT/GAIN ──
+            // ── Control row: EQ | HARMAN BLEND | CROSSFEED | INPUT ──
+            // Meridian-style: stretch across full width (not pin-left fixed shells).
             HorizontalLayout {
-                spacing: 0px;
+                spacing: 4px;
                 vertical-stretch: 1;
-                horizontal-stretch: 0;
-                alignment: start;
+                horizontal-stretch: 1;
+                min-width: 0px;
+                alignment: stretch;
 
-                // ── EQ 340 ──
-                Rectangle {
-                    width: 340px;
-                    horizontal-stretch: 0;
-                    background: transparent;
+                LxSection {
+                    title: "EQ";
+                    horizontal-stretch: 3;
+                    vertical-stretch: 1;
+                    min-width: 0px;
 
-                    VerticalLayout {
-                        width: 100%;
-                        height: 100%;
+                    HorizontalLayout {
                         spacing: 4px;
-                        padding: 5px;
                         alignment: center;
+                        horizontal-stretch: 1;
+                        vertical-stretch: 1;
 
-                        Text {
-                            text: "EQ";
-                            font-size: Lx.font-sm;
-                            color: Lx.text-secondary;
-                            horizontal-alignment: center;
-                            vertical-stretch: 0;
+                        LxBandColumn {
+                            type_choices: root.band-types;
+                            type_index <=> root.eq1_type;
+                            freq_text: root.eq1_freq_text;
+                            gain_text: root.eq1_gain_text;
+                            q_text: root.eq1_q_text;
+                            type_changed(v) => { root.eq1_type_changed(v); }
+                            freq_committed(s) => { root.eq1_freq_committed(s); }
+                            gain_committed(s) => { root.eq1_gain_committed(s); }
+                            q_committed(s) => { root.eq1_q_committed(s); }
                         }
-
-                        HorizontalLayout {
-                            spacing: 4px;
-                            alignment: center;
-                            horizontal-stretch: 0;
-
-                            LxBandColumn {
-                                type_choices: root.band-types;
-                                type_index <=> root.eq1_type;
-                                freq_text: root.eq1_freq_text;
-                                gain_text: root.eq1_gain_text;
-                                q_text: root.eq1_q_text;
-                                type_changed(v) => { root.eq1_type_changed(v); }
-                                freq_committed(s) => { root.eq1_freq_committed(s); }
-                                gain_committed(s) => { root.eq1_gain_committed(s); }
-                                q_committed(s) => { root.eq1_q_committed(s); }
-                            }
-                            LxBandColumn {
-                                type_choices: root.band-types;
-                                type_index <=> root.eq2_type;
-                                freq_text: root.eq2_freq_text;
-                                gain_text: root.eq2_gain_text;
-                                q_text: root.eq2_q_text;
-                                type_changed(v) => { root.eq2_type_changed(v); }
-                                freq_committed(s) => { root.eq2_freq_committed(s); }
-                                gain_committed(s) => { root.eq2_gain_committed(s); }
-                                q_committed(s) => { root.eq2_q_committed(s); }
-                            }
-                            LxBandColumn {
-                                type_choices: root.band-types;
-                                type_index <=> root.eq3_type;
-                                freq_text: root.eq3_freq_text;
-                                gain_text: root.eq3_gain_text;
-                                q_text: root.eq3_q_text;
-                                type_changed(v) => { root.eq3_type_changed(v); }
-                                freq_committed(s) => { root.eq3_freq_committed(s); }
-                                gain_committed(s) => { root.eq3_gain_committed(s); }
-                                q_committed(s) => { root.eq3_q_committed(s); }
-                            }
-                            LxBandColumn {
-                                type_choices: root.band-types;
-                                type_index <=> root.eq4_type;
-                                freq_text: root.eq4_freq_text;
-                                gain_text: root.eq4_gain_text;
-                                q_text: root.eq4_q_text;
-                                type_changed(v) => { root.eq4_type_changed(v); }
-                                freq_committed(s) => { root.eq4_freq_committed(s); }
-                                gain_committed(s) => { root.eq4_gain_committed(s); }
-                                q_committed(s) => { root.eq4_q_committed(s); }
-                            }
-                            LxBandColumn {
-                                type_choices: root.band-types;
-                                type_index <=> root.eq5_type;
-                                freq_text: root.eq5_freq_text;
-                                gain_text: root.eq5_gain_text;
-                                q_text: root.eq5_q_text;
-                                type_changed(v) => { root.eq5_type_changed(v); }
-                                freq_committed(s) => { root.eq5_freq_committed(s); }
-                                gain_committed(s) => { root.eq5_gain_committed(s); }
-                                q_committed(s) => { root.eq5_q_committed(s); }
-                            }
+                        LxBandColumn {
+                            type_choices: root.band-types;
+                            type_index <=> root.eq2_type;
+                            freq_text: root.eq2_freq_text;
+                            gain_text: root.eq2_gain_text;
+                            q_text: root.eq2_q_text;
+                            type_changed(v) => { root.eq2_type_changed(v); }
+                            freq_committed(s) => { root.eq2_freq_committed(s); }
+                            gain_committed(s) => { root.eq2_gain_committed(s); }
+                            q_committed(s) => { root.eq2_q_committed(s); }
+                        }
+                        LxBandColumn {
+                            type_choices: root.band-types;
+                            type_index <=> root.eq3_type;
+                            freq_text: root.eq3_freq_text;
+                            gain_text: root.eq3_gain_text;
+                            q_text: root.eq3_q_text;
+                            type_changed(v) => { root.eq3_type_changed(v); }
+                            freq_committed(s) => { root.eq3_freq_committed(s); }
+                            gain_committed(s) => { root.eq3_gain_committed(s); }
+                            q_committed(s) => { root.eq3_q_committed(s); }
+                        }
+                        LxBandColumn {
+                            type_choices: root.band-types;
+                            type_index <=> root.eq4_type;
+                            freq_text: root.eq4_freq_text;
+                            gain_text: root.eq4_gain_text;
+                            q_text: root.eq4_q_text;
+                            type_changed(v) => { root.eq4_type_changed(v); }
+                            freq_committed(s) => { root.eq4_freq_committed(s); }
+                            gain_committed(s) => { root.eq4_gain_committed(s); }
+                            q_committed(s) => { root.eq4_q_committed(s); }
+                        }
+                        LxBandColumn {
+                            type_choices: root.band-types;
+                            type_index <=> root.eq5_type;
+                            freq_text: root.eq5_freq_text;
+                            gain_text: root.eq5_gain_text;
+                            q_text: root.eq5_q_text;
+                            type_changed(v) => { root.eq5_type_changed(v); }
+                            freq_committed(s) => { root.eq5_freq_committed(s); }
+                            gain_committed(s) => { root.eq5_gain_committed(s); }
+                            q_committed(s) => { root.eq5_q_committed(s); }
                         }
                     }
                 }
 
-                Rectangle { width: 1px; horizontal-stretch: 0; background: #1f2929; }
-
-                // ── HARMAN BLEND 96 ──
-                Rectangle {
-                    width: 96px;
-                    horizontal-stretch: 0;
-                    background: transparent;
+                LxSection {
+                    title: "HARMAN BLEND";
+                    horizontal-stretch: 1;
+                    vertical-stretch: 1;
+                    min-width: 114px;
 
                     VerticalLayout {
-                        width: 100%;
-                        height: 100%;
                         spacing: 4px;
-                        padding: 5px;
                         alignment: center;
-
-                        Text {
-                            text: "HARMAN BLEND";
-                            font-size: Lx.font-sm;
-                            color: Lx.text-secondary;
-                            horizontal-alignment: center;
-                            vertical-stretch: 0;
-                        }
+                        vertical-stretch: 1;
 
                         HorizontalLayout {
                             spacing: 0px;
@@ -364,39 +307,34 @@ export component AetherUi inherits Window {
                             }
                         }
 
-                        Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+                        Rectangle { vertical-stretch: 1; min-height: 4px; background: transparent; }
 
-                        LxDangerBtn {
-                            label: "RESET";
-                            min-width: 60px;
+                        HorizontalLayout {
+                            spacing: 0px;
+                            alignment: center;
                             horizontal-stretch: 0;
-                            clicked => { root.reset_clicked(); }
+                            vertical-stretch: 0;
+
+                            LxDangerBtn {
+                                label: "RESET";
+                                min-width: 60px;
+                                horizontal-stretch: 0;
+                                clicked => { root.reset_clicked(); }
+                            }
                         }
                     }
                 }
 
-                Rectangle { width: 1px; horizontal-stretch: 0; background: #1f2929; }
-
-                // ── CROSSFEED 130 ──
-                Rectangle {
-                    width: 130px;
-                    horizontal-stretch: 0;
-                    background: transparent;
+                LxSection {
+                    title: "CROSSFEED";
+                    horizontal-stretch: 1;
+                    vertical-stretch: 1;
+                    min-width: 134px;
 
                     VerticalLayout {
-                        width: 100%;
-                        height: 100%;
                         spacing: 4px;
-                        padding: 5px;
                         alignment: center;
-
-                        Text {
-                            text: "CROSSFEED";
-                            font-size: Lx.font-sm;
-                            color: Lx.text-secondary;
-                            horizontal-alignment: center;
-                            vertical-stretch: 0;
-                        }
+                        vertical-stretch: 1;
 
                         HorizontalLayout {
                             spacing: 6px;
@@ -422,41 +360,37 @@ export component AetherUi inherits Window {
                             }
                         }
 
-                        Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+                        Rectangle { vertical-stretch: 1; min-height: 4px; background: transparent; }
 
-                        LxCycleBtn {
-                            choices: root.realism-labels;
-                            index <=> root.cf_realism;
-                            inactive-index: 0;
-                            btn-width: 100px;
+                        HorizontalLayout {
+                            spacing: 0px;
+                            alignment: center;
                             horizontal-stretch: 0;
-                            changed(v) => { root.cf_realism_changed(v); }
+                            vertical-stretch: 0;
+
+                            LxCycleBtn {
+                                choices: root.realism-labels;
+                                index <=> root.cf_realism;
+                                inactive-index: 0;
+                                btn-width: 100px;
+                                horizontal-stretch: 0;
+                                changed(v) => { root.cf_realism_changed(v); }
+                            }
                         }
                     }
                 }
 
-                Rectangle { width: 1px; horizontal-stretch: 0; background: #1f2929; }
-
-                // ── INPUT + GAIN 100 ──
-                Rectangle {
-                    width: 100px;
-                    horizontal-stretch: 0;
-                    background: transparent;
+                LxSection {
+                    title: "INPUT";
+                    horizontal-stretch: 1;
+                    vertical-stretch: 1;
+                    min-width: 104px;
 
                     VerticalLayout {
-                        width: 100%;
-                        height: 100%;
                         spacing: 4px;
-                        padding: 5px;
                         alignment: center;
+                        vertical-stretch: 1;
 
-                        Text {
-                            text: "INPUT";
-                            font-size: Lx.font-sm;
-                            color: Lx.text-secondary;
-                            horizontal-alignment: center;
-                            vertical-stretch: 0;
-                        }
                         Text {
                             text: root.input_db_text;
                             font-size: Lx.font-lg;
@@ -472,7 +406,7 @@ export component AetherUi inherits Window {
                             vertical-stretch: 0;
                         }
 
-                        Rectangle { vertical-stretch: 1; min-height: 8px; background: transparent; }
+                        Rectangle { vertical-stretch: 1; min-height: 4px; background: transparent; }
 
                         HorizontalLayout {
                             spacing: 0px;

@@ -140,8 +140,12 @@ export component LxShellFooter inherits Rectangle {
 
 // ── Header ───────────────────────────────────────────────────────────────────
 
-/// Brand + plugin name + version (left). Custom actions are passed as children
-/// on the right and are automatically vertically centered. Frozen 50px.
+/// Brand + plugin name + version (left). Plugin-specific actions as children
+/// (right, auto-centered). Frozen 50px.
+///
+/// Style rule: free choice of which controls, but all use default Lx chrome
+/// (Lx.button-h / LxButton / LxToggleBtn / LxDangerBtn / LxSelectTrigger /
+/// LxLineEdit). No local height overrides, no `small` in the header.
 export component LxShellHeader inherits Rectangle {
     in property <string> brand-left: "LX";
     in property <string> brand-right: "AUDIOLABS";

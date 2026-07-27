@@ -182,11 +182,13 @@ export component LxSection inherits Rectangle {
     }
 }
 
-// Amber-when-active toggle button (MONO / DELTA / BYPASS / modes). Soft-3D bevel.
+// Amber-when-active toggle (MONO / DELTA / BYPASS / …). Soft-3D bevel.
+// Default height = Lx.button-h (shared chrome). `small` only for dense body rows.
 export component LxToggleBtn inherits Rectangle {
     in property <string> label: "";
     in-out property <bool> active: false;
     in property <bool> danger: false;
+    // Dense body only (e.g. solo "S"). Never set true for LxShellHeader actions.
     in property <bool> small: false;
 
     callback toggled(bool);
@@ -252,7 +254,8 @@ export component LxToggleBtn inherits Rectangle {
     ]
 }
 
-// Generic action button. Use `primary: true` for the amber SNAP-style variant.
+// Generic action button (SAVE / SETUP / SNAP / …). Height locked to Lx.button-h.
+// Use `primary: true` for the amber SNAP-style variant. Don't override height.
 export component LxButton inherits Rectangle {
     in property <string> text: "";
     in property <bool> primary: false;
@@ -306,7 +309,7 @@ export component LxButton inherits Rectangle {
     ]
 }
 
-// Danger action button (RESET etc.) — momentary press.
+// Danger action button (RESET etc.) — momentary press. Same chrome as LxButton.
 export component LxDangerBtn inherits Rectangle {
     in property <string> label: "RESET";
     callback clicked;
@@ -343,6 +346,66 @@ export component LxDangerBtn inherits Rectangle {
         }
         pressed when ta.pressed: {
             background: @linear-gradient(180deg, #2a1010 0%, #5c2020 100%);
+        }
+    ]
+}
+
+// Dropdown / select trigger — same height + bevel language as LxButton.
+// Popup list stays plugin-owned; this is chrome only.
+export component LxSelectTrigger inherits Rectangle {
+    in property <string> text: "";
+    in property <string> placeholder: "Select…";
+    in property <length> trigger-width: 130px;
+    callback clicked;
+
+    width: root.trigger-width;
+    height: Lx.button-h;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    background: @linear-gradient(180deg, Lx.raise-hi 0%, Lx.control 50%, Lx.raise-lo 100%);
+    border-radius: Lx.radius-sm;
+    border-width: 1px;
+    border-color: Lx.edge-dark;
+    drop-shadow-offset-x: 0px;
+    drop-shadow-offset-y: Lx.shadow-btn-y;
+    drop-shadow-blur: Lx.shadow-btn-blur;
+    drop-shadow-color: Lx.shadow-soft;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 4px;
+        alignment: center;
+
+        Text {
+            text: root.text == "" ? root.placeholder : root.text;
+            font-size: Lx.font-md;
+            color: root.text == "" ? Lx.text-muted : Lx.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        Text {
+            text: "▼";
+            font-size: 8px;
+            color: Lx.text-muted;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+    }
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    states [
+        hover when ta.has-hover: {
+            background: @linear-gradient(180deg, Lx.control-hover 0%, Lx.control 55%, Lx.raise-lo 100%);
+        }
+        pressed when ta.pressed: {
+            background: @linear-gradient(180deg, Lx.raise-lo 0%, Lx.control-active 100%);
+            drop-shadow-offset-y: 0px;
+            drop-shadow-blur: 1px;
         }
     ]
 }

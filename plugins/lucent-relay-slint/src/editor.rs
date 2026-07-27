@@ -1,15 +1,13 @@
-//! Lucent Relay Slint editor — name, target, connection status.
-//! truce-slint software renderer.
+//! Lucent Relay — lx-slint-editor (name, target, connection status).
 
 use std::sync::Arc;
 
+use lx_analysis::relay_hub;
+use lx_slint_editor::{LxSlintEditor, PluginContext};
 use slint::{ModelRc, SharedString, VecModel};
-use truce::prelude::*;
 use truce_core::editor::Editor;
-use truce_slint::{PluginContext, SlintEditor, SyncFn};
 
 use crate::{editor_publish_heartbeat, sync_live, LucentRelayParams};
-use lx_analysis::relay_hub;
 
 slint::include_modules!();
 
@@ -23,17 +21,13 @@ fn names_model(names: &[String]) -> ModelRc<SharedString> {
 }
 
 pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
-    SlintEditor::new(
+    LxSlintEditor::new(
         params.clone(),
         (WINDOW_W, WINDOW_H),
-        move |_state: PluginContext<LucentRelayParams>| -> SyncFn<LucentRelayParams> {
-            let ui = match LucentRelayUi::new() {
-                Ok(u) => u,
-                Err(e) => {
-                    tracing::error!("LucentRelayUi::new failed: {e:?}");
-                    return Box::new(|_: &PluginContext<LucentRelayParams>| {});
-                }
-            };
+        {
+            let params = params.clone();
+            move |_state: PluginContext<LucentRelayParams>| {
+            let ui = LucentRelayUi::new().expect("LucentRelayUi::new");
 
             ui.set_version(SharedString::from(VERSION));
             let initial_name = params.name.read().map(|s| s.clone()).unwrap_or_default();
@@ -67,8 +61,12 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                 sync_live(&p);
             });
 
+            ui
+            }
+        },
+        {
             let params_sync = params.clone();
-            Box::new(move |_state: &PluginContext<LucentRelayParams>| {
+            move |ui: &LucentRelayUi, _state: &PluginContext<LucentRelayParams>| {
                 editor_publish_heartbeat(&params_sync);
 
                 let now_ms = lx_analysis::shm::now_ms();
@@ -134,9 +132,9 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                 } else {
                     "select target"
                 }));
-            })
+            }
         },
     )
     .resizable(false)
-    .into_editor()
+    .into()
 }

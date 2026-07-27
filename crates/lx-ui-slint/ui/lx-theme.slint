@@ -105,12 +105,19 @@ export global Lx {
     out property <length> font-md: 11px;
     out property <length> font-lg: 14px;
 
-    // Control sizes (match Vizia shared-ui / vault ui-layout-spec)
+    // ── Control sizes ──────────────────────────────────────────────────────
+    // Shared chrome language for ALL plugins. Which buttons appear is per-plugin;
+    // when a control exists, it uses these tokens — do not invent local heights.
+    //
+    //   button-h     → default for LxButton / LxToggleBtn / LxDangerBtn /
+    //                  LxLineEdit / LxSelectTrigger / header actions.
+    //   button-h-sm  → dense body only (solo "S", tight toolbars). NOT header.
+    //   button-h-lg  → rare oversized chrome; do not use for standard actions.
     out property <length> button-h: 22px;
     out property <length> button-h-sm: 18px;
     out property <length> button-h-lg: 30px;
     out property <length> header-h: 50px;       // frozen header zone
-    out property <length> header-h-sm: 40px;    // compact (Aether)
+    out property <length> header-h-sm: 40px;    // compact window (legacy)
     out property <length> footer-h: 110px;      // frozen footer zone
     out property <length> stereo-meter-h: 180px;
     out property <length> left-bar-w: 180px;    // vault / presets sidebar

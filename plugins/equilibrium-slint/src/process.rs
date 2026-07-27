@@ -503,9 +503,12 @@ fn publish(
     let listen = ctrl.listen;
     let auto_gain = ctrl.auto_gain;
     let is_measuring = ctrl.is_measuring;
-    let max_out_peak = metrics.max_out_peak;
-    let max_out_peak_l = metrics.max_out_peak_l;
-    let max_out_peak_r = metrics.max_out_peak_r;
+    // Sample-loop peaks superseded by final-buffer metering after PRE-MASTER.
+    let _ = (
+        metrics.max_out_peak,
+        metrics.max_out_peak_l,
+        metrics.max_out_peak_r,
+    );
     let sum_power_in = metrics.sum_power_in;
     let sum_power_out = metrics.sum_power_out;
     let sum_power_l = metrics.sum_power_l;
@@ -680,45 +683,6 @@ fn publish(
         .phase_correlation
         .store(correlation.clamp(-1.0, 1.0), Ordering::Release);
 
-    // Peak meters
-    let block_peak_db = gain_to_db(max_out_peak);
-    params
-        .shared
-        .output_peak
-        .store(block_peak_db, Ordering::Release);
-    if block_peak_db > state.peak_hold_value {
-        state.peak_hold_value = block_peak_db;
-    }
-    params
-        .shared
-        .peak_hold
-        .store(state.peak_hold_value, Ordering::Release);
-
-    let peak_l_db = gain_to_db(max_out_peak_l);
-    let peak_r_db = gain_to_db(max_out_peak_r);
-    params
-        .shared
-        .output_peak_l
-        .store(peak_l_db, Ordering::Release);
-    params
-        .shared
-        .output_peak_r
-        .store(peak_r_db, Ordering::Release);
-    if peak_l_db > state.peak_hold_l_value {
-        state.peak_hold_l_value = peak_l_db;
-    }
-    if peak_r_db > state.peak_hold_r_value {
-        state.peak_hold_r_value = peak_r_db;
-    }
-    params
-        .shared
-        .peak_hold_l
-        .store(state.peak_hold_l_value, Ordering::Release);
-    params
-        .shared
-        .peak_hold_r
-        .store(state.peak_hold_r_value, Ordering::Release);
-
     // Auto gain
     if auto_gain && count_samples > 0 {
         let avg_power_in = sum_power_in * sample_weight;
@@ -767,7 +731,7 @@ fn publish(
         }
     }
 
-    // PRE-MASTER
+    // PRE-MASTER (gain on final buffer; peaks published once after this)
     if params.pre_master_active.value() {
         let target_linear = db_to_gain(params.pre_master_target_db.raw_target() as f32);
         let n = out0.len().min(out1.len());
@@ -783,6 +747,10 @@ fn publish(
             state.pre_master_measure_count = 0;
             state.pre_master_gain = 1.0;
             state.pre_master_active_prev = true;
+            // Fresh holds for the new gain stage
+            state.peak_hold_value = MINUS_INF_DB;
+            state.peak_hold_l_value = MINUS_INF_DB;
+            state.peak_hold_r_value = MINUS_INF_DB;
         }
 
         if state.pre_master_measure_count < measure_samples {
@@ -801,6 +769,10 @@ fn publish(
                 let max_cut = db_to_gain(-24.0);
                 state.pre_master_gain =
                     (target_linear / state.pre_master_measure_peak).clamp(max_cut, max_boost);
+                // Gain just engaged — drop pre-measure holds
+                state.peak_hold_value = MINUS_INF_DB;
+                state.peak_hold_l_value = MINUS_INF_DB;
+                state.peak_hold_r_value = MINUS_INF_DB;
             } else {
                 state.pre_master_measure_count = 0;
                 state.pre_master_measure_peak = 0.0;
@@ -811,41 +783,57 @@ fn publish(
             out0[i] *= state.pre_master_gain;
             out1[i] *= state.pre_master_gain;
         }
-
-        let mut post_peak = 0.0f32;
-        let mut post_peak_l = 0.0f32;
-        let mut post_peak_r = 0.0f32;
-        for i in 0..n {
-            let abs_l = out0[i].abs();
-            let abs_r = out1[i].abs();
-            post_peak = post_peak.max(abs_l).max(abs_r);
-            post_peak_l = post_peak_l.max(abs_l);
-            post_peak_r = post_peak_r.max(abs_r);
+    } else {
+        if state.pre_master_active_prev {
+            state.peak_hold_value = MINUS_INF_DB;
+            state.peak_hold_l_value = MINUS_INF_DB;
+            state.peak_hold_r_value = MINUS_INF_DB;
         }
-        let post_db = gain_to_db(post_peak.max(1e-9));
-        params.shared.output_peak.store(post_db, Ordering::Release);
-        if post_db > state.peak_hold_value {
-            state.peak_hold_value = post_db;
+        state.pre_master_gain = 1.0;
+        state.pre_master_active_prev = false;
+    }
+
+    // Peak meters from final output (post PRE-MASTER / bypass path)
+    {
+        let n = out0.len().min(out1.len());
+        let mut peak = 0.0f32;
+        let mut peak_l = 0.0f32;
+        let mut peak_r = 0.0f32;
+        for i in 0..n {
+            let al = out0[i].abs();
+            let ar = out1[i].abs();
+            peak = peak.max(al).max(ar);
+            peak_l = peak_l.max(al);
+            peak_r = peak_r.max(ar);
+        }
+        let block_peak_db = gain_to_db(peak);
+        params
+            .shared
+            .output_peak
+            .store(block_peak_db, Ordering::Release);
+        if block_peak_db > state.peak_hold_value {
+            state.peak_hold_value = block_peak_db;
         }
         params
             .shared
             .peak_hold
             .store(state.peak_hold_value, Ordering::Release);
-        let post_l_db = gain_to_db(post_peak_l.max(1e-9));
-        let post_r_db = gain_to_db(post_peak_r.max(1e-9));
+
+        let peak_l_db = gain_to_db(peak_l);
+        let peak_r_db = gain_to_db(peak_r);
         params
             .shared
             .output_peak_l
-            .store(post_l_db, Ordering::Release);
+            .store(peak_l_db, Ordering::Release);
         params
             .shared
             .output_peak_r
-            .store(post_r_db, Ordering::Release);
-        if post_l_db > state.peak_hold_l_value {
-            state.peak_hold_l_value = post_l_db;
+            .store(peak_r_db, Ordering::Release);
+        if peak_l_db > state.peak_hold_l_value {
+            state.peak_hold_l_value = peak_l_db;
         }
-        if post_r_db > state.peak_hold_r_value {
-            state.peak_hold_r_value = post_r_db;
+        if peak_r_db > state.peak_hold_r_value {
+            state.peak_hold_r_value = peak_r_db;
         }
         params
             .shared
@@ -855,9 +843,6 @@ fn publish(
             .shared
             .peak_hold_r
             .store(state.peak_hold_r_value, Ordering::Release);
-    } else {
-        state.pre_master_gain = 1.0;
-        state.pre_master_active_prev = false;
     }
 
     // Goniometer scope buffer
