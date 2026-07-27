@@ -1,7 +1,10 @@
-# Project-specific overlay for lx-audio-graph.
-# Add custom frameworks or migrations here. The default taxonomy already
-# covers truce, nih-plug, clack, JUCE, Slint, egui, iced, vizia, wry, etc.
+# LX Audiolabs — Slint workspace configuration for lx-audio-graph.
+# project_name and internal_crates are auto-detected.
 
 [migrations.truce-slint]
 from = "truce-slint"
 to = "lx-slint-editor"
+
+[rules]
+plugin_target_editor = "Plugins should use lx-slint-editor, not truce-slint."
+crate_vs_plugin = "Reusable logic belongs in crates/, product logic belongs in plugins/."
