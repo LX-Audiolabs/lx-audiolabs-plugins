@@ -283,7 +283,8 @@ pub struct SharedState {
     /// a dead claim alive and fighting the new owner.
     pub shm_generation: Arc<AtomicU32>,
     /// Per-relay enable mask keyed by SHM publisher slot (bit `i` = slot `i` active).
-    /// `0` means "no UI preference — treat all relays as active" (editor closed).
+    /// Bit 31 = [`RELAY_MASK_DRIVEN`]: editor is driving toggles.
+    /// `0` (no driven bit) = no UI preference — treat all relays as active.
     pub relay_active_mask: Arc<AtomicU32>,
     /// UI-only display toggle: 1/3-octave smoothing on the spectrum view.
     /// Read by the editor tick each frame; not persisted, not a plugin param.
@@ -396,8 +397,23 @@ impl Default for SharedState {
     }
 }
 
+/// Editor-driving flag for [`SharedState::relay_active_mask`].
+/// Without this bit the mask is "no preference" (all slots active) — even when
+/// the low bits are zero. That way "user turned every relay off" (driven +
+/// bits=0) is distinct from "editor closed / never set a mask" (0).
+pub const RELAY_MASK_DRIVEN: u32 = 1u32 << 31;
+
+/// Whether SHM publisher `slot` is enabled under the editor's relay mask.
+#[inline]
+pub fn relay_slot_active(mask: u32, slot: u8) -> bool {
+    if mask & RELAY_MASK_DRIVEN == 0 {
+        return true;
+    }
+    mask & (1u32 << slot) != 0
+}
+
 /// Filter relay feeds by the editor's per-slot active mask.
-/// When `mask == 0` (editor not driving toggles), all feeds pass through.
+/// See [`relay_slot_active`] / [`RELAY_MASK_DRIVEN`].
 #[inline]
 pub fn filter_relays_by_mask(
     mask: u32,
@@ -405,7 +421,7 @@ pub fn filter_relays_by_mask(
 ) -> Vec<(String, Vec<f32>)> {
     feeds
         .into_iter()
-        .filter(|(slot, _, _)| mask == 0 || mask & (1u32 << slot) != 0)
+        .filter(|(slot, _, _)| relay_slot_active(mask, *slot))
         .map(|(_, name, spec)| (name, spec))
         .collect()
 }
@@ -420,10 +436,14 @@ mod tests {
             (0, "A".into(), vec![]),
             (2, "B".into(), vec![]),
         ];
+        // No driven bit → all pass (editor not driving).
         let all = filter_relays_by_mask(0, feeds.clone());
         assert_eq!(all.len(), 2);
-        let one = filter_relays_by_mask(1 << 2, feeds);
+        let one = filter_relays_by_mask((1 << 2) | RELAY_MASK_DRIVEN, feeds.clone());
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].0, "B");
+        // Driven + zero bits → none pass (user disabled every relay).
+        let none = filter_relays_by_mask(RELAY_MASK_DRIVEN, feeds);
+        assert!(none.is_empty());
     }
 }

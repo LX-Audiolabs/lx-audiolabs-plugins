@@ -11,16 +11,19 @@ export struct RelayCurve { cmds: string, col: color }
 /// Resonance marker: Rust-built path (line + diamond) + per-marker alpha.
 export struct ResMarker { cmds: string, a: float }
 
-/// Lucent — FFT spectrum analyser / masking. Frozen vault layout 990×660.
+/// Lucent — FFT spectrum analyser / masking.
+/// Compact shell (no footer / no OUT GAIN): 990 × 500 — right bar is
+/// Peak → correlation → goniometer only (Meridian order, tight pack).
 export component LucentUi inherits Window {
     init => { Palette.color-scheme = ColorScheme.dark; }
 
     title: "Lucent";
     background: Lx.window;
     preferred-width: Lx.window-w;
-    preferred-height: Lx.window-h;
+    // Not Lx.window-h (660): Lucent has no footer; tight right-bar stack.
+    preferred-height: 500px;
     min-width: Lx.window-w;
-    min-height: Lx.window-h;
+    min-height: 500px;
 
     in property <string> version: "1.0.0";
 
@@ -90,14 +93,16 @@ export component LucentUi inherits Window {
             version: root.version;
             status-text: root.status_line;
 
+            // Free choice of controls; chrome = lx-ui-slint defaults (button-h).
+            // Name field uses default dark LxLineEdit (not light white box).
             HorizontalLayout {
                 spacing: 4px;
                 alignment: center;
 
                 LxLineEdit {
                     text <=> root.display_name;
-                    light: true;
-                    field-width: 120px;
+                    placeholder-text: "Instance name";
+                    field-width: 130px;
                     accepted(t) => { root.display_name_changed(t); }
                     committed(t) => { root.display_name_changed(t); }
                 }
@@ -106,27 +111,24 @@ export component LucentUi inherits Window {
                     index <=> root.analyze_mode;
                     changed(v) => { root.analyze_mode_changed(v); }
                 }
-                LxToggleBtn {
-                    label: "SMOOTH";
-                    active <=> root.spectrum_smooth;
-                    toggled(v) => { root.spectrum_smooth_changed(v); }
-                }
-                LxToggleBtn {
-                    label: "BYPASS";
-                    danger: true;
-                    active <=> root.bypass_active;
-                    toggled(v) => { root.bypass_active_changed(v); }
-                }
+
+                Rectangle { width: 6px; background: transparent; }
+
                 LxDangerBtn {
                     label: "RESET";
                     clicked => { root.reset_peaks(); }
+                }
+                LxToggleBtn {
+                    label: "BYPASS";
+                    active <=> root.bypass_active;
+                    toggled(v) => { root.bypass_active_changed(v); }
                 }
             }
         }
 
         // ── BODY ─────────────────────────────────────────────────────────
         LxShellBody {
-            // ── LEFT BAR: snapshot/vault + relay toggles ──────────────
+            // ── LEFT BAR: snapshot / vault ────────────────────────────
             LxShellLeft {
                 LxSection {
                     title: "SNAPSHOT";
@@ -152,38 +154,45 @@ export component LucentUi inherits Window {
                     }
                 }
 
+                Rectangle { vertical-stretch: 1; background: transparent; }
+            }
+
+            // ── MAIN: relay bar + spectrum pit + analyzer panels ──────
+            LxShellMain {
+                // Relay toggle bar — above FFT (not left sidebar).
                 LxSection {
                     title: "RELAYS";
                     vertical-stretch: 0;
 
-                    Text {
-                        text: root.relay_names.length == 0
-                            ? "No relays online"
-                            : root.relay_names.length == 1
-                                ? "1 relay online"
-                                : root.relay_names.length + " relays online";
-                        color: root.relay_names.length > 0 ? Lx.green : Lx.text-muted;
-                        font-size: Lx.font-sm;
-                    }
-                    if root.relay_names.length == 0: Text {
-                        text: "— send a relay from another LX plugin —";
-                        color: Lx.text-dim;
-                        font-size: Lx.font-xs;
-                        wrap: word-wrap;
-                    }
-                    for name[idx] in root.relay_names: LxToggleBtn {
-                        small: true;
-                        label: name;
-                        active: root.relay_actives[idx];
-                        toggled(v) => { root.relay_toggled(idx); }
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+
+                        Text {
+                            vertical-alignment: center;
+                            text: root.relay_names.length == 0
+                                ? "No relays online"
+                                : root.relay_names.length == 1
+                                    ? "1 relay online"
+                                    : root.relay_names.length + " relays online";
+                            color: root.relay_names.length > 0 ? Lx.green : Lx.text-muted;
+                            font-size: Lx.font-sm;
+                        }
+                        if root.relay_names.length == 0: Text {
+                            vertical-alignment: center;
+                            text: "— send a relay from another LX plugin —";
+                            color: Lx.text-dim;
+                            font-size: Lx.font-xs;
+                        }
+                        for name[idx] in root.relay_names: LxToggleBtn {
+                            small: true;
+                            label: name;
+                            active: root.relay_actives[idx];
+                            toggled(v) => { root.relay_toggled(idx); }
+                        }
                     }
                 }
 
-                Rectangle { vertical-stretch: 1; background: transparent; }
-            }
-
-            // ── MAIN: spectrum pit + analyzer panels ──────────────────
-            LxShellMain {
                 // Spectrum pit: own curve + fill, relay curves, masking bars,
                 // resonance markers (all path-driven from Rust).
                 LxSection {
@@ -256,10 +265,24 @@ export component LucentUi inherits Window {
                             stroke-width: 1px;
                             fill: Lx.amber.with-alpha(m.a);
                         }
+
+                        // Display smoothing toggle — sits left of the dB labels.
+                        // Explicit width: positioned (no layout), min-width 36px
+                        // would clip the 6-char label. Default OFF (Meridian ON).
+                        LxToggleBtn {
+                            x: parent.width - 100px;
+                            y: 4px;
+                            width: 46px;
+                            label: "SMOOTH";
+                            small: true;
+                            active <=> root.spectrum_smooth;
+                            toggled(v) => { root.spectrum_smooth_changed(v); }
+                        }
                     }
                 }
 
-                // Analyzer panels: top-3 lines, gated by their display toggles.
+                // Analyzer panels: resonance / masking / sensitivity.
+                // Res/mask cards ~3× former content height so multi-line top-N fits.
                 HorizontalLayout {
                     spacing: Lx.gap-sm;
                     vertical-stretch: 0;
@@ -268,23 +291,30 @@ export component LucentUi inherits Window {
                         show-title: false;
                         horizontal-stretch: 1;
                         vertical-stretch: 0;
+                        min-height: 150px;
+                        preferred-height: 150px;
 
                         HorizontalLayout {
                             spacing: Lx.gap-sm;
+                            vertical-stretch: 1;
                             VerticalLayout {
                                 spacing: 2px;
                                 horizontal-stretch: 1;
+                                vertical-stretch: 1;
                                 Text {
                                     text: "RESONANCE";
                                     font-size: Lx.font-xs;
                                     font-weight: 700;
                                     color: Lx.amber;
+                                    vertical-stretch: 0;
                                 }
                                 Text {
                                     text: root.resonance_text;
                                     font-size: Lx.font-sm;
                                     color: Lx.text-secondary;
                                     wrap: word-wrap;
+                                    vertical-stretch: 1;
+                                    vertical-alignment: top;
                                 }
                             }
                             LxToggleBtn {
@@ -299,23 +329,30 @@ export component LucentUi inherits Window {
                         show-title: false;
                         horizontal-stretch: 1;
                         vertical-stretch: 0;
+                        min-height: 150px;
+                        preferred-height: 150px;
 
                         HorizontalLayout {
                             spacing: Lx.gap-sm;
+                            vertical-stretch: 1;
                             VerticalLayout {
                                 spacing: 2px;
                                 horizontal-stretch: 1;
+                                vertical-stretch: 1;
                                 Text {
                                     text: "MASKING";
                                     font-size: Lx.font-xs;
                                     font-weight: 700;
                                     color: Lx.crimson;
+                                    vertical-stretch: 0;
                                 }
                                 Text {
                                     text: root.masking_text;
                                     font-size: Lx.font-sm;
                                     color: Lx.text-secondary;
                                     wrap: word-wrap;
+                                    vertical-stretch: 1;
+                                    vertical-alignment: top;
                                 }
                             }
                             LxToggleBtn {
@@ -326,19 +363,27 @@ export component LucentUi inherits Window {
                             }
                         }
                     }
+
+                    LxSection {
+                        title: "SENSITIVITY";
+                        horizontal-stretch: 0;
+                        vertical-stretch: 0;
+
+                        LxKnob {
+                            label: "";
+                            value <=> root.sensitivity;
+                            value-text: root.sensitivity_text;
+                            changed(v) => { root.sensitivity_changed(v); }
+                        }
+                    }
                 }
             }
 
-            // ── RIGHT BAR: sensitivity + meters + gonio ───────────────
+            // ── RIGHT BAR: Peak → correlation → gonio (Meridian order) ─
+            // No OUT GAIN / no footer — window height is sized so this
+            // stack fills the column without a big empty spacer.
             LxShellRight {
-                title: "";
-
-                LxKnob {
-                    label: "SENSITIVITY";
-                    value <=> root.sensitivity;
-                    value-text: root.sensitivity_text;
-                    changed(v) => { root.sensitivity_changed(v); }
-                }
+                title: "OUTPUT LEVEL";
 
                 Text {
                     text: "OUTPUT PEAK";
@@ -390,9 +435,6 @@ export component LucentUi inherits Window {
                     text: root.corr_text;
                     vertical-stretch: 0;
                 }
-
-                // Spacer pushes the goniometer to the bottom (Vizia parity).
-                Rectangle { vertical-stretch: 1; background: transparent; }
 
                 Text {
                     text: "GONIOMETER";

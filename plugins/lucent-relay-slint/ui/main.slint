@@ -1,10 +1,16 @@
 import {
-    Lx, LxShellHeader, LxShellBody, LxShellMain, LxLineEdit, LxSelectTrigger,
+    Lx, LxLineEdit, LxSelectTrigger,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 
+/// Lucent-Relay — compact sender (Vizia 260×160). Dark LX chrome, form pinned left.
 export component LucentRelayUi inherits Window {
+    // Same footprint as Vizia lucent-relay (editor.rs: Pixels(260) × 160).
     preferred-width: 260px;
     preferred-height: 160px;
+    min-width: 260px;
+    min-height: 160px;
+    max-width: 260px;
+    max-height: 160px;
     title: "Lucent Relay";
     background: Lx.window;
 
@@ -20,90 +26,138 @@ export component LucentRelayUi inherits Window {
     in property <string> version: "1.0.0";
 
     VerticalLayout {
+        spacing: 4px;
         padding: 0;
-        spacing: 0;
 
-        LxShellHeader {
-            plugin-name: "Lucent-Relay";
-            version: root.version;
-        }
+        // ── Compact header (Vizia 36px row — not full LxShellHeader) ──
+        Rectangle {
+            height: 36px;
+            vertical-stretch: 0;
+            background: #141419;
 
-        LxShellBody {
-            LxShellMain {
-                VerticalLayout {
-                    padding: Lx.pad-md;
-                    spacing: Lx.gap-md;
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
+                alignment: center;
 
-                    HorizontalLayout {
-                        spacing: Lx.gap-sm;
-                        alignment: center;
-                        Text {
-                            text: "Name";
-                            color: Lx.text-secondary;
-                            font-size: Lx.font-sm;
-                            vertical-alignment: center;
-                            min-width: 48px;
-                        }
-                        LxLineEdit {
-                            text <=> root.relay_name;
-                            light: true;
-                            accepted => { root.relay_name_changed(self.text); }
-                            committed => { root.relay_name_changed(self.text); }
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: Lx.gap-sm;
-                        alignment: center;
-                        Text {
-                            text: "Target";
-                            color: Lx.text-secondary;
-                            font-size: Lx.font-sm;
-                            vertical-alignment: center;
-                            min-width: 48px;
-                        }
-                        Rectangle {
-                            horizontal-stretch: 1;
-                            height: Lx.button-h;
-                            background: transparent;
-                            target_dd := LxSelectTrigger {
-                                trigger-width: parent.width;
-                                text: root.target_index >= 0 && root.target_index < root.target_names.length
-                                    ? root.target_names[root.target_index] : "(broadcast)";
-                                clicked => { target_popup.show(); }
-                            }
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: Lx.gap-sm;
-                        alignment: center;
-                        Rectangle {
-                            width: 8px;
-                            height: 8px;
-                            border-radius: 4px;
-                            background: root.connected ? Lx.amber : Lx.text-secondary;
-                        }
-                        Text {
-                            text: root.status_text;
-                            color: Lx.text-secondary;
-                            font-size: Lx.font-sm;
-                            vertical-alignment: center;
-                        }
-                    }
+                Text {
+                    text: "LX";
+                    font-size: 16px;
+                    font-weight: 800;
+                    color: Lx.amber;
+                    vertical-alignment: center;
+                    horizontal-stretch: 0;
+                }
+                Text {
+                    text: "AUDIOLABS";
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: Lx.text;
+                    vertical-alignment: center;
+                    horizontal-stretch: 0;
+                }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+                Text {
+                    text: "Lucent-Relay v" + root.version;
+                    font-size: 10px;
+                    color: Lx.text-muted;
+                    vertical-alignment: center;
+                    horizontal-stretch: 0;
                 }
             }
         }
+
+        // ── Name — label left, dark LxLineEdit fills rest ──
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+            alignment: center;
+            vertical-stretch: 0;
+            height: 32px;
+
+            Text {
+                text: "Name";
+                color: Lx.text-muted;
+                font-size: Lx.font-sm;
+                vertical-alignment: center;
+                horizontal-stretch: 0;
+                min-width: 44px;
+            }
+            LxLineEdit {
+                text <=> root.relay_name;
+                placeholder-text: "Relay name";
+                // default dark chrome (not light white box)
+                accepted(t) => { root.relay_name_changed(t); }
+                committed(t) => { root.relay_name_changed(t); }
+            }
+        }
+
+        // ── Target — label left, LxSelectTrigger fixed 190px (Vizia width) ──
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+            alignment: start;
+            vertical-stretch: 0;
+            height: 32px;
+
+            Text {
+                text: "Target";
+                color: Lx.text-muted;
+                font-size: Lx.font-sm;
+                vertical-alignment: center;
+                horizontal-stretch: 0;
+                min-width: 44px;
+                height: 100%;
+            }
+            target_dd := LxSelectTrigger {
+                // Vizia Dropdown was Pixels(190.0) — pin left under label.
+                trigger-width: 190px;
+                text: root.target_index >= 0 && root.target_index < root.target_names.length
+                    ? root.target_names[root.target_index] : "(broadcast)";
+                placeholder: "(broadcast)";
+                clicked => { target_popup.show(); }
+            }
+        }
+
+        // ── Connection status ──
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 6px;
+            alignment: start;
+            vertical-stretch: 0;
+
+            Rectangle {
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: root.connected ? Lx.green : Lx.crimson;
+                vertical-stretch: 0;
+            }
+            Text {
+                text: root.status_text;
+                color: root.connected ? Lx.green : Lx.crimson;
+                font-size: Lx.font-sm;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; background: transparent; }
     }
 
-    // ── Target list popup — anchored under the dropdown trigger (Aether pattern) ──
+    // Target list popup — under trigger, left-pinned (Vizia Placement::BottomStart).
     target_popup := PopupWindow {
-        width: max(146px, target_dd.width);
+        width: max(190px, target_dd.width);
         x: target_dd.absolute-position.x;
         y: target_dd.absolute-position.y + target_dd.height + 2px;
-        height: min(160px, 8px + root.target_names.length * 22px);
+        height: min(56px, 4px + root.target_names.length * 20px);
 
         Rectangle {
+            // Light list surface (Aether / Vizia FORM popup).
             background: #ffffff;
             border-radius: Lx.radius-sm;
             border-width: 1px;
@@ -113,24 +167,25 @@ export component LucentRelayUi inherits Window {
             Flickable {
                 width: 100%;
                 height: 100%;
-                viewport-height: root.target_names.length * 22px;
+                viewport-height: root.target_names.length * 20px;
 
                 VerticalLayout {
                     alignment: start;
                     spacing: 0px;
 
                     for name[i] in root.target_names: Rectangle {
-                        height: 22px;
+                        height: 20px;
                         vertical-stretch: 0;
                         background: row_ta.has-hover ? #f0f0f0 : #ffffff;
 
                         HorizontalLayout {
-                            padding-left: Lx.pad-sm;
+                            padding-left: 4px;
                             Text {
                                 text: name;
-                                font-size: Lx.font-md;
+                                font-size: Lx.font-sm;
                                 color: #282828;
                                 vertical-alignment: center;
+                                overflow: elide;
                             }
                         }
 

@@ -29,9 +29,9 @@ use crate::{
 
 slint::include_modules!();
 
-// Frozen vault size (ui-layout-spec): 990 × 660
+// Lucent compact shell (no footer / no OUT GAIN): 990 × 500
 const WINDOW_W: u32 = 990;
-const WINDOW_H: u32 = 660;
+const WINDOW_H: u32 = 500;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Spectrum viewBox — scales to the pit; only aspect affects stroke width.
 const PATH_W: f32 = 620.0;
@@ -713,9 +713,11 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                         && let Some(r) = c.relay_state.relays.get_mut(idx.max(0.0) as usize)
                     {
                         r.active = !r.active;
-                        shared_t
-                            .relay_active_mask
-                            .store(c.relay_state.active_mask(), Ordering::Release);
+                        // DRIVEN bit: distinguish "all off" from "no preference".
+                        shared_t.relay_active_mask.store(
+                            c.relay_state.active_mask() | lx_analysis::RELAY_MASK_DRIVEN,
+                            Ordering::Release,
+                        );
                     }
                 });
 
@@ -823,12 +825,18 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 // --- relay list (EMA + toggles + mask) ---
                 if mode != 0 {
                     cache.relay_state.sync(&read_relays(instance_key));
+                    // DRIVEN | slot-bits: all-off is not the same as mask==0.
+                    shared_sync.relay_active_mask.store(
+                        cache.relay_state.active_mask() | lx_analysis::RELAY_MASK_DRIVEN,
+                        Ordering::Release,
+                    );
                 } else {
                     cache.relay_state.clear();
+                    // Own mode: no UI preference (process ignores relays anyway).
+                    shared_sync
+                        .relay_active_mask
+                        .store(0, Ordering::Release);
                 }
-                shared_sync
-                    .relay_active_mask
-                    .store(cache.relay_state.active_mask(), Ordering::Release);
 
                 let names: Vec<String> = cache
                     .relay_state

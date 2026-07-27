@@ -8,7 +8,8 @@ use truce::prelude::*;
 use truce_core::{editor::Editor, state::StateLoadError};
 
 use lx_analysis::{
-    spectrum_physical_db, SPECTRUM_BINS, SharedState, relay_hub, SPECTRUM_TILT_RAW_GATE_DB,
+    relay_hub, relay_slot_active, spectrum_physical_db, SharedState, SPECTRUM_BINS,
+    SPECTRUM_TILT_RAW_GATE_DB,
 };
 
 /// Claim a consumer slot (if needed) and refresh the Lucent display name in SHM.
@@ -58,7 +59,7 @@ const CONTRIB_FLOOR_DB: f32 = -70.0;
 
 /// For each (bin, score) group-level peak, find which named Relay spectra
 /// are actually above the floor at that bin. `mask` filters relay slots
-/// (0 = all active), same semantics as `filter_relays_by_mask`.
+/// via [`relay_slot_active`].
 pub(crate) fn attribute_contributors(
     peaks: &[(usize, f32)],
     relay_spectra: &[(u8, String, Vec<f32>)],
@@ -69,7 +70,7 @@ pub(crate) fn attribute_contributors(
         .map(|(bin, score)| {
             let contributors = relay_spectra
                 .iter()
-                .filter(|(slot, _, _)| mask == 0 || mask & (1u32 << slot) != 0)
+                .filter(|(slot, _, _)| relay_slot_active(mask, *slot))
                 .filter(|(_, _, spec)| spec.get(*bin).copied().unwrap_or(-90.0) > CONTRIB_FLOOR_DB)
                 .map(|(_, name, _)| name.clone())
                 .collect();
@@ -204,7 +205,7 @@ pub fn remove_relays(key: usize) {
 
 /// Per-bin power-sum (linear domain) of named dB spectra, into `out` (no alloc).
 /// Models how tracks combine on a bus — e.g. two -6dB at same bin → ~-3dB.
-/// `mask` filters relay slots (0 = all active).
+/// `mask` filters relay slots via [`relay_slot_active`].
 pub(crate) fn power_sum_named_into(
     relay_named: &[(u8, String, Vec<f32>)],
     mask: u32,
@@ -215,7 +216,7 @@ pub(crate) fn power_sum_named_into(
     for (j, o) in out.iter_mut().enumerate().take(n) {
         let sum_lin: f32 = relay_named
             .iter()
-            .filter(|(slot, _, _)| mask == 0 || mask & (1u32 << slot) != 0)
+            .filter(|(slot, _, _)| relay_slot_active(mask, *slot))
             .map(|(_, _, s)| 10f32.powf(s.get(j).copied().unwrap_or(-90.0) / 10.0))
             .sum();
         *o = if sum_lin < 1e-9 {
@@ -257,11 +258,11 @@ mod editor;
 mod process;
 mod relay_state;
 
-// Frozen vault window (ui-layout-spec): 990 × 660
+// Lucent compact shell (no footer / no OUT GAIN): 990 × 500
 #[allow(dead_code)]
 const WINDOW_W: u32 = 990;
 #[allow(dead_code)]
-const WINDOW_H: u32 = 660;
+const WINDOW_H: u32 = 500;
 
 // ─── Sensitivity ────────────────────────────────────────────────
 
@@ -355,7 +356,7 @@ impl MaskingAnalyzer {
 
     /// `relay_named` pairs each Relay spectrum with its track name so a
     /// masking collision can be attributed to the two tracks that caused it.
-    /// `mask` filters relay slots (0 = all active). `persistence_min` is the
+    /// `mask` filters via [`relay_slot_active`]. `persistence_min` is the
     /// Sensitivity knob's shared persistence gate
     /// (same field resonance uses) — a collision only counts once it holds
     /// for that many frames, not on a single-frame blip.
@@ -380,8 +381,7 @@ impl MaskingAnalyzer {
         let mut name_count = 0;
         for (slot, name, s) in relay_named.iter() {
             self.relay_live.push(
-                (mask == 0 || mask & (1u32 << slot) != 0)
-                    && track_has_masking_signal(s, sample_rate),
+                relay_slot_active(mask, *slot) && track_has_masking_signal(s, sample_rate),
             );
             if let Some(existing) = self.relay_names.get_mut(name_count) {
                 existing.clear();
