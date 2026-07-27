@@ -1,6 +1,6 @@
 {
-  "version": "0.3.1",
-  "generated_at": "2026-07-27T16:56:27Z",
+  "version": "0.3.2",
+  "generated_at": "2026-07-27T17:13:09Z",
   "project_root": "L:/LX-AudioLabs/lx-audiolabs-slint",
   "project_name": "lx-audiolabs-slint",
   "used_frameworks": [
@@ -2389,7 +2389,7 @@
     "plugin_target_editor": "Plugins should use lx-slint-editor, not truce-slint."
   },
   "delta": {
-    "previous_generated_at": "2026-07-27T16:56:26Z",
+    "previous_generated_at": "2026-07-27T16:56:27Z",
     "previous_version": "0.3.1"
   }
 }

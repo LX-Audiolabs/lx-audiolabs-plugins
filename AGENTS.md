@@ -11,10 +11,10 @@ No abstractions, no new deps, no boilerplate. Delete > add. Boring > clever. Few
 Not lazy: input validation, error handling preventing data loss, security, accessibility, explicit requests. Non-trivial logic → ONE assert/test.
 
 ## graphify
-When `graphify-out/graph.json` exists, query/path/explain first before raw grep or source reads. `/graphify` to build/update.
+Optional whole-repo knowledge graph. When `graphify-out/graph.json` exists, query/path/explain for deep non-audio searches before raw grep. `/graphify` to build/update. **Not required** for plugin work if audio-graph is present.
 
 ## audio-graph
-When `audio-graph/audio-graph.agent.md` exists, **read it first** before plugin/crate work (token-cheap). Check `audio-graph.delta.md` for what changed since last gen. Escalate to `audio-graph.json` for `params_fields`, `params_unbound`, `public_api`, IPC/UI edges, or full findings. Contains frameworks in use, migration status, internal deps, semantic edges (`uses_ui`, `ipc_peer`, `runtime_depends_on`), file roles, IPC signals, structural findings, and delta. Scope: `lx-audio-graph --plugin <name> .` → `<name>.slice.json`. Regenerate: `lx-audio-graph .` | watch: `lx-audio-graph --watch .`.
+**Independent of graphify** — scans the workspace itself; no need to run graphify first. When `audio-graph/audio-graph.agent.md` exists, **read it first** before plugin/crate work (token-cheap). Check `audio-graph.delta.md` for what changed since last gen. Escalate to `audio-graph.json` for `params_fields`, `params_unbound`, `public_api`, IPC/UI edges, or full findings. Contains frameworks in use, migration status, internal deps, semantic edges (`uses_ui`, `ipc_peer`, `runtime_depends_on`), file roles, IPC signals, structural findings, and delta. Scope: `lx-audio-graph --plugin <name> .` → `<name>.slice.json`. Regenerate: `lx-audio-graph .` | watch: `lx-audio-graph --watch .`.
 
 ## truce
 When writing, editing, or debugging truce plugin code (Params, PluginLogic, process, state, editor), ALWAYS consult `TRUCE_SKILL.md` — covers param macros, lifecycle, threading rules, common bugs, shared crates, and build workflow.

@@ -1,8 +1,8 @@
 # audio-graph agent summary
 
 project: **lx-audiolabs-slint**  
-generated: `2026-07-27T16:56:27Z`  
-version: 0.3.1  
+generated: `2026-07-27T17:13:09Z`  
+version: 0.3.2  
 nodes: 13 · edges: 36 · findings: 2
 
 ## frameworks in use
