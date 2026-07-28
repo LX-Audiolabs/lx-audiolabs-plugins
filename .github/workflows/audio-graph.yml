@@ -29,13 +29,13 @@ jobs:
         with:
           key: audio-graph
 
-      - name: Install lx-audio-graph
-        # NOTE: adjust URL/branch once lx-audio-graph is published.
+      - name: Install rust-audio-graph
+        # NOTE: adjust URL/branch once rust-audio-graph is published.
         # Private repo: use a PAT (CARGO_REGISTRIES / git config) or submodule.
-        run: cargo install --git https://github.com/LX-Audiolabs/lx-audio-graph --branch main
+        run: cargo install --git https://github.com/lxndrbe/rust-audio-graph --branch main
 
       - name: Generate audio-graph
-        run: lx-audio-graph .
+        run: rust-audio-graph .
 
       - name: Upload audio-graph artifacts
         uses: actions/upload-artifact@v4

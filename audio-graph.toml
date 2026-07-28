@@ -1,4 +1,4 @@
-# LX Audiolabs — Slint workspace configuration for lx-audio-graph.
+# LX Audiolabs — Slint workspace configuration for rust-audio-graph.
 # Optional: without this file the tool still applies default migration
 # truce-slint → lx-slint-editor and auto-detects UI/IPC.
 
