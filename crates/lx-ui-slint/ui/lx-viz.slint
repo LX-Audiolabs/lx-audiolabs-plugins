@@ -82,7 +82,8 @@ export component LxSpectrum inherits LxPanel {
         viewbox-y: 0;
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
-        // Stretch path to widget (default contain letterboxes / can hide fill).
+        // ImageFit.fill (not bare `fill` — collides with Path.fill brush).
+        fit: ImageFit.fill;
         commands: root.commands;
         fill: root.fill;
         stroke: root.stroke-color;

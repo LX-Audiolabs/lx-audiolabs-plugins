@@ -2658,7 +2658,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lucent-relay-slint"
+name = "lucent"
 version = "1.0.0"
 dependencies = [
  "clap-sys",
@@ -2680,7 +2680,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lucent-slint"
+name = "lucent-relay"
 version = "1.0.0"
 dependencies = [
  "clap-sys",

@@ -11,7 +11,7 @@ use crate::{editor_publish_heartbeat, sync_live, LucentRelayParams};
 
 slint::include_modules!();
 
-const WINDOW_W: u32 = 260;
+const WINDOW_W: u32 = 300;
 const WINDOW_H: u32 = 160;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -53,7 +53,10 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                 if let Ok(mut n) = p.name.write() {
                     *n = txt.as_str().to_string();
                 }
+                // Immediate live mirror + SHM touch so Lucent button renames
+                // without waiting for the next editor tick.
                 sync_live(&p);
+                editor_publish_heartbeat(&p);
             });
 
             let p = params.clone();
@@ -95,16 +98,15 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                     .map(|s| s.clone())
                     .unwrap_or_default();
 
-                // Auto-target sole consumer
-                if current.is_empty() && lucent_list.len() == 1 {
-                    let auto = lucent_list[0].clone();
+                // Soft-reconcile stale target (Vizia process path). Hard-clear
+                // caused connect flicker when Lucent renames Hub N → custom name:
+                // sole consumer auto-retargets; multi → broadcast; match stays.
+                use lx_analysis::resolve_from_consumers;
+                let resolved =
+                    resolve_from_consumers(&current, &lucent_list).unwrap_or_default();
+                if resolved != current {
                     if let Ok(mut t) = params_sync.target.write() {
-                        *t = auto;
-                    }
-                    sync_live(&params_sync);
-                } else if !current.is_empty() && !lucent_list.contains(&current) {
-                    if let Ok(mut t) = params_sync.target.write() {
-                        t.clear();
+                        *t = resolved;
                     }
                     sync_live(&params_sync);
                 }

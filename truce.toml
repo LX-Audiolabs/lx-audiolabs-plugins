@@ -5,22 +5,22 @@ url = "https://lx-audiolabs.github.io"
 au_manufacturer = "LxAL"
 
 [[plugin]]
-name = "Lucent Relay (Slint)"
-bundle_id = "lucent-relay-slint"
-crate = "lucent-relay-slint"
+name = "Lucent Relay"
+bundle_id = "lucentrelay"
+crate = "lucent-relay"
 category = "analyzer"
 fourcc = "LRly"
 vst3_subcategory = "Analyzer|Fx"
-description = "Lucent Relay Slint — FFT sender, pure pass-through"
+description = "Lucent Relay — FFT sender, pure pass-through"
 
 [[plugin]]
-name = "Lucent (Slint)"
-bundle_id = "lucent-slint"
-crate = "lucent-slint"
+name = "Lucent"
+bundle_id = "lucent"
+crate = "lucent"
 category = "analyzer"
-fourcc = "LcSl"
+fourcc = "Lcnt"
 vst3_subcategory = "Analyzer|Fx"
-description = "Lucent Slint — spectrum analyser, resonance & masking"
+description = "Lucent — spectrum analyser, resonance & masking"
 
 [[plugin]]
 name = "Aurum (Slint)"

@@ -1,6 +1,6 @@
 {
   "version": "0.3.2",
-  "generated_at": "2026-07-27T17:13:09Z",
+  "generated_at": "2026-07-28T11:56:08Z",
   "project_root": "L:/LX-AudioLabs/lx-audiolabs-slint",
   "project_name": "lx-audiolabs-slint",
   "used_frameworks": [
@@ -806,17 +806,16 @@
         ],
         "slint_components": [
           "LxButton",
+          "LxCompDisplay",
           "LxCycleBtn",
           "LxDangerBtn",
           "LxDialogs",
           "LxEqCurve",
           "LxGoniometer",
-          "LxGrMeter",
           "LxKnob",
           "LxLedPeakMeter",
           "LxLineEdit",
           "LxSection",
-          "LxSegmentedButton",
           "LxShellBody",
           "LxShellFooter",
           "LxShellHeader",
@@ -824,6 +823,7 @@
           "LxShellMain",
           "LxShellRight",
           "LxSpectrum",
+          "LxTabs",
           "LxToggleBtn",
           "LxUiSlint",
           "LxVaultSetupOverlay"
@@ -1137,121 +1137,12 @@
       }
     },
     {
-      "id": "plugins/lucent-relay-slint",
-      "name": "lucent-relay-slint",
+      "id": "plugins/lucent",
+      "name": "lucent",
       "kind": "plugin",
-      "description": "LX Audiolabs — Lucent Relay (Slint UI — FFT sender, pass-through)",
+      "description": "LX Audiolabs — Lucent (FFT spectrum analyser / masking)",
       "version": "1.0.0",
-      "path": "plugins/lucent-relay-slint",
-      "frameworks": [
-        "clap",
-        "lx-slint-editor",
-        "slint",
-        "truce"
-      ],
-      "migration_status": "migrated",
-      "internal_deps": [
-        "crates/lx-analysis",
-        "crates/lx-dsp",
-        "crates/lx-slint-build",
-        "crates/lx-slint-editor"
-      ],
-      "external_flags": [
-        "clap",
-        "realfft",
-        "slint",
-        "tracing",
-        "truce_stack"
-      ],
-      "ast_summary": {
-        "plugin_logic_impls": [
-          "LucentRelay"
-        ],
-        "plugin_macro_types": [
-          "LucentRelay"
-        ],
-        "params_structs": [
-          "LucentRelayParams"
-        ],
-        "params_fields": {
-          "LucentRelayParams": [
-            {
-              "name": "bypass",
-              "ty": "BoolParam",
-              "display_name": "Bypass",
-              "hidden": true
-            },
-            {
-              "name": "_flush_sentinel",
-              "ty": "FloatParam",
-              "display_name": "_flush_sentinel",
-              "hidden": true
-            }
-          ]
-        },
-        "process_functions": [
-          "process"
-        ],
-        "process_hooks": [
-          "PluginLogic::process @ src/lib.rs"
-        ],
-        "process_method_count": 1,
-        "editor_functions": [
-          "editor"
-        ],
-        "imported_editor_adapters": [
-          "lx-slint-editor"
-        ],
-        "imported_crates": [
-          "lx-analysis",
-          "lx-dsp",
-          "lx-slint-editor",
-          "realfft",
-          "slint",
-          "truce",
-          "truce-core",
-          "truce-test"
-        ],
-        "slint_components": [
-          "LxLineEdit",
-          "LxSelectTrigger",
-          "LxShellBody",
-          "LxShellHeader",
-          "LxShellMain",
-          "LxUiSlint"
-        ],
-        "ipc_signals": [
-          "relay",
-          "shared_state",
-          "shm"
-        ],
-        "file_roles": {
-          "Cargo.toml": "manifest",
-          "build.rs": "build",
-          "src/editor.rs": "ui",
-          "src/lib.rs": "entry",
-          "src/process.rs": "audio",
-          "ui/main.slint": "slint"
-        },
-        "files": [
-          "Cargo.toml",
-          "build.rs",
-          "src",
-          "src/editor.rs",
-          "src/lib.rs",
-          "src/process.rs",
-          "ui",
-          "ui/main.slint"
-        ]
-      }
-    },
-    {
-      "id": "plugins/lucent-slint",
-      "name": "lucent-slint",
-      "kind": "plugin",
-      "description": "LX Audiolabs — Lucent (Slint UI — FFT spectrum analyser / masking)",
-      "version": "1.0.0",
-      "path": "plugins/lucent-slint",
+      "path": "plugins/lucent",
       "frameworks": [
         "clap",
         "lx-slint-editor",
@@ -1349,9 +1240,7 @@
           "LxGoniometer",
           "LxKnob",
           "LxLedPeakMeter",
-          "LxLineEdit",
           "LxSection",
-          "LxSegmentedButton",
           "LxShellBody",
           "LxShellHeader",
           "LxShellLeft",
@@ -1384,6 +1273,113 @@
           "src/lib.rs",
           "src/process.rs",
           "src/relay_state.rs",
+          "ui",
+          "ui/main.slint"
+        ]
+      }
+    },
+    {
+      "id": "plugins/lucent-relay",
+      "name": "lucent-relay",
+      "kind": "plugin",
+      "description": "LX Audiolabs — Lucent Relay (FFT sender, pass-through)",
+      "version": "1.0.0",
+      "path": "plugins/lucent-relay",
+      "frameworks": [
+        "clap",
+        "lx-slint-editor",
+        "slint",
+        "truce"
+      ],
+      "migration_status": "migrated",
+      "internal_deps": [
+        "crates/lx-analysis",
+        "crates/lx-dsp",
+        "crates/lx-slint-build",
+        "crates/lx-slint-editor"
+      ],
+      "external_flags": [
+        "clap",
+        "realfft",
+        "slint",
+        "tracing",
+        "truce_stack"
+      ],
+      "ast_summary": {
+        "plugin_logic_impls": [
+          "LucentRelay"
+        ],
+        "plugin_macro_types": [
+          "LucentRelay"
+        ],
+        "params_structs": [
+          "LucentRelayParams"
+        ],
+        "params_fields": {
+          "LucentRelayParams": [
+            {
+              "name": "bypass",
+              "ty": "BoolParam",
+              "display_name": "Bypass",
+              "hidden": true
+            },
+            {
+              "name": "_flush_sentinel",
+              "ty": "FloatParam",
+              "display_name": "_flush_sentinel",
+              "hidden": true
+            }
+          ]
+        },
+        "process_functions": [
+          "process"
+        ],
+        "process_hooks": [
+          "PluginLogic::process @ src/lib.rs"
+        ],
+        "process_method_count": 1,
+        "editor_functions": [
+          "editor"
+        ],
+        "imported_editor_adapters": [
+          "lx-slint-editor"
+        ],
+        "imported_crates": [
+          "lx-analysis",
+          "lx-dsp",
+          "lx-slint-editor",
+          "realfft",
+          "slint",
+          "truce",
+          "truce-core",
+          "truce-test"
+        ],
+        "slint_components": [
+          "LxLineEdit",
+          "LxSelectTrigger",
+          "LxShellHeader",
+          "LxUiSlint"
+        ],
+        "ipc_signals": [
+          "relay",
+          "shared_state",
+          "shm"
+        ],
+        "file_roles": {
+          "Cargo.toml": "manifest",
+          "build.rs": "build",
+          "src/editor.rs": "ui",
+          "src/lib.rs": "entry",
+          "src/process.rs": "audio",
+          "ui/main.slint": "slint"
+        },
+        "files": [
+          "Cargo.toml",
+          "build.rs",
+          "src",
+          "src/editor.rs",
+          "src/lib.rs",
+          "src/process.rs",
           "ui",
           "ui/main.slint"
         ]
@@ -1424,6 +1420,7 @@
           "fn compute_spectrum_bins",
           "fn filter_relays_by_mask",
           "fn init",
+          "fn relay_slot_active",
           "fn spectrum_physical_db",
           "fn spectrum_tilt_db",
           "struct ClipWaveRing",
@@ -2187,12 +2184,12 @@
       "kind": "build_depends_on"
     },
     {
-      "from": "plugins/lucent-relay-slint",
+      "from": "plugins/lucent",
       "to": "crates/lx-slint-build",
       "kind": "build_depends_on"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent-relay",
       "to": "crates/lx-slint-build",
       "kind": "build_depends_on"
     },
@@ -2257,32 +2254,32 @@
       "kind": "depends_on"
     },
     {
-      "from": "plugins/lucent-relay-slint",
+      "from": "plugins/lucent",
       "to": "crates/lx-analysis",
       "kind": "depends_on"
     },
     {
-      "from": "plugins/lucent-relay-slint",
+      "from": "plugins/lucent",
       "to": "crates/lx-dsp",
       "kind": "depends_on"
     },
     {
-      "from": "plugins/lucent-relay-slint",
+      "from": "plugins/lucent",
       "to": "crates/lx-slint-editor",
       "kind": "depends_on"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent-relay",
       "to": "crates/lx-analysis",
       "kind": "depends_on"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent-relay",
       "to": "crates/lx-dsp",
       "kind": "depends_on"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent-relay",
       "to": "crates/lx-slint-editor",
       "kind": "depends_on"
     },
@@ -2302,19 +2299,19 @@
       "kind": "depends_on"
     },
     {
-      "from": "plugins/lucent-relay-slint",
-      "to": "plugins/lucent-slint",
+      "from": "plugins/lucent",
+      "to": "plugins/lucent-relay",
       "kind": "ipc_peer",
       "note": "shared: relay, shm"
     },
     {
-      "from": "plugins/lucent-relay-slint",
+      "from": "plugins/lucent",
       "to": "crates/lx-shm",
       "kind": "runtime_depends_on",
       "note": "via relay+shm"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent-relay",
       "to": "crates/lx-shm",
       "kind": "runtime_depends_on",
       "note": "via relay+shm"
@@ -2338,16 +2335,16 @@
       "note": "17 shared Lx* components"
     },
     {
-      "from": "plugins/lucent-relay-slint",
+      "from": "plugins/lucent",
       "to": "crates/lx-ui-slint",
       "kind": "uses_ui",
-      "note": "5 shared Lx* components"
+      "note": "15 shared Lx* components"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent-relay",
       "to": "crates/lx-ui-slint",
       "kind": "uses_ui",
-      "note": "17 shared Lx* components"
+      "note": "3 shared Lx* components"
     },
     {
       "from": "plugins/meridian",
@@ -2389,7 +2386,7 @@
     "plugin_target_editor": "Plugins should use lx-slint-editor, not truce-slint."
   },
   "delta": {
-    "previous_generated_at": "2026-07-27T16:56:27Z",
-    "previous_version": "0.3.1"
+    "previous_generated_at": "2026-07-28T11:46:05Z",
+    "previous_version": "0.3.2"
   }
 }

@@ -4,297 +4,197 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
-  <title>lx-audiolabs-slint · LX Audio Graph</title>
+  <title>lx-audiolabs-slint · Rust Audio Graph</title>
   <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
   <style>
     :root {
-      --bg: #0e0e10;
-      --bg-grid: #121214;
-      --panel: #141418;
-      --panel-2: #1a1a20;
-      --panel-3: #22222a;
-      --text: #f0c14a;
-      --text-bright: #fff6d6;
-      --text-dim: #9a7a2e;
-      --text-muted: #6b5a38;
-      --accent: #ffb000;
-      --accent-hot: #ff731a;
-      --border: #2a2a32;
-      --border-soft: #1e1e26;
-      --ok: #3dd68c;
-      --err: #ff6b6b;
-      --info: #8ab4f8;
-      --plugin: #f97316;
-      --crate: #5b8def;
-      --edge-ui: #fbbf24;
-      --edge-ipc: #a78bfa;
-      --edge-rt: #22d3ee;
-      --radius: 8px;
-      --radius-sm: 5px;
-      --font: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
-      --mono: "IBM Plex Mono", "Cascadia Code", "SF Mono", ui-monospace, monospace;
-      --shadow: 0 8px 28px rgba(0,0,0,.45);
+      --bg: #0b0c10;
+      --bg-elevated: #111318;
+      --panel: #151922;
+      --panel-2: #1c212e;
+      --panel-3: #252b3a;
+      --text: #e2e8f0;
+      --text-bright: #f8fafc;
+      --text-dim: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --border: #252b3a;
+      --border-soft: #1c212e;
+      --ok: #10b981;
+      --warn: #f59e0b;
+      --err: #ef4444;
+      --info: #38bdf8;
+      --plugin: #8b5cf6;
+      --crate: #64748b;
+      --edge-dep: #334155;
+      --edge-ui: #6366f1;
+      --edge-ipc: #a855f7;
+      --edge-rt: #06b6d4;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: "JetBrains Mono", "Cascadia Code", "SF Mono", ui-monospace, monospace;
+      --shadow: 0 10px 40px rgba(0,0,0,.45);
+      --shadow-sm: 0 4px 16px rgba(0,0,0,.3);
     }
     * { box-sizing: border-box; }
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
       font-family: var(--font);
       background: var(--bg);
       color: var(--text);
-      display: flex;
-      flex-direction: column;
       height: 100vh;
+      width: 100vw;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
     }
-    #top {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-      min-height: 0;
-    }
-    #sidebar {
-      width: 280px;
-      background: linear-gradient(180deg, #16161c 0%, var(--panel) 40%);
-      border-right: 1px solid var(--border);
-      padding: 18px 16px 24px;
-      overflow-y: auto;
-      flex-shrink: 0;
-    }
-    .brand-block { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border-soft); }
-    h1 {
-      margin: 0;
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      line-height: 1.2;
-    }
-    h1 .brand { color: var(--accent-hot); }
-    h1 .brand-sub { color: var(--text-bright); font-weight: 600; }
-    .project-meta {
-      margin-top: 8px;
-      font-size: 11px;
-      color: var(--text-muted);
-      line-height: 1.45;
-    }
-    .project-meta strong {
-      display: block;
-      color: var(--text-dim);
-      font-weight: 600;
-      font-size: 12px;
-      margin-bottom: 2px;
-      word-break: break-word;
-    }
-    .chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-    .chip {
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      padding: 3px 7px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-      background: var(--panel-2);
-    }
-    .chip-ok { border-color: #1f4d38; color: var(--ok); background: #0f2419; }
-    .chip-warn { border-color: #5a4010; color: var(--accent); background: #241a08; }
-    #stage {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      min-height: 0;
+    #app {
       position: relative;
-      background:
-        radial-gradient(ellipse 80% 60% at 50% 40%, #1a1410 0%, transparent 55%),
-        linear-gradient(180deg, #101012 0%, var(--bg) 100%);
+      width: 100%;
+      height: 100%;
     }
     #cy {
-      flex: 1;
-      position: relative;
-      min-width: 0;
-      min-height: 0;
-      background-image:
-        linear-gradient(rgba(255,176,0,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,176,0,0.03) 1px, transparent 1px);
-      background-size: 28px 28px;
-    }
-    .graph-hint {
       position: absolute;
-      left: 14px;
-      bottom: 12px;
-      z-index: 5;
-      font-size: 10px;
-      color: var(--text-muted);
-      pointer-events: none;
-      letter-spacing: 0.04em;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 30%, #13161d 0%, transparent 60%),
+        var(--bg);
+      background-image:
+        linear-gradient(rgba(99,102,241,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+      z-index: 1;
     }
-    #footer {
+
+    /* Floating cards */
+    .floating-card {
+      position: absolute;
+      z-index: 10;
+      background: rgba(21, 25, 34, 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      min-width: 220px;
+      max-width: 340px;
+      transition: transform .18s ease, opacity .18s ease;
+    }
+    .floating-card.collapsed {
+      opacity: 0.85;
+    }
+    .floating-card.collapsed .card-body {
       display: none;
-      height: 46vh;
-      max-height: 55vh;
-      min-height: 240px;
-      background: var(--panel);
-      border-top: 1px solid var(--accent);
-      box-shadow: 0 -12px 40px rgba(0,0,0,.35);
-      overflow: hidden;
-      min-width: 0;
-      width: 100%;
     }
-    #footer.open { display: flex; flex-direction: column; min-height: 0; }
-    #footer-header {
+    .card-header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
-      flex-shrink: 0;
-      border-bottom: 1px solid var(--border-soft);
-      flex-wrap: wrap;
-      min-width: 0;
-      background: linear-gradient(180deg, #1a1a22, var(--panel));
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
     }
-    #footer-header .name {
-      font-size: 16px;
+    .floating-card.collapsed .card-header {
+      margin-bottom: 0;
+    }
+    .card-title {
+      font-size: 12px;
       font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       color: var(--text-bright);
-      letter-spacing: -0.02em;
     }
-    #footer-header .close-btn {
-      margin-left: auto;
-      background: var(--panel-2);
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-      cursor: pointer;
-      font-size: 13px;
-      padding: 4px 10px;
-      border-radius: var(--radius-sm);
-      flex-shrink: 0;
-      transition: border-color .15s, color .15s;
-    }
-    #footer-header .close-btn:hover { border-color: var(--accent); color: var(--accent); }
-    #footer-tabs {
-      display: flex;
-      flex-shrink: 0;
-      gap: 0;
-      padding: 0 12px;
-      border-bottom: 1px solid var(--border-soft);
-      background: var(--panel-2);
-      overflow-x: auto;
-      min-width: 0;
-    }
-    #footer-tabs button {
-      appearance: none;
+    .card-toggle {
       background: transparent;
       border: none;
-      border-bottom: 2px solid transparent;
       color: var(--text-muted);
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      padding: 11px 14px;
       cursor: pointer;
-      white-space: nowrap;
-      transition: color .12s, border-color .12s;
-    }
-    #footer-tabs button:hover { color: var(--text); }
-    #footer-tabs button.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-    }
-    #footer-tabs button .tab-count {
-      display: inline-block;
-      margin-left: 6px;
-      font-size: 10px;
-      font-weight: 700;
-      opacity: 0.85;
-      background: #2a2208;
-      color: var(--text-dim);
-      padding: 1px 7px;
-      border-radius: 999px;
-    }
-    #footer-tabs button.active .tab-count { background: #3a2e0a; color: var(--accent); }
-    #footer-tabs button:disabled { opacity: 0.32; cursor: default; }
-    #footer-body {
-      flex: 1 1 auto;
-      min-height: 0;
-      min-width: 0;
-      overflow: hidden;
-      position: relative;
-    }
-    .footer-tab-panel {
-      display: none;
-      height: 100%;
-      overflow-y: auto;
-      overflow-x: hidden;
-      padding: 16px 20px 22px;
-      -webkit-overflow-scrolling: touch;
-    }
-    .footer-tab-panel.active { display: block; }
-    .footer-section-title {
-      font-size: 10px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      letter-spacing: 0.1em;
-      margin: 14px 0 8px 0;
-      font-weight: 700;
-    }
-    .footer-section-title:first-child { margin-top: 0; }
-    .info-row {
-      font-size: 12.5px;
-      margin-bottom: 5px;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      color: var(--text-bright);
-      line-height: 1.4;
-    }
-    .info-row .key {
-      color: var(--text-muted);
-      display: inline-block;
-      min-width: 96px;
-      vertical-align: top;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-weight: 600;
-    }
-    .info-row .badge { margin: 2px 3px 2px 0; }
-    .info-row code {
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--accent);
-      background: #1e1a10;
-      padding: 1px 5px;
-      border-radius: 3px;
-    }
-    .comp-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
-    .focus-cards { display: flex; flex-wrap: wrap; gap: 12px; }
-    .focus-cards .focus-card { min-width: 220px; max-width: 320px; flex: 1 1 240px; }
-    h2 {
-      margin: 18px 0 9px 0;
-      font-size: 10px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      letter-spacing: 0.12em;
-      font-weight: 700;
-    }
-    .stat {
+      font-size: 14px;
+      padding: 0;
+      width: 20px;
+      height: 20px;
       display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border-soft);
-      font-size: 12.5px;
-      color: var(--text-dim);
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
     }
-    .stat .value {
+    .card-toggle:hover { color: var(--text); background: var(--panel-2); }
+
+    #controls-card { top: 18px; left: 18px; }
+    #overview-card { top: 18px; right: 18px; text-align: right; }
+    #findings-card { bottom: 18px; left: 18px; max-height: 42vh; display: flex; flex-direction: column; }
+    #findings-card .card-body { overflow-y: auto; flex: 1; }
+    #legend-card { bottom: 18px; right: 18px; }
+
+    .brand {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
       color: var(--text-bright);
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      font-family: var(--mono);
-      font-size: 12px;
+      margin-bottom: 2px;
     }
+    .brand span { color: var(--accent); }
+    .project-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      word-break: break-word;
+      line-height: 1.3;
+      margin-bottom: 6px;
+    }
+    .meta-line {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .metric {
+      background: var(--panel-2);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      text-align: left;
+    }
+    .metric-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .metric-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-bright);
+      font-family: var(--mono);
+    }
+    .metric-value.err { color: var(--err); }
+    .metric-value.warn { color: var(--warn); }
+    .metric-value.ok { color: var(--ok); }
+
+    .chip-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+    .chip {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      background: var(--panel-2);
+    }
+    .chip-ok { border-color: rgba(16,185,129,0.35); color: var(--ok); background: rgba(16,185,129,0.08); }
+    .chip-warn { border-color: rgba(245,158,11,0.35); color: var(--warn); background: rgba(245,158,11,0.08); }
+    .chip-err { border-color: rgba(239,68,68,0.35); color: var(--err); background: rgba(239,68,68,0.08); }
+
     .filter-group { margin-bottom: 12px; }
     .filter-group label {
       display: block;
@@ -302,10 +202,10 @@
       color: var(--text-muted);
       margin-bottom: 5px;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       font-weight: 700;
     }
-    select, input {
+    select, input[type="text"] {
       width: 100%;
       padding: 9px 11px;
       background: var(--panel-2);
@@ -317,15 +217,14 @@
       outline: none;
       transition: border-color .15s, box-shadow .15s;
     }
-    select:focus, input:focus {
+    select:focus, input[type="text"]:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(255,176,0,.12);
+      box-shadow: 0 0 0 3px rgba(99,102,241,.12);
     }
-    select option { background: #1a1a20; color: var(--text-bright); }
+    select option { background: var(--panel-2); color: var(--text-bright); }
     .btn {
       width: 100%;
       padding: 9px 12px;
-      margin-top: 6px;
       background: var(--panel-2);
       border: 1px solid var(--border);
       color: var(--text-dim);
@@ -334,26 +233,27 @@
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      transition: border-color .15s, color .15s, background .15s;
+      transition: all .15s;
     }
-    .btn:hover { border-color: var(--accent); color: var(--accent); background: #1e1a10; }
+    .btn:hover { border-color: var(--accent); color: var(--text-bright); background: var(--panel-3); }
     .btn-primary {
-      background: linear-gradient(180deg, #3a2a08, #2a1f00);
-      border-color: #8a6500;
-      color: var(--accent);
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
     }
-    .btn-primary:hover { background: linear-gradient(180deg, #4a360c, #322508); color: var(--text-bright); }
-    .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; }
     .legend-item {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 10px;
-      color: var(--text-muted);
+      font-size: 11px;
+      color: var(--text-dim);
       background: var(--panel-2);
       border: 1px solid var(--border-soft);
       border-radius: 999px;
-      padding: 4px 9px;
+      padding: 4px 10px;
     }
     .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .legend-line {
@@ -364,61 +264,256 @@
     }
     .legend-line.dashed { border-top-style: dashed; }
     .legend-line.dotted { border-top-style: dotted; }
-    .badge {
-      display: inline-block;
-      padding: 2px 7px;
-      border-radius: 999px;
-      font-size: 9px;
-      text-transform: uppercase;
-      font-weight: 700;
-      margin-right: 4px;
-      letter-spacing: 0.05em;
-      vertical-align: middle;
+
+    /* Findings list */
+    .findings-summary {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
     }
-    .badge-legacy { background: #3a1010; color: var(--err); }
-    .badge-migrated { background: #103a1c; color: var(--ok); }
-    .badge-framework { background: #152038; color: var(--info); }
-    .badge-plugin { background: #3a220f; color: #fb923c; }
-    .badge-crate { background: #151a2e; color: #94a3b8; }
-    .badge-error { background: #3a1010; color: var(--err); }
-    .badge-warn { background: #3a2a10; color: #fbbf24; }
-    .badge-info { background: #151a2e; color: #94a3b8; }
+    .severity-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .finding-group { margin-bottom: 10px; }
+    .finding-group-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
     .finding-item {
       font-size: 11px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       line-height: 1.4;
-      padding: 8px 9px;
+      padding: 8px 10px;
       border-radius: var(--radius-sm);
       background: var(--panel-2);
       border: 1px solid var(--border-soft);
       color: var(--text-dim);
+      cursor: pointer;
+      transition: border-color .12s, background .12s;
     }
+    .finding-item:hover { border-color: var(--border); background: var(--panel-3); }
     .finding-item b { color: var(--text-bright); font-weight: 600; }
-    #findings-list { max-height: 200px; overflow-y: auto; }
+    .finding-item .node-ref { color: var(--text-muted); }
+
+    /* Detail drawer */
+    #detail-drawer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 420px;
+      max-width: 92vw;
+      height: 100%;
+      background: rgba(17, 19, 24, 0.97);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-left: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      z-index: 20;
+      transform: translateX(100%);
+      transition: transform .22s cubic-bezier(.2,.8,.2,1);
+      display: flex;
+      flex-direction: column;
+    }
+    #detail-drawer.open { transform: translateX(0); }
+    #drawer-header {
+      padding: 20px 22px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      flex-shrink: 0;
+    }
+    #drawer-header .name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: -0.02em;
+      word-break: break-word;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    #drawer-header .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #drawer-header .btn { width: auto; flex: 1 1 auto; }
+    #drawer-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #drawer-close:hover { border-color: var(--accent); color: var(--text-bright); }
+
+    #drawer-tabs {
+      display: flex;
+      flex-shrink: 0;
+      gap: 0;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--panel);
+      overflow-x: auto;
+    }
+    #drawer-tabs button {
+      appearance: none;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      padding: 12px 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color .12s, border-color .12s;
+    }
+    #drawer-tabs button:hover { color: var(--text); }
+    #drawer-tabs button.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    #drawer-tabs button .tab-count {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--panel-2);
+      color: var(--text-muted);
+      padding: 1px 7px;
+      border-radius: 999px;
+    }
+    #drawer-tabs button.active .tab-count { background: rgba(99,102,241,.18); color: var(--accent); }
+    #drawer-tabs button:disabled { opacity: 0.32; cursor: default; }
+    #drawer-tabs button.hidden { display: none; }
+    #drawer-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .drawer-tab-panel {
+      display: none;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 18px 22px 26px;
+    }
+    .drawer-tab-panel.active { display: block; }
+
+    .section-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      margin: 16px 0 8px 0;
+      font-weight: 700;
+    }
+    .section-title:first-child { margin-top: 0; }
+    .info-row {
+      font-size: 13px;
+      margin-bottom: 7px;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      color: var(--text-bright);
+      line-height: 1.45;
+    }
+    .info-row .key {
+      color: var(--text-muted);
+      display: inline-block;
+      min-width: 96px;
+      vertical-align: top;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+      padding-top: 2px;
+    }
+    .info-row code {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent-hover);
+      background: var(--panel-2);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-right: 4px;
+      margin-bottom: 3px;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+    }
+    .badge-legacy { background: rgba(245,158,11,.12); color: var(--warn); border: 1px solid rgba(245,158,11,.25); }
+    .badge-migrated { background: rgba(16,185,129,.12); color: var(--ok); border: 1px solid rgba(16,185,129,.25); }
+    .badge-framework { background: rgba(56,189,248,.10); color: var(--info); border: 1px solid rgba(56,189,248,.20); }
+    .badge-plugin { background: rgba(139,92,246,.12); color: #c4b5fd; border: 1px solid rgba(139,92,246,.25); }
+    .badge-crate { background: rgba(100,116,139,.12); color: #cbd5e1; border: 1px solid rgba(100,116,139,.25); }
+    .badge-error { background: rgba(239,68,68,.12); color: var(--err); border: 1px solid rgba(239,68,68,.25); }
+    .badge-warn { background: rgba(245,158,11,.12); color: var(--warn); border: 1px solid rgba(245,158,11,.25); }
+    .badge-info { background: rgba(56,189,248,.10); color: var(--info); border: 1px solid rgba(56,189,248,.20); }
+
+    .comp-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+    .comp-tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: rgba(139,92,246,.10);
+      color: #c4b5fd;
+      border: 1px solid rgba(139,92,246,.20);
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .comp-tag.missing { background: rgba(239,68,68,.10); color: var(--err); text-decoration: line-through; border-color: rgba(239,68,68,.20); }
+
     .file-list { margin-top: 4px; }
-    .file-group { margin-bottom: 10px; }
+    .file-group { margin-bottom: 12px; }
     .file-group-title {
       color: var(--text-muted);
       font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      margin-bottom: 4px;
+      margin-bottom: 5px;
       font-weight: 700;
     }
     .file-item {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--text-bright);
       font-family: var(--mono);
       opacity: 0.92;
       word-break: break-all;
-      padding: 2px 0;
+      padding: 3px 0;
     }
     .file-ext {
       display: inline-block;
-      min-width: 28px;
-      font-size: 8px;
-      padding: 1px 4px;
-      border-radius: 3px;
+      min-width: 30px;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 4px;
       text-transform: uppercase;
       text-align: center;
       margin-right: 6px;
@@ -426,166 +521,188 @@
       letter-spacing: 0.04em;
       font-family: var(--font);
     }
-    .ext-rs { background: #152038; color: var(--info); }
-    .ext-slint { background: #2a1f00; color: #fbbf24; }
-    .ext-toml { background: #1a1a2e; color: #94a3b8; }
-    .ext-other { background: #1a1a2e; color: #6b7280; }
-    .dim { opacity: 0.55; color: var(--text-muted); }
+    .ext-rs { background: rgba(56,189,248,.12); color: var(--info); }
+    .ext-slint { background: rgba(245,158,11,.12); color: var(--warn); }
+    .ext-toml { background: rgba(100,116,139,.12); color: var(--text-dim); }
+    .ext-other { background: var(--panel-3); color: var(--text-muted); }
+    .dim { opacity: 0.6; color: var(--text-muted); }
+
+    .focus-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+    .focus-cards .focus-card { min-width: 220px; max-width: 320px; flex: 1 1 240px; }
     .focus-card {
       background: var(--panel-2);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px;
+      border-radius: var(--radius-sm);
+      padding: 14px;
       font-size: 12px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-sm);
     }
     .focus-card .fc-header {
       font-weight: 600;
       color: var(--text-bright);
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .comp-tag {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 999px;
-      font-size: 10px;
-      background: #241c08;
-      color: #fbbf24;
-      border: 1px solid #3a2e0a;
-      font-weight: 600;
-      word-break: break-word;
-    }
-    .comp-tag.missing { background: #2a1010; color: var(--err); text-decoration: line-through; border-color: #4a1818; }
-    .footer-tab-panel::-webkit-scrollbar,
-    #footer-tabs::-webkit-scrollbar,
-    #sidebar::-webkit-scrollbar,
-    #findings-list::-webkit-scrollbar {
+
+    /* Scrollbars */
+    .drawer-tab-panel::-webkit-scrollbar,
+    #findings-card .card-body::-webkit-scrollbar,
+    #drawer-tabs::-webkit-scrollbar {
       width: 8px;
       height: 8px;
     }
-    .footer-tab-panel::-webkit-scrollbar-thumb,
-    #footer-tabs::-webkit-scrollbar-thumb,
-    #sidebar::-webkit-scrollbar-thumb,
-    #findings-list::-webkit-scrollbar-thumb {
-      background: #33333c;
+    .drawer-tab-panel::-webkit-scrollbar-thumb,
+    #findings-card .card-body::-webkit-scrollbar-thumb,
+    #drawer-tabs::-webkit-scrollbar-thumb {
+      background: var(--panel-3);
       border-radius: 4px;
     }
-    .footer-tab-panel::-webkit-scrollbar-thumb:hover,
-    #sidebar::-webkit-scrollbar-thumb:hover {
+    .drawer-tab-panel::-webkit-scrollbar-thumb:hover,
+    #findings-card .card-body::-webkit-scrollbar-thumb:hover {
       background: var(--accent);
     }
-    @media (max-width: 820px) {
-      #sidebar { width: 220px; padding: 12px; }
+
+    .graph-hint {
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
+      z-index: 5;
+      font-size: 11px;
+      color: var(--text-muted);
+      pointer-events: none;
+      letter-spacing: 0.03em;
+    }
+
+    @media (max-width: 760px) {
+      .floating-card { max-width: 86vw; }
+      #controls-card { top: 12px; left: 12px; }
+      #overview-card { top: auto; bottom: 12px; right: 12px; left: 12px; text-align: left; }
+      #overview-card .metric-grid { grid-template-columns: repeat(4, 1fr); }
+      #overview-card .chip-row { justify-content: flex-start; }
+      #findings-card { display: none; }
+      #legend-card { display: none; }
+      #detail-drawer { width: 100%; }
     }
   </style>
 </head>
 <body>
-  <div id="top">
-    <div id="sidebar">
-      <div class="brand-block">
-        <h1><span class="brand">LX</span> <span class="brand-sub">Audio Graph</span></h1>
-        <div class="project-meta">
-          <strong>lx-audiolabs-slint</strong>
-          v0.3.2 · 2026-07-27T17:13:09Z
+  <div id="app">
+    <div id="cy"></div>
+    <div class="graph-hint">click node · drag · scroll zoom · esc closes details</div>
+
+    <div class="floating-card" id="controls-card">
+      <div class="card-header">
+        <div class="brand"><span>Rust</span> Audio Graph</div>
+        <button class="card-toggle" data-target="controls-card" aria-label="collapse">−</button>
+      </div>
+      <div class="card-body">
+        <div class="project-name">lx-audiolabs-slint</div>
+        <div class="meta-line">v0.3.2 · 2026-07-28T11:56:08Z</div>
+        <div class="filter-group" style="margin-top:14px">
+          <label>Search</label>
+          <input id="search" type="text" placeholder="plugin or crate…">
         </div>
-        <div class="chip-row" id="meta-chips"></div>
+        <div class="filter-group">
+          <label>Kind</label>
+          <select id="kind-filter">
+            <option value="all">all</option>
+            <option value="plugin">plugins only</option>
+            <option value="crate">crates only</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Framework</label>
+          <select id="framework-filter"><option value="all">all</option></select>
+        </div>
+        <button class="btn" id="reset-btn">Reset view</button>
       </div>
-
-      <h2>Overview</h2>
-      <div id="stats"></div>
-
-      <h2>Actions</h2>
-      <button class="btn btn-primary" id="reset-btn">Reset view</button>
-
-      <h2>Filters</h2>
-      <div class="filter-group">
-        <label>Kind <span class="dim" style="text-transform:none;letter-spacing:0;font-weight:500">(strict)</span></label>
-        <select id="kind-filter">
-          <option value="all">all</option>
-          <option value="plugin">plugins only</option>
-          <option value="crate">crates only</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label>Framework</label>
-        <select id="framework-filter"><option value="all">all</option></select>
-      </div>
-      <div class="filter-group">
-        <label>Search</label>
-        <input id="search" type="text" placeholder="plugin or crate…">
-      </div>
-
-      <h2>Findings</h2>
-      <div id="findings-list"></div>
-
-      <h2>Nodes</h2>
-      <div class="legend" id="legend"></div>
-      <h2>Edges</h2>
-      <div class="legend" id="edge-legend"></div>
     </div>
-    <div id="stage">
-      <div id="cy"></div>
-      <div class="graph-hint">click node · drag · scroll zoom</div>
+
+    <div class="floating-card" id="overview-card">
+      <div class="card-header">
+        <div class="card-title">Overview</div>
+        <button class="card-toggle" data-target="overview-card" aria-label="collapse">−</button>
+      </div>
+      <div class="card-body">
+        <div class="metric-grid" id="overview-metrics"></div>
+        <div class="chip-row" id="overview-chips"></div>
+      </div>
     </div>
-  </div>
-  <div id="footer">
-    <div id="footer-header"></div>
-    <div id="footer-tabs" role="tablist">
-      <button type="button" role="tab" data-tab="info" data-base-label="Info" class="active">Info</button>
-      <button type="button" role="tab" data-tab="files" data-base-label="Files">Files</button>
-      <button type="button" role="tab" data-tab="comps" data-base-label="Components">Components</button>
-      <button type="button" role="tab" data-tab="deps" data-base-label="Deps">Deps</button>
-      <button type="button" role="tab" data-tab="params" data-base-label="Params">Params</button>
-      <button type="button" role="tab" data-tab="focus" data-base-label="Focus" disabled>Focus</button>
+
+    <div class="floating-card" id="findings-card">
+      <div class="card-header">
+        <div class="card-title">Findings</div>
+        <button class="card-toggle" data-target="findings-card" aria-label="collapse">−</button>
+      </div>
+      <div class="card-body" id="findings-body"></div>
     </div>
-    <div id="footer-body">
-      <div id="tab-info" class="footer-tab-panel active" role="tabpanel"></div>
-      <div id="tab-files" class="footer-tab-panel" role="tabpanel"></div>
-      <div id="tab-comps" class="footer-tab-panel" role="tabpanel"></div>
-      <div id="tab-deps" class="footer-tab-panel" role="tabpanel"></div>
-      <div id="tab-params" class="footer-tab-panel" role="tabpanel"></div>
-      <div id="tab-focus" class="footer-tab-panel" role="tabpanel"></div>
+
+    <div class="floating-card collapsed" id="legend-card">
+      <div class="card-header">
+        <div class="card-title">Legend</div>
+        <button class="card-toggle" data-target="legend-card" aria-label="expand">+</button>
+      </div>
+      <div class="card-body">
+        <div class="legend" id="legend"></div>
+        <div class="legend" id="edge-legend" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div id="detail-drawer">
+      <button id="drawer-close" aria-label="close">✕</button>
+      <div id="drawer-header"></div>
+      <div id="drawer-tabs" role="tablist"></div>
+      <div id="drawer-body"></div>
     </div>
   </div>
 
   <script>
     function initGraph() {
-      const nodes = [{"id":"plugins/aether","label":"aether","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#f97316","border_color":"#22c55e","version":"1.3.0","description":"LX Audiolabs — Aether","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","serde","serde_json","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/presets.rs":"state","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/presets.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","slint","truce","truce-core"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"AetherParams":[{"display_name":"EQ1 Freq","name":"eq1_freq","ty":"FloatParam"},{"display_name":"EQ1 Gain","name":"eq1_gain","ty":"FloatParam"},{"display_name":"EQ1 Q","name":"eq1_q","ty":"FloatParam"},{"display_name":"EQ2 Freq","name":"eq2_freq","ty":"FloatParam"},{"display_name":"EQ2 Gain","name":"eq2_gain","ty":"FloatParam"},{"display_name":"EQ2 Q","name":"eq2_q","ty":"FloatParam"},{"display_name":"EQ3 Freq","name":"eq3_freq","ty":"FloatParam"},{"display_name":"EQ3 Gain","name":"eq3_gain","ty":"FloatParam"},{"display_name":"EQ3 Q","name":"eq3_q","ty":"FloatParam"},{"display_name":"EQ4 Freq","name":"eq4_freq","ty":"FloatParam"},{"display_name":"EQ4 Gain","name":"eq4_gain","ty":"FloatParam"},{"display_name":"EQ4 Q","name":"eq4_q","ty":"FloatParam"},{"display_name":"EQ5 Freq","name":"eq5_freq","ty":"FloatParam"},{"display_name":"EQ5 Gain","name":"eq5_gain","ty":"FloatParam"},{"display_name":"EQ5 Q","name":"eq5_q","ty":"FloatParam"},{"display_name":"EQ1 Type","name":"eq1_type","ty":"IntParam"},{"display_name":"EQ2 Type","name":"eq2_type","ty":"IntParam"},{"display_name":"EQ3 Type","name":"eq3_type","ty":"IntParam"},{"display_name":"EQ4 Type","name":"eq4_type","ty":"IntParam"},{"display_name":"EQ5 Type","name":"eq5_type","ty":"IntParam"},{"display_name":"Blend","name":"blend","ty":"FloatParam"},{"display_name":"Crossfeed Angle","name":"cf_angle","ty":"FloatParam"},{"display_name":"Crossfeed Amount","name":"cf_amount","ty":"FloatParam"},{"display_name":"Crossfeed Realism","name":"cf_realism","ty":"IntParam"},{"display_name":"Gain","name":"gain","ty":"FloatParam"},{"display_name":"Bypass","name":"bypass","ty":"BoolParam"}]},"params_referenced":["blend","bypass","cf_amount","cf_angle","cf_realism","eq1_freq","eq1_gain","eq1_q","eq1_type","eq2_freq","eq2_gain","eq2_q","eq2_type","eq3_freq","eq3_gain","eq3_q","eq3_type","eq4_freq","eq4_gain","eq4_q","eq4_type","eq5_freq","eq5_gain","eq5_q","eq5_type","gain"],"params_structs":["AetherParams"],"plugin_logic_impls":["Aether"],"plugin_macro_types":["Aether"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxBandColumn","LxButton","LxCycleBtn","LxDangerBtn","LxDialogs","LxEqCurve","LxKnob","LxLineEdit","LxSection","LxSelectTrigger","LxShellBody","LxShellHeader","LxShellMain","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"plugins/aurum-slint","label":"aurum-slint","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#f97316","border_color":"#22c55e","version":"0.2.6","description":"LX Audiolabs — Aurum (Slint UI — all-in-one mastering)","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","serde","serde_json","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","slint","truce","truce-core","truce-test"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"AurumParams":[{"display_name":"Side","name":"side_active","ty":"BoolParam"},{"display_name":"Mono","name":"mono_active","ty":"BoolParam"},{"display_name":"Delta","name":"delta_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"},{"display_name":"AT","name":"at_active","ty":"BoolParam"},{"display_name":"AT Amount","name":"at_amount","ty":"FloatParam"},{"display_name":"Input Gain","name":"input_gain","ty":"FloatParam"},{"display_name":"Stereo Width","name":"stereo_width","ty":"FloatParam"},{"display_name":"Mono Floor","name":"mono_floor","ty":"FloatParam"},{"display_name":"Clip Ceiling","name":"clip_ceiling","ty":"FloatParam"},{"display_name":"Clip Softness","name":"clip_softness","ty":"FloatParam"},{"display_name":"Clip M/S Mode","name":"clip_ms_mode","ty":"BoolParam"},{"display_name":"Clip Ceiling Mid","name":"clip_ceiling_mid","ty":"FloatParam"},{"display_name":"Clip Ceiling Side","name":"clip_ceiling_side","ty":"FloatParam"},{"display_name":"Clip Softness Mid","name":"clip_softness_mid","ty":"FloatParam"},{"display_name":"Clip Softness Side","name":"clip_softness_side","ty":"FloatParam"},{"display_name":"Mid Lo Shelf","name":"eq_m_lo_shelf","ty":"FloatParam"},{"display_name":"Mid Lo-Mid","name":"eq_m_lo_mid","ty":"FloatParam"},{"display_name":"Mid Hi-Mid","name":"eq_m_hi_mid","ty":"FloatParam"},{"display_name":"Mid Hi Shelf","name":"eq_m_hi_shelf","ty":"FloatParam"},{"display_name":"Mid Lo Shelf Slope","name":"eq_m_lo_shelf_slope","ty":"IntParam"},{"display_name":"Mid Lo-Mid Slope","name":"eq_m_lo_mid_slope","ty":"IntParam"},{"display_name":"Mid Hi-Mid Slope","name":"eq_m_hi_mid_slope","ty":"IntParam"},{"display_name":"Mid Hi Shelf Slope","name":"eq_m_hi_shelf_slope","ty":"IntParam"},{"display_name":"Side Lo Shelf","name":"eq_s_lo_shelf","ty":"FloatParam"},{"display_name":"Side Lo-Mid","name":"eq_s_lo_mid","ty":"FloatParam"},{"display_name":"Side Hi-Mid","name":"eq_s_hi_mid","ty":"FloatParam"},{"display_name":"Side Hi Shelf","name":"eq_s_hi_shelf","ty":"FloatParam"},{"display_name":"Side Lo Shelf Slope","name":"eq_s_lo_shelf_slope","ty":"IntParam"},{"display_name":"Side Lo-Mid Slope","name":"eq_s_lo_mid_slope","ty":"IntParam"},{"display_name":"Side Hi-Mid Slope","name":"eq_s_hi_mid_slope","ty":"IntParam"},{"display_name":"Side Hi Shelf Slope","name":"eq_s_hi_shelf_slope","ty":"IntParam"},{"display_name":"Comp Split","name":"comp_split","ty":"FloatParam"},{"display_name":"Comp Link","name":"comp_link","ty":"BoolParam"},{"display_name":"Thresh Low","name":"comp_thresh_lo","ty":"FloatParam"},{"display_name":"Thresh High","name":"comp_thresh_hi","ty":"FloatParam"},{"display_name":"Comp Ratio","name":"comp_ratio","ty":"FloatParam"},{"display_name":"Comp Attack","name":"comp_attack","ty":"FloatParam"},{"display_name":"Comp Release","name":"comp_release","ty":"FloatParam"},{"display_name":"Comp Mix","name":"comp_mix","ty":"FloatParam"},{"display_name":"HPF Freq","name":"sweet_hpf","ty":"FloatParam"},{"display_name":"LPF Freq","name":"sweet_lpf","ty":"FloatParam"},{"display_name":"Sweet Lo Shelf","name":"sweet_lo_shelf","ty":"FloatParam"},{"display_name":"Sweet Hi Shelf","name":"sweet_hi_shelf","ty":"FloatParam"},{"display_name":"MB Crossover","name":"mb_crossover","ty":"FloatParam"},{"display_name":"MB Thresh Mid-Lo","name":"mb_thresh_mid_lo","ty":"FloatParam"},{"display_name":"MB Thresh Mid-Hi","name":"mb_thresh_mid_hi","ty":"FloatParam"},{"display_name":"MB Thresh Side","name":"mb_thresh_side","ty":"FloatParam"},{"display_name":"MB Gain Mid-Lo","name":"mb_gain_mid_lo","ty":"FloatParam"},{"display_name":"MB Gain Mid-Hi","name":"mb_gain_mid_hi","ty":"FloatParam"},{"display_name":"MB Gain Side","name":"mb_gain_side","ty":"FloatParam"},{"display_name":"MB Attack Mid-Lo","name":"mb_attack_mid_lo","ty":"FloatParam"},{"display_name":"MB Attack Mid-Hi","name":"mb_attack_mid_hi","ty":"FloatParam"},{"display_name":"MB Attack Side","name":"mb_attack_side","ty":"FloatParam"},{"display_name":"MB Release Mid-Lo","name":"mb_release_mid_lo","ty":"FloatParam"},{"display_name":"MB Release Mid-Hi","name":"mb_release_mid_hi","ty":"FloatParam"},{"display_name":"MB Release Side","name":"mb_release_side","ty":"FloatParam"},{"display_name":"MB Fader Link","name":"mb_fader_link","ty":"BoolParam"},{"display_name":"MB Global Gain","name":"mb_global_gain","ty":"FloatParam"},{"display_name":"MB Global Thresh","name":"mb_global_thresh","ty":"FloatParam"},{"display_name":"MB Mode Modern","name":"mb_mode","ty":"BoolParam"},{"display_name":"Lim Ceiling","name":"lim_ceiling","ty":"FloatParam"},{"display_name":"Lim Release","name":"lim_release","ty":"FloatParam"},{"display_name":"LUFS Target","name":"lufs_target","ty":"FloatParam"},{"display_name":"Sat M/S Mode","name":"sat_ms_mode","ty":"BoolParam"},{"display_name":"Drive Stereo","name":"sat_drive_stereo","ty":"FloatParam"},{"display_name":"Drive Mid","name":"sat_drive_mid","ty":"FloatParam"},{"display_name":"Drive Side","name":"sat_drive_side","ty":"FloatParam"},{"display_name":"Sat Mix","name":"sat_mix","ty":"FloatParam"},{"display_name":"Sat Harmonics","name":"sat_harmonics","ty":"IntParam"}]},"params_referenced":["at_active","at_amount","bypass_active","clip_ceiling","clip_ceiling_mid","clip_ceiling_side","clip_ms_mode","clip_softness","clip_softness_mid","clip_softness_side","comp_attack","comp_link","comp_mix","comp_ratio","comp_release","comp_split","comp_thresh_hi","comp_thresh_lo","delta_active","eq_m_hi_mid","eq_m_hi_mid_slope","eq_m_hi_shelf","eq_m_hi_shelf_slope","eq_m_lo_mid","eq_m_lo_mid_slope","eq_m_lo_shelf","eq_m_lo_shelf_slope","eq_s_hi_mid","eq_s_hi_mid_slope","eq_s_hi_shelf","eq_s_hi_shelf_slope","eq_s_lo_mid","eq_s_lo_mid_slope","eq_s_lo_shelf","eq_s_lo_shelf_slope","input_gain","lim_ceiling","lim_release","lufs_target","mb_attack_mid_hi","mb_attack_mid_lo","mb_attack_side","mb_crossover","mb_fader_link","mb_gain_mid_hi","mb_gain_mid_lo","mb_gain_side","mb_global_gain","mb_global_thresh","mb_mode","mb_release_mid_hi","mb_release_mid_lo","mb_release_side","mb_thresh_mid_hi","mb_thresh_mid_lo","mb_thresh_side","mono_active","mono_floor","sat_drive_mid","sat_drive_side","sat_drive_stereo","sat_harmonics","sat_mix","sat_ms_mode","side_active","stereo_width","sweet_hi_shelf","sweet_hpf","sweet_lo_shelf","sweet_lpf"],"params_structs":["AurumParams"],"plugin_logic_impls":["Aurum"],"plugin_macro_types":["Aurum"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCycleBtn","LxDangerBtn","LxDialogs","LxEqCurve","LxGoniometer","LxGrMeter","LxKnob","LxLedPeakMeter","LxLineEdit","LxSection","LxSegmentedButton","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSpectrum","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"plugins/equilibrium","label":"equilibrium","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#f97316","border_color":"#22c55e","version":"1.7.0","description":"LX Audiolabs — Equilibrium","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/presets.rs":"state","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/presets.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","slint","truce","truce-core","truce-params"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"EquilibriumParams":[{"display_name":"Sub Gain","name":"low_gain","ty":"FloatParam"},{"display_name":"Bass Gain","name":"bass_gain","ty":"FloatParam"},{"display_name":"Mid Gain","name":"mid_gain","ty":"FloatParam"},{"display_name":"Pres Gain","name":"high_mid_gain","ty":"FloatParam"},{"display_name":"Air Gain","name":"high_gain","ty":"FloatParam"},{"display_name":"Sub Width","name":"low_width","ty":"FloatParam"},{"display_name":"Bass Width","name":"bass_width","ty":"FloatParam"},{"display_name":"Mid Width","name":"mid_width","ty":"FloatParam"},{"display_name":"Pres Width","name":"high_mid_width","ty":"FloatParam"},{"display_name":"Air Width","name":"high_width","ty":"FloatParam"},{"display_name":"Sub Pan","name":"low_pan","ty":"FloatParam"},{"display_name":"Bass Pan","name":"bass_pan","ty":"FloatParam"},{"display_name":"Mid Pan","name":"mid_pan","ty":"FloatParam"},{"display_name":"Pres Pan","name":"high_mid_pan","ty":"FloatParam"},{"display_name":"Air Pan","name":"high_pan","ty":"FloatParam"},{"display_name":"Mono Floor","name":"mono_floor","ty":"FloatParam"},{"display_name":"Output Gain","name":"output_gain","ty":"FloatParam"},{"display_name":"Solo Sub","name":"solo_low","ty":"BoolParam"},{"display_name":"Solo Bass","name":"solo_bass","ty":"BoolParam"},{"display_name":"Solo Mid","name":"solo_mid","ty":"BoolParam"},{"display_name":"Solo Pres","name":"solo_high_mid","ty":"BoolParam"},{"display_name":"Solo Air","name":"solo_high","ty":"BoolParam"},{"display_name":"Mono Sum","name":"mono_active","ty":"BoolParam"},{"display_name":"Delta Diff","name":"delta_active","ty":"BoolParam"},{"display_name":"Listen Profile","name":"listen_active","ty":"BoolParam"},{"display_name":"Auto Loudness","name":"auto_gain_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"},{"display_name":"Pre-Master","name":"pre_master_active","ty":"BoolParam"},{"display_name":"Pre-Master Target","name":"pre_master_target_db","ty":"FloatParam"}]},"params_referenced":["auto_gain_active","bass_gain","bass_pan","bass_width","bypass_active","delta_active","high_gain","high_mid_gain","high_mid_pan","high_mid_width","high_pan","high_width","listen_active","low_gain","low_pan","low_width","mid_gain","mid_pan","mid_width","mono_active","mono_floor","output_gain","pre_master_active","pre_master_target_db","solo_bass","solo_high","solo_high_mid","solo_low","solo_mid"],"params_structs":["EquilibriumParams"],"plugin_logic_impls":["Equilibrium"],"plugin_macro_types":["Equilibrium"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCorrelation","LxDangerBtn","LxDialogs","LxGoniometer","LxKnob","LxLedPeakMeter","LxLineEdit","LxSection","LxSections","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"plugins/lucent-relay-slint","label":"lucent-relay-slint","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#f97316","border_color":"#22c55e","version":"1.0.0","description":"LX Audiolabs — Lucent Relay (Slint UI — FFT sender, pass-through)","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","realfft","slint","truce","truce-core","truce-test"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["relay","shared_state","shm"],"params_fields":{"LucentRelayParams":[{"display_name":"Bypass","hidden":true,"name":"bypass","ty":"BoolParam"},{"display_name":"_flush_sentinel","hidden":true,"name":"_flush_sentinel","ty":"FloatParam"}]},"params_structs":["LucentRelayParams"],"plugin_logic_impls":["LucentRelay"],"plugin_macro_types":["LucentRelay"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxLineEdit","LxSelectTrigger","LxShellBody","LxShellHeader","LxShellMain","LxUiSlint"]}},{"id":"plugins/lucent-slint","label":"lucent-slint","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#f97316","border_color":"#22c55e","version":"1.0.0","description":"LX Audiolabs — Lucent (Slint UI — FFT spectrum analyser / masking)","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/process.rs":"audio","src/relay_state.rs":"ipc","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/process.rs","src/relay_state.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","realfft","slint","truce","truce-core","truce-test"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["relay","shared_state","shm"],"params_fields":{"LucentParams":[{"display_name":"Analyze Mode","name":"analyze_mode","ty":"IntParam"},{"display_name":"Resonance","name":"resonance_active","ty":"BoolParam"},{"display_name":"Masking","name":"masking_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"},{"display_name":"Sensitivity","name":"sensitivity","ty":"FloatParam"}]},"params_referenced":["analyze_mode","bypass_active","masking_active","resonance_active","sensitivity"],"params_structs":["LucentParams"],"plugin_logic_impls":["Lucent"],"plugin_macro_types":["Lucent"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCorrelation","LxDangerBtn","LxDialogs","LxGoniometer","LxKnob","LxLedPeakMeter","LxLineEdit","LxSection","LxSegmentedButton","LxShellBody","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSpectrum","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"crates/lx-analysis","label":"lx-analysis","kind":"crate","frameworks":[],"migration_status":null,"color":"#3b82f6","version":"0.1.0","internal_deps":["crates/lx-shm","crates/lx-vault"],"external_flags":["atomic_float","num-complex","realfft","serde","serde_json","tracing","tracing-appender","tracing-subscriber"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/dev_log.rs":"source","src/lib.rs":"entry","src/snap_fft.rs":"source"},"files":["Cargo.toml","src","src/dev_log.rs","src/lib.rs","src/snap_fft.rs"],"imported_crates":["atomic-float","lx-shm","lx-vault","snap-fft"],"ipc_signals":["relay","shared_state","shm"],"public_api":["enum SnapMode","fn clip_wave_minmax_window","fn clip_wave_scroll_phase","fn compute_spectrum_bins","fn filter_relays_by_mask","fn init","fn spectrum_physical_db","fn spectrum_tilt_db","struct ClipWaveRing","struct SharedState","struct SnapFFT"]}},{"id":"crates/lx-dsp","label":"lx-dsp","kind":"crate","frameworks":[],"migration_status":null,"color":"#3b82f6","version":"0.1.1","external_flags":["ebur128","serde_json"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry","src/state_migration.rs":"state"},"files":["Cargo.toml","src","src/lib.rs","src/state_migration.rs"],"imported_crates":["ebur128","serde-json"],"process_method_count":11,"public_api":["enum HarmonicsMode","fn try_parse_niceplug_state","struct AutoLoudMeter","struct Biquad","struct Compressor","struct FtzDazGuard","struct LR2Crossover","struct MasteringClipper","struct MasteringMeter","struct MasteringSaturator","struct MsBandLimiter","struct MsEq","struct PeakMeter","struct RmsMeter","struct SweeteningEq","struct TiltEq","struct ToleranceTable","struct TwoBandCompressor","trait Filter"]}},{"id":"crates/lx-shm","label":"lx-shm","kind":"crate","frameworks":[],"migration_status":null,"color":"#3b82f6","version":"0.1.0","description":"Cross-plugin shared-memory hub with seqlock-protected slots, heartbeat liveness, and CAS-based slot claiming","external_flags":["shared_memory"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry"},"files":["Cargo.toml","src","src/lib.rs"],"imported_crates":["shared-memory"],"ipc_signals":["relay","seqlock","shm"],"public_api":["fn display_name","fn now_ms","fn relay_hub","fn resolve_from_consumers","fn resolve_relay_target","struct RelayHub"]}},{"id":"crates/lx-slint-build","label":"lx-slint-build","kind":"crate","frameworks":["slint"],"migration_status":null,"color":"#3b82f6","version":"0.1.0","description":"Build helper: @truce widgets + JetBrains Mono with slint-build 1.17.1","external_flags":["slint-build","truce_stack"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry","ui/dropdown.slint":"slint","ui/knob.slint":"slint","ui/meter.slint":"slint","ui/slider.slint":"slint","ui/toggle.slint":"slint","ui/widgets.slint":"slint","ui/xy_pad.slint":"slint"},"files":["Cargo.toml","src","src/lib.rs","ui","ui/dropdown.slint","ui/knob.slint","ui/meter.slint","ui/slider.slint","ui/toggle.slint","ui/widgets.slint","ui/xy_pad.slint"],"public_api":["enum CompileError","fn compile"]}},{"id":"crates/lx-slint-editor","label":"lx-slint-editor","kind":"crate","frameworks":["baseview","lx-slint-editor","raw-window-handle","slint","truce"],"migration_status":null,"color":"#3b82f6","version":"0.1.0","description":"truce::Editor adapter for slint-baseview — LX Audiolabs","external_flags":["baseview","log","paste","raw-window-handle","slint","slint-baseview","truce_stack"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry","src/parent.rs":"source"},"files":["Cargo.toml","src","src/lib.rs","src/parent.rs"],"imported_crates":["baseview","paste","raw-window-handle","slint","slint-baseview","truce-core","truce-params"],"public_api":["struct LxSlintEditor","struct ParentedWindow"]}},{"id":"crates/lx-ui-slint","label":"lx-ui-slint","kind":"crate","frameworks":["slint"],"migration_status":null,"color":"#3b82f6","version":"0.1.0","internal_deps":["crates/lx-slint-build"],"external_flags":["slint"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/lib.rs":"entry","ui/lx-chrome.slint":"slint","ui/lx-controls.slint":"slint","ui/lx-dialogs.slint":"slint","ui/lx-meters.slint":"slint","ui/lx-shell.slint":"slint","ui/lx-theme.slint":"slint","ui/lx-viz.slint":"slint","ui/lx.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/lib.rs","ui","ui/lx-chrome.slint","ui/lx-controls.slint","ui/lx-dialogs.slint","ui/lx-meters.slint","ui/lx-shell.slint","ui/lx-theme.slint","ui/lx-viz.slint","ui/lx.slint"],"slint_components":["Lx","LxAnalysis","LxBandColumn","LxButton","LxChrome","LxCompDisplay","LxControls","LxCorrelation","LxCycleBtn","LxDangerBtn","LxEqBandColumn","LxEqCurve","LxGallery","LxGoniometer","LxGrMeter","LxHeader","LxKnob","LxLedColumn","LxLedPeakMeter","LxLevelPanel","LxLineEdit","LxMeterBar","LxMeters","LxMonitorStrip","LxPanel","LxParamField","LxSection","LxSegmentedButton","LxSelectTrigger","LxShell","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxSpectrum","LxStereoMeter","LxTabs","LxTheme","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay","LxVaultSetupPopup","LxViz"],"slint_exports":["Lx","LxBandColumn","LxButton","LxCompDisplay","LxCorrelation","LxCycleBtn","LxDangerBtn","LxEqBandColumn","LxEqCurve","LxGallery","LxGoniometer","LxGrMeter","LxHeader","LxKnob","LxLedColumn","LxLedPeakMeter","LxLevelPanel","LxLineEdit","LxMeterBar","LxMonitorStrip","LxPanel","LxParamField","LxSection","LxSegmentedButton","LxSelectTrigger","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxSpectrum","LxStereoMeter","LxTabs","LxToggleBtn","LxVaultSetupOverlay","LxVaultSetupPopup"]}},{"id":"crates/lx-vault","label":"lx-vault","kind":"crate","frameworks":[],"migration_status":null,"color":"#3b82f6","version":"0.1.0","external_flags":["serde","serde_json"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry"},"files":["Cargo.toml","src","src/lib.rs"],"imported_crates":["serde"],"public_api":["fn export_preset_to_markdown","fn get_plugin_dir","fn list_custom_presets","fn load_config","fn parse_preset_from_markdown","fn preset_plugin_name","fn save_config","struct PluginConfig","struct Profile"]}},{"id":"plugins/meridian","label":"meridian","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#f97316","border_color":"#22c55e","version":"1.10.0","description":"LX Audiolabs — Meridian","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/presets.rs":"state","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/presets.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","realfft","slint","truce","truce-core","truce-params"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"MeridianParams":[{"display_name":"Low Cut","name":"hpf_freq","ty":"FloatParam"},{"display_name":"High Cut","name":"lpf_freq","ty":"FloatParam"},{"display_name":"Cut Slope","name":"cut_slope","ty":"IntParam"},{"display_name":"Lo Shelf Gain","name":"bass_gain","ty":"FloatParam"},{"display_name":"Lo Shelf Slope","name":"bass_slope","ty":"IntParam"},{"display_name":"Lo-Mid Gain","name":"lo_mid_gain","ty":"FloatParam"},{"display_name":"Lo-Mid Slope","name":"lo_mid_slope","ty":"IntParam"},{"display_name":"Mid Gain","name":"mid_gain","ty":"FloatParam"},{"display_name":"Mid Slope","name":"mid_slope","ty":"IntParam"},{"display_name":"Hi-Mid Gain","name":"high_gain","ty":"FloatParam"},{"display_name":"Hi-Mid Slope","name":"high_slope","ty":"IntParam"},{"display_name":"Hi Shelf Gain","name":"excite_gain","ty":"FloatParam"},{"display_name":"Hi Shelf Slope","name":"excite_slope","ty":"IntParam"},{"display_name":"Lo Shelf Freq","name":"eq_freq_1","ty":"FloatParam"},{"display_name":"Lo-Mid Freq","name":"eq_freq_2","ty":"FloatParam"},{"display_name":"Mid Freq","name":"eq_freq_3","ty":"FloatParam"},{"display_name":"Hi-Mid Freq","name":"eq_freq_4","ty":"FloatParam"},{"display_name":"Hi Shelf Freq","name":"eq_freq_5","ty":"FloatParam"},{"display_name":"Tilt","name":"tilt_gain","ty":"FloatParam"},{"display_name":"Warmth Drive","name":"warmth_drive","ty":"FloatParam"},{"display_name":"Warmth Mix","name":"warmth_mix","ty":"FloatParam"},{"display_name":"Excite Amount","name":"excite_amount","ty":"FloatParam"},{"display_name":"Excite Blend","name":"excite_blend","ty":"FloatParam"},{"display_name":"Excite Freq","name":"excite_freq","ty":"FloatParam"},{"display_name":"Comp Threshold","name":"comp_threshold","ty":"FloatParam"},{"display_name":"Comp Mix","name":"comp_mix","ty":"FloatParam"},{"display_name":"Comp Attack","name":"comp_attack","ty":"FloatParam"},{"display_name":"Comp Release","name":"comp_release","ty":"FloatParam"},{"display_name":"Comp Ratio","name":"comp_character","ty":"FloatParam"},{"display_name":"Comp Makeup","name":"comp_makeup","ty":"FloatParam"},{"display_name":"Inflate Effect","name":"inflate_effect","ty":"FloatParam"},{"display_name":"Inflate Curve","name":"inflate_curve","ty":"FloatParam"},{"display_name":"Inflate Band Split","name":"inflate_band_split","ty":"BoolParam"},{"display_name":"Inflate Clip","name":"inflate_clip","ty":"BoolParam"},{"display_name":"Stereo Width","name":"stereo_width","ty":"FloatParam"},{"display_name":"Pan","name":"pan","ty":"FloatParam"},{"display_name":"Output Gain","name":"output_gain","ty":"FloatParam"},{"display_name":"Mono Sum","name":"mono_active","ty":"BoolParam"},{"display_name":"Delta Diff","name":"delta_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"}]},"params_referenced":["bass_gain","bass_slope","bypass_active","comp_attack","comp_character","comp_makeup","comp_mix","comp_release","comp_threshold","cut_slope","delta_active","eq_freq_1","eq_freq_2","eq_freq_3","eq_freq_4","eq_freq_5","excite_amount","excite_blend","excite_freq","excite_gain","excite_slope","high_gain","high_slope","hpf_freq","inflate_band_split","inflate_clip","inflate_curve","inflate_effect","lo_mid_gain","lo_mid_slope","lpf_freq","mid_gain","mid_slope","mono_active","output_gain","pan","stereo_width","tilt_gain","warmth_drive","warmth_mix"],"params_structs":["MeridianParams"],"plugin_logic_impls":["Meridian"],"plugin_macro_types":["Meridian"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCompDisplay","LxCorrelation","LxDangerBtn","LxDialogs","LxEqBandColumn","LxEqCurve","LxGoniometer","LxGrMeter","LxKnob","LxLedPeakMeter","LxLineEdit","LxSection","LxSegmentedButton","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxSpectrum","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}}];
-      const edges = [{"source":"crates/lx-ui-slint","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/aether","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/lucent-relay-slint","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/lucent-slint","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/meridian","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"crates/lx-analysis","target":"crates/lx-shm","kind":"depends_on"},{"source":"crates/lx-analysis","target":"crates/lx-vault","kind":"depends_on"},{"source":"plugins/aether","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/aether","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/aether","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/lucent-relay-slint","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/lucent-relay-slint","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/lucent-relay-slint","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/lucent-slint","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/lucent-slint","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/lucent-slint","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/meridian","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/meridian","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/meridian","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/lucent-relay-slint","target":"plugins/lucent-slint","kind":"ipc_peer","note":"shared: relay, shm"},{"source":"plugins/lucent-relay-slint","target":"crates/lx-shm","kind":"runtime_depends_on","note":"via relay+shm"},{"source":"plugins/lucent-slint","target":"crates/lx-shm","kind":"runtime_depends_on","note":"via relay+shm"},{"source":"plugins/aether","target":"crates/lx-ui-slint","kind":"uses_ui","note":"14 shared Lx* components"},{"source":"plugins/aurum-slint","target":"crates/lx-ui-slint","kind":"uses_ui","note":"20 shared Lx* components"},{"source":"plugins/equilibrium","target":"crates/lx-ui-slint","kind":"uses_ui","note":"17 shared Lx* components"},{"source":"plugins/lucent-relay-slint","target":"crates/lx-ui-slint","kind":"uses_ui","note":"5 shared Lx* components"},{"source":"plugins/lucent-slint","target":"crates/lx-ui-slint","kind":"uses_ui","note":"17 shared Lx* components"},{"source":"plugins/meridian","target":"crates/lx-ui-slint","kind":"uses_ui","note":"23 shared Lx* components"}];
+      const nodes = [{"id":"plugins/aether","label":"aether","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#8b5cf6","border_color":"#10b981","version":"1.3.0","description":"LX Audiolabs — Aether","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","serde","serde_json","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/presets.rs":"state","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/presets.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","slint","truce","truce-core"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"AetherParams":[{"display_name":"EQ1 Freq","name":"eq1_freq","ty":"FloatParam"},{"display_name":"EQ1 Gain","name":"eq1_gain","ty":"FloatParam"},{"display_name":"EQ1 Q","name":"eq1_q","ty":"FloatParam"},{"display_name":"EQ2 Freq","name":"eq2_freq","ty":"FloatParam"},{"display_name":"EQ2 Gain","name":"eq2_gain","ty":"FloatParam"},{"display_name":"EQ2 Q","name":"eq2_q","ty":"FloatParam"},{"display_name":"EQ3 Freq","name":"eq3_freq","ty":"FloatParam"},{"display_name":"EQ3 Gain","name":"eq3_gain","ty":"FloatParam"},{"display_name":"EQ3 Q","name":"eq3_q","ty":"FloatParam"},{"display_name":"EQ4 Freq","name":"eq4_freq","ty":"FloatParam"},{"display_name":"EQ4 Gain","name":"eq4_gain","ty":"FloatParam"},{"display_name":"EQ4 Q","name":"eq4_q","ty":"FloatParam"},{"display_name":"EQ5 Freq","name":"eq5_freq","ty":"FloatParam"},{"display_name":"EQ5 Gain","name":"eq5_gain","ty":"FloatParam"},{"display_name":"EQ5 Q","name":"eq5_q","ty":"FloatParam"},{"display_name":"EQ1 Type","name":"eq1_type","ty":"IntParam"},{"display_name":"EQ2 Type","name":"eq2_type","ty":"IntParam"},{"display_name":"EQ3 Type","name":"eq3_type","ty":"IntParam"},{"display_name":"EQ4 Type","name":"eq4_type","ty":"IntParam"},{"display_name":"EQ5 Type","name":"eq5_type","ty":"IntParam"},{"display_name":"Blend","name":"blend","ty":"FloatParam"},{"display_name":"Crossfeed Angle","name":"cf_angle","ty":"FloatParam"},{"display_name":"Crossfeed Amount","name":"cf_amount","ty":"FloatParam"},{"display_name":"Crossfeed Realism","name":"cf_realism","ty":"IntParam"},{"display_name":"Gain","name":"gain","ty":"FloatParam"},{"display_name":"Bypass","name":"bypass","ty":"BoolParam"}]},"params_referenced":["blend","bypass","cf_amount","cf_angle","cf_realism","eq1_freq","eq1_gain","eq1_q","eq1_type","eq2_freq","eq2_gain","eq2_q","eq2_type","eq3_freq","eq3_gain","eq3_q","eq3_type","eq4_freq","eq4_gain","eq4_q","eq4_type","eq5_freq","eq5_gain","eq5_q","eq5_type","gain"],"params_structs":["AetherParams"],"plugin_logic_impls":["Aether"],"plugin_macro_types":["Aether"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxBandColumn","LxButton","LxCycleBtn","LxDangerBtn","LxDialogs","LxEqCurve","LxKnob","LxLineEdit","LxSection","LxSelectTrigger","LxShellBody","LxShellHeader","LxShellMain","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"plugins/aurum-slint","label":"aurum-slint","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#8b5cf6","border_color":"#10b981","version":"0.2.6","description":"LX Audiolabs — Aurum (Slint UI — all-in-one mastering)","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","serde","serde_json","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","slint","truce","truce-core","truce-test"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"AurumParams":[{"display_name":"Side","name":"side_active","ty":"BoolParam"},{"display_name":"Mono","name":"mono_active","ty":"BoolParam"},{"display_name":"Delta","name":"delta_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"},{"display_name":"AT","name":"at_active","ty":"BoolParam"},{"display_name":"AT Amount","name":"at_amount","ty":"FloatParam"},{"display_name":"Input Gain","name":"input_gain","ty":"FloatParam"},{"display_name":"Stereo Width","name":"stereo_width","ty":"FloatParam"},{"display_name":"Mono Floor","name":"mono_floor","ty":"FloatParam"},{"display_name":"Clip Ceiling","name":"clip_ceiling","ty":"FloatParam"},{"display_name":"Clip Softness","name":"clip_softness","ty":"FloatParam"},{"display_name":"Clip M/S Mode","name":"clip_ms_mode","ty":"BoolParam"},{"display_name":"Clip Ceiling Mid","name":"clip_ceiling_mid","ty":"FloatParam"},{"display_name":"Clip Ceiling Side","name":"clip_ceiling_side","ty":"FloatParam"},{"display_name":"Clip Softness Mid","name":"clip_softness_mid","ty":"FloatParam"},{"display_name":"Clip Softness Side","name":"clip_softness_side","ty":"FloatParam"},{"display_name":"Mid Lo Shelf","name":"eq_m_lo_shelf","ty":"FloatParam"},{"display_name":"Mid Lo-Mid","name":"eq_m_lo_mid","ty":"FloatParam"},{"display_name":"Mid Hi-Mid","name":"eq_m_hi_mid","ty":"FloatParam"},{"display_name":"Mid Hi Shelf","name":"eq_m_hi_shelf","ty":"FloatParam"},{"display_name":"Mid Lo Shelf Slope","name":"eq_m_lo_shelf_slope","ty":"IntParam"},{"display_name":"Mid Lo-Mid Slope","name":"eq_m_lo_mid_slope","ty":"IntParam"},{"display_name":"Mid Hi-Mid Slope","name":"eq_m_hi_mid_slope","ty":"IntParam"},{"display_name":"Mid Hi Shelf Slope","name":"eq_m_hi_shelf_slope","ty":"IntParam"},{"display_name":"Side Lo Shelf","name":"eq_s_lo_shelf","ty":"FloatParam"},{"display_name":"Side Lo-Mid","name":"eq_s_lo_mid","ty":"FloatParam"},{"display_name":"Side Hi-Mid","name":"eq_s_hi_mid","ty":"FloatParam"},{"display_name":"Side Hi Shelf","name":"eq_s_hi_shelf","ty":"FloatParam"},{"display_name":"Side Lo Shelf Slope","name":"eq_s_lo_shelf_slope","ty":"IntParam"},{"display_name":"Side Lo-Mid Slope","name":"eq_s_lo_mid_slope","ty":"IntParam"},{"display_name":"Side Hi-Mid Slope","name":"eq_s_hi_mid_slope","ty":"IntParam"},{"display_name":"Side Hi Shelf Slope","name":"eq_s_hi_shelf_slope","ty":"IntParam"},{"display_name":"Comp Split","name":"comp_split","ty":"FloatParam"},{"display_name":"Comp Link","name":"comp_link","ty":"BoolParam"},{"display_name":"Thresh Low","name":"comp_thresh_lo","ty":"FloatParam"},{"display_name":"Thresh High","name":"comp_thresh_hi","ty":"FloatParam"},{"display_name":"Comp Ratio","name":"comp_ratio","ty":"FloatParam"},{"display_name":"Comp Attack","name":"comp_attack","ty":"FloatParam"},{"display_name":"Comp Release","name":"comp_release","ty":"FloatParam"},{"display_name":"Comp Mix","name":"comp_mix","ty":"FloatParam"},{"display_name":"HPF Freq","name":"sweet_hpf","ty":"FloatParam"},{"display_name":"LPF Freq","name":"sweet_lpf","ty":"FloatParam"},{"display_name":"Sweet Lo Shelf","name":"sweet_lo_shelf","ty":"FloatParam"},{"display_name":"Sweet Hi Shelf","name":"sweet_hi_shelf","ty":"FloatParam"},{"display_name":"MB Crossover","name":"mb_crossover","ty":"FloatParam"},{"display_name":"MB Thresh Mid-Lo","name":"mb_thresh_mid_lo","ty":"FloatParam"},{"display_name":"MB Thresh Mid-Hi","name":"mb_thresh_mid_hi","ty":"FloatParam"},{"display_name":"MB Thresh Side","name":"mb_thresh_side","ty":"FloatParam"},{"display_name":"MB Gain Mid-Lo","name":"mb_gain_mid_lo","ty":"FloatParam"},{"display_name":"MB Gain Mid-Hi","name":"mb_gain_mid_hi","ty":"FloatParam"},{"display_name":"MB Gain Side","name":"mb_gain_side","ty":"FloatParam"},{"display_name":"MB Attack Mid-Lo","name":"mb_attack_mid_lo","ty":"FloatParam"},{"display_name":"MB Attack Mid-Hi","name":"mb_attack_mid_hi","ty":"FloatParam"},{"display_name":"MB Attack Side","name":"mb_attack_side","ty":"FloatParam"},{"display_name":"MB Release Mid-Lo","name":"mb_release_mid_lo","ty":"FloatParam"},{"display_name":"MB Release Mid-Hi","name":"mb_release_mid_hi","ty":"FloatParam"},{"display_name":"MB Release Side","name":"mb_release_side","ty":"FloatParam"},{"display_name":"MB Fader Link","name":"mb_fader_link","ty":"BoolParam"},{"display_name":"MB Global Gain","name":"mb_global_gain","ty":"FloatParam"},{"display_name":"MB Global Thresh","name":"mb_global_thresh","ty":"FloatParam"},{"display_name":"MB Mode Modern","name":"mb_mode","ty":"BoolParam"},{"display_name":"Lim Ceiling","name":"lim_ceiling","ty":"FloatParam"},{"display_name":"Lim Release","name":"lim_release","ty":"FloatParam"},{"display_name":"LUFS Target","name":"lufs_target","ty":"FloatParam"},{"display_name":"Sat M/S Mode","name":"sat_ms_mode","ty":"BoolParam"},{"display_name":"Drive Stereo","name":"sat_drive_stereo","ty":"FloatParam"},{"display_name":"Drive Mid","name":"sat_drive_mid","ty":"FloatParam"},{"display_name":"Drive Side","name":"sat_drive_side","ty":"FloatParam"},{"display_name":"Sat Mix","name":"sat_mix","ty":"FloatParam"},{"display_name":"Sat Harmonics","name":"sat_harmonics","ty":"IntParam"}]},"params_referenced":["at_active","at_amount","bypass_active","clip_ceiling","clip_ceiling_mid","clip_ceiling_side","clip_ms_mode","clip_softness","clip_softness_mid","clip_softness_side","comp_attack","comp_link","comp_mix","comp_ratio","comp_release","comp_split","comp_thresh_hi","comp_thresh_lo","delta_active","eq_m_hi_mid","eq_m_hi_mid_slope","eq_m_hi_shelf","eq_m_hi_shelf_slope","eq_m_lo_mid","eq_m_lo_mid_slope","eq_m_lo_shelf","eq_m_lo_shelf_slope","eq_s_hi_mid","eq_s_hi_mid_slope","eq_s_hi_shelf","eq_s_hi_shelf_slope","eq_s_lo_mid","eq_s_lo_mid_slope","eq_s_lo_shelf","eq_s_lo_shelf_slope","input_gain","lim_ceiling","lim_release","lufs_target","mb_attack_mid_hi","mb_attack_mid_lo","mb_attack_side","mb_crossover","mb_fader_link","mb_gain_mid_hi","mb_gain_mid_lo","mb_gain_side","mb_global_gain","mb_global_thresh","mb_mode","mb_release_mid_hi","mb_release_mid_lo","mb_release_side","mb_thresh_mid_hi","mb_thresh_mid_lo","mb_thresh_side","mono_active","mono_floor","sat_drive_mid","sat_drive_side","sat_drive_stereo","sat_harmonics","sat_mix","sat_ms_mode","side_active","stereo_width","sweet_hi_shelf","sweet_hpf","sweet_lo_shelf","sweet_lpf"],"params_structs":["AurumParams"],"plugin_logic_impls":["Aurum"],"plugin_macro_types":["Aurum"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCompDisplay","LxCycleBtn","LxDangerBtn","LxDialogs","LxEqCurve","LxGoniometer","LxKnob","LxLedPeakMeter","LxLineEdit","LxSection","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSpectrum","LxTabs","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"plugins/equilibrium","label":"equilibrium","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#8b5cf6","border_color":"#10b981","version":"1.7.0","description":"LX Audiolabs — Equilibrium","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/presets.rs":"state","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/presets.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","slint","truce","truce-core","truce-params"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"EquilibriumParams":[{"display_name":"Sub Gain","name":"low_gain","ty":"FloatParam"},{"display_name":"Bass Gain","name":"bass_gain","ty":"FloatParam"},{"display_name":"Mid Gain","name":"mid_gain","ty":"FloatParam"},{"display_name":"Pres Gain","name":"high_mid_gain","ty":"FloatParam"},{"display_name":"Air Gain","name":"high_gain","ty":"FloatParam"},{"display_name":"Sub Width","name":"low_width","ty":"FloatParam"},{"display_name":"Bass Width","name":"bass_width","ty":"FloatParam"},{"display_name":"Mid Width","name":"mid_width","ty":"FloatParam"},{"display_name":"Pres Width","name":"high_mid_width","ty":"FloatParam"},{"display_name":"Air Width","name":"high_width","ty":"FloatParam"},{"display_name":"Sub Pan","name":"low_pan","ty":"FloatParam"},{"display_name":"Bass Pan","name":"bass_pan","ty":"FloatParam"},{"display_name":"Mid Pan","name":"mid_pan","ty":"FloatParam"},{"display_name":"Pres Pan","name":"high_mid_pan","ty":"FloatParam"},{"display_name":"Air Pan","name":"high_pan","ty":"FloatParam"},{"display_name":"Mono Floor","name":"mono_floor","ty":"FloatParam"},{"display_name":"Output Gain","name":"output_gain","ty":"FloatParam"},{"display_name":"Solo Sub","name":"solo_low","ty":"BoolParam"},{"display_name":"Solo Bass","name":"solo_bass","ty":"BoolParam"},{"display_name":"Solo Mid","name":"solo_mid","ty":"BoolParam"},{"display_name":"Solo Pres","name":"solo_high_mid","ty":"BoolParam"},{"display_name":"Solo Air","name":"solo_high","ty":"BoolParam"},{"display_name":"Mono Sum","name":"mono_active","ty":"BoolParam"},{"display_name":"Delta Diff","name":"delta_active","ty":"BoolParam"},{"display_name":"Listen Profile","name":"listen_active","ty":"BoolParam"},{"display_name":"Auto Loudness","name":"auto_gain_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"},{"display_name":"Pre-Master","name":"pre_master_active","ty":"BoolParam"},{"display_name":"Pre-Master Target","name":"pre_master_target_db","ty":"FloatParam"}]},"params_referenced":["auto_gain_active","bass_gain","bass_pan","bass_width","bypass_active","delta_active","high_gain","high_mid_gain","high_mid_pan","high_mid_width","high_pan","high_width","listen_active","low_gain","low_pan","low_width","mid_gain","mid_pan","mid_width","mono_active","mono_floor","output_gain","pre_master_active","pre_master_target_db","solo_bass","solo_high","solo_high_mid","solo_low","solo_mid"],"params_structs":["EquilibriumParams"],"plugin_logic_impls":["Equilibrium"],"plugin_macro_types":["Equilibrium"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCorrelation","LxDangerBtn","LxDialogs","LxGoniometer","LxKnob","LxLedPeakMeter","LxLineEdit","LxSection","LxSections","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"plugins/lucent","label":"lucent","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#8b5cf6","border_color":"#10b981","version":"1.0.0","description":"LX Audiolabs — Lucent (FFT spectrum analyser / masking)","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/process.rs":"audio","src/relay_state.rs":"ipc","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/process.rs","src/relay_state.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","realfft","slint","truce","truce-core","truce-test"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["relay","shared_state","shm"],"params_fields":{"LucentParams":[{"display_name":"Analyze Mode","name":"analyze_mode","ty":"IntParam"},{"display_name":"Resonance","name":"resonance_active","ty":"BoolParam"},{"display_name":"Masking","name":"masking_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"},{"display_name":"Sensitivity","name":"sensitivity","ty":"FloatParam"}]},"params_referenced":["analyze_mode","bypass_active","masking_active","resonance_active","sensitivity"],"params_structs":["LucentParams"],"plugin_logic_impls":["Lucent"],"plugin_macro_types":["Lucent"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCorrelation","LxDangerBtn","LxDialogs","LxGoniometer","LxKnob","LxLedPeakMeter","LxSection","LxShellBody","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSpectrum","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}},{"id":"plugins/lucent-relay","label":"lucent-relay","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#8b5cf6","border_color":"#10b981","version":"1.0.0","description":"LX Audiolabs — Lucent Relay (FFT sender, pass-through)","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","realfft","slint","truce","truce-core","truce-test"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["relay","shared_state","shm"],"params_fields":{"LucentRelayParams":[{"display_name":"Bypass","hidden":true,"name":"bypass","ty":"BoolParam"},{"display_name":"_flush_sentinel","hidden":true,"name":"_flush_sentinel","ty":"FloatParam"}]},"params_structs":["LucentRelayParams"],"plugin_logic_impls":["LucentRelay"],"plugin_macro_types":["LucentRelay"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxLineEdit","LxSelectTrigger","LxShellHeader","LxUiSlint"]}},{"id":"crates/lx-analysis","label":"lx-analysis","kind":"crate","frameworks":[],"migration_status":null,"color":"#64748b","version":"0.1.0","internal_deps":["crates/lx-shm","crates/lx-vault"],"external_flags":["atomic_float","num-complex","realfft","serde","serde_json","tracing","tracing-appender","tracing-subscriber"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/dev_log.rs":"source","src/lib.rs":"entry","src/snap_fft.rs":"source"},"files":["Cargo.toml","src","src/dev_log.rs","src/lib.rs","src/snap_fft.rs"],"imported_crates":["atomic-float","lx-shm","lx-vault","snap-fft"],"ipc_signals":["relay","shared_state","shm"],"public_api":["enum SnapMode","fn clip_wave_minmax_window","fn clip_wave_scroll_phase","fn compute_spectrum_bins","fn filter_relays_by_mask","fn init","fn relay_slot_active","fn spectrum_physical_db","fn spectrum_tilt_db","struct ClipWaveRing","struct SharedState","struct SnapFFT"]}},{"id":"crates/lx-dsp","label":"lx-dsp","kind":"crate","frameworks":[],"migration_status":null,"color":"#64748b","version":"0.1.1","external_flags":["ebur128","serde_json"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry","src/state_migration.rs":"state"},"files":["Cargo.toml","src","src/lib.rs","src/state_migration.rs"],"imported_crates":["ebur128","serde-json"],"process_method_count":11,"public_api":["enum HarmonicsMode","fn try_parse_niceplug_state","struct AutoLoudMeter","struct Biquad","struct Compressor","struct FtzDazGuard","struct LR2Crossover","struct MasteringClipper","struct MasteringMeter","struct MasteringSaturator","struct MsBandLimiter","struct MsEq","struct PeakMeter","struct RmsMeter","struct SweeteningEq","struct TiltEq","struct ToleranceTable","struct TwoBandCompressor","trait Filter"]}},{"id":"crates/lx-shm","label":"lx-shm","kind":"crate","frameworks":[],"migration_status":null,"color":"#64748b","version":"0.1.0","description":"Cross-plugin shared-memory hub with seqlock-protected slots, heartbeat liveness, and CAS-based slot claiming","external_flags":["shared_memory"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry"},"files":["Cargo.toml","src","src/lib.rs"],"imported_crates":["shared-memory"],"ipc_signals":["relay","seqlock","shm"],"public_api":["fn display_name","fn now_ms","fn relay_hub","fn resolve_from_consumers","fn resolve_relay_target","struct RelayHub"]}},{"id":"crates/lx-slint-build","label":"lx-slint-build","kind":"crate","frameworks":["slint"],"migration_status":null,"color":"#64748b","version":"0.1.0","description":"Build helper: @truce widgets + JetBrains Mono with slint-build 1.17.1","external_flags":["slint-build","truce_stack"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry","ui/dropdown.slint":"slint","ui/knob.slint":"slint","ui/meter.slint":"slint","ui/slider.slint":"slint","ui/toggle.slint":"slint","ui/widgets.slint":"slint","ui/xy_pad.slint":"slint"},"files":["Cargo.toml","src","src/lib.rs","ui","ui/dropdown.slint","ui/knob.slint","ui/meter.slint","ui/slider.slint","ui/toggle.slint","ui/widgets.slint","ui/xy_pad.slint"],"public_api":["enum CompileError","fn compile"]}},{"id":"crates/lx-slint-editor","label":"lx-slint-editor","kind":"crate","frameworks":["baseview","lx-slint-editor","raw-window-handle","slint","truce"],"migration_status":null,"color":"#64748b","version":"0.1.0","description":"truce::Editor adapter for slint-baseview — LX Audiolabs","external_flags":["baseview","log","paste","raw-window-handle","slint","slint-baseview","truce_stack"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry","src/parent.rs":"source"},"files":["Cargo.toml","src","src/lib.rs","src/parent.rs"],"imported_crates":["baseview","paste","raw-window-handle","slint","slint-baseview","truce-core","truce-params"],"public_api":["struct LxSlintEditor","struct ParentedWindow"]}},{"id":"crates/lx-ui-slint","label":"lx-ui-slint","kind":"crate","frameworks":["slint"],"migration_status":null,"color":"#64748b","version":"0.1.0","internal_deps":["crates/lx-slint-build"],"external_flags":["slint"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/lib.rs":"entry","ui/lx-chrome.slint":"slint","ui/lx-controls.slint":"slint","ui/lx-dialogs.slint":"slint","ui/lx-meters.slint":"slint","ui/lx-shell.slint":"slint","ui/lx-theme.slint":"slint","ui/lx-viz.slint":"slint","ui/lx.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/lib.rs","ui","ui/lx-chrome.slint","ui/lx-controls.slint","ui/lx-dialogs.slint","ui/lx-meters.slint","ui/lx-shell.slint","ui/lx-theme.slint","ui/lx-viz.slint","ui/lx.slint"],"slint_components":["Lx","LxAnalysis","LxBandColumn","LxButton","LxChrome","LxCompDisplay","LxControls","LxCorrelation","LxCycleBtn","LxDangerBtn","LxEqBandColumn","LxEqCurve","LxGallery","LxGoniometer","LxGrMeter","LxHeader","LxKnob","LxLedColumn","LxLedPeakMeter","LxLevelPanel","LxLineEdit","LxMeterBar","LxMeters","LxMonitorStrip","LxPanel","LxParamField","LxSection","LxSegmentedButton","LxSelectTrigger","LxShell","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxSpectrum","LxStereoMeter","LxTabs","LxTheme","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay","LxVaultSetupPopup","LxViz"],"slint_exports":["Lx","LxBandColumn","LxButton","LxCompDisplay","LxCorrelation","LxCycleBtn","LxDangerBtn","LxEqBandColumn","LxEqCurve","LxGallery","LxGoniometer","LxGrMeter","LxHeader","LxKnob","LxLedColumn","LxLedPeakMeter","LxLevelPanel","LxLineEdit","LxMeterBar","LxMonitorStrip","LxPanel","LxParamField","LxSection","LxSegmentedButton","LxSelectTrigger","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxSpectrum","LxStereoMeter","LxTabs","LxToggleBtn","LxVaultSetupOverlay","LxVaultSetupPopup"]}},{"id":"crates/lx-vault","label":"lx-vault","kind":"crate","frameworks":[],"migration_status":null,"color":"#64748b","version":"0.1.0","external_flags":["serde","serde_json"],"ast_summary":{"file_roles":{"Cargo.toml":"manifest","src/lib.rs":"entry"},"files":["Cargo.toml","src","src/lib.rs"],"imported_crates":["serde"],"public_api":["fn export_preset_to_markdown","fn get_plugin_dir","fn list_custom_presets","fn load_config","fn parse_preset_from_markdown","fn preset_plugin_name","fn save_config","struct PluginConfig","struct Profile"]}},{"id":"plugins/meridian","label":"meridian","kind":"plugin","frameworks":["clap","lx-slint-editor","slint","truce"],"migration_status":"migrated","color":"#8b5cf6","border_color":"#10b981","version":"1.10.0","description":"LX Audiolabs — Meridian","internal_deps":["crates/lx-analysis","crates/lx-dsp","crates/lx-slint-build","crates/lx-slint-editor"],"external_flags":["clap","realfft","slint","tracing","truce_stack"],"ast_summary":{"editor_functions":["editor"],"file_roles":{"Cargo.toml":"manifest","build.rs":"build","src/editor.rs":"ui","src/lib.rs":"entry","src/presets.rs":"state","src/process.rs":"audio","ui/main.slint":"slint"},"files":["Cargo.toml","build.rs","src","src/editor.rs","src/lib.rs","src/presets.rs","src/process.rs","ui","ui/main.slint"],"imported_crates":["lx-analysis","lx-dsp","lx-slint-editor","realfft","slint","truce","truce-core","truce-params"],"imported_editor_adapters":["lx-slint-editor"],"ipc_signals":["shared_state"],"params_fields":{"MeridianParams":[{"display_name":"Low Cut","name":"hpf_freq","ty":"FloatParam"},{"display_name":"High Cut","name":"lpf_freq","ty":"FloatParam"},{"display_name":"Cut Slope","name":"cut_slope","ty":"IntParam"},{"display_name":"Lo Shelf Gain","name":"bass_gain","ty":"FloatParam"},{"display_name":"Lo Shelf Slope","name":"bass_slope","ty":"IntParam"},{"display_name":"Lo-Mid Gain","name":"lo_mid_gain","ty":"FloatParam"},{"display_name":"Lo-Mid Slope","name":"lo_mid_slope","ty":"IntParam"},{"display_name":"Mid Gain","name":"mid_gain","ty":"FloatParam"},{"display_name":"Mid Slope","name":"mid_slope","ty":"IntParam"},{"display_name":"Hi-Mid Gain","name":"high_gain","ty":"FloatParam"},{"display_name":"Hi-Mid Slope","name":"high_slope","ty":"IntParam"},{"display_name":"Hi Shelf Gain","name":"excite_gain","ty":"FloatParam"},{"display_name":"Hi Shelf Slope","name":"excite_slope","ty":"IntParam"},{"display_name":"Lo Shelf Freq","name":"eq_freq_1","ty":"FloatParam"},{"display_name":"Lo-Mid Freq","name":"eq_freq_2","ty":"FloatParam"},{"display_name":"Mid Freq","name":"eq_freq_3","ty":"FloatParam"},{"display_name":"Hi-Mid Freq","name":"eq_freq_4","ty":"FloatParam"},{"display_name":"Hi Shelf Freq","name":"eq_freq_5","ty":"FloatParam"},{"display_name":"Tilt","name":"tilt_gain","ty":"FloatParam"},{"display_name":"Warmth Drive","name":"warmth_drive","ty":"FloatParam"},{"display_name":"Warmth Mix","name":"warmth_mix","ty":"FloatParam"},{"display_name":"Excite Amount","name":"excite_amount","ty":"FloatParam"},{"display_name":"Excite Blend","name":"excite_blend","ty":"FloatParam"},{"display_name":"Excite Freq","name":"excite_freq","ty":"FloatParam"},{"display_name":"Comp Threshold","name":"comp_threshold","ty":"FloatParam"},{"display_name":"Comp Mix","name":"comp_mix","ty":"FloatParam"},{"display_name":"Comp Attack","name":"comp_attack","ty":"FloatParam"},{"display_name":"Comp Release","name":"comp_release","ty":"FloatParam"},{"display_name":"Comp Ratio","name":"comp_character","ty":"FloatParam"},{"display_name":"Comp Makeup","name":"comp_makeup","ty":"FloatParam"},{"display_name":"Inflate Effect","name":"inflate_effect","ty":"FloatParam"},{"display_name":"Inflate Curve","name":"inflate_curve","ty":"FloatParam"},{"display_name":"Inflate Band Split","name":"inflate_band_split","ty":"BoolParam"},{"display_name":"Inflate Clip","name":"inflate_clip","ty":"BoolParam"},{"display_name":"Stereo Width","name":"stereo_width","ty":"FloatParam"},{"display_name":"Pan","name":"pan","ty":"FloatParam"},{"display_name":"Output Gain","name":"output_gain","ty":"FloatParam"},{"display_name":"Mono Sum","name":"mono_active","ty":"BoolParam"},{"display_name":"Delta Diff","name":"delta_active","ty":"BoolParam"},{"display_name":"Bypass","name":"bypass_active","ty":"BoolParam"}]},"params_referenced":["bass_gain","bass_slope","bypass_active","comp_attack","comp_character","comp_makeup","comp_mix","comp_release","comp_threshold","cut_slope","delta_active","eq_freq_1","eq_freq_2","eq_freq_3","eq_freq_4","eq_freq_5","excite_amount","excite_blend","excite_freq","excite_gain","excite_slope","high_gain","high_slope","hpf_freq","inflate_band_split","inflate_clip","inflate_curve","inflate_effect","lo_mid_gain","lo_mid_slope","lpf_freq","mid_gain","mid_slope","mono_active","output_gain","pan","stereo_width","tilt_gain","warmth_drive","warmth_mix"],"params_structs":["MeridianParams"],"plugin_logic_impls":["Meridian"],"plugin_macro_types":["Meridian"],"process_functions":["process"],"process_hooks":["PluginLogic::process @ src/lib.rs"],"process_method_count":1,"slint_components":["LxButton","LxCompDisplay","LxCorrelation","LxDangerBtn","LxDialogs","LxEqBandColumn","LxEqCurve","LxGoniometer","LxGrMeter","LxKnob","LxLedPeakMeter","LxLineEdit","LxSection","LxSegmentedButton","LxShellBody","LxShellFooter","LxShellHeader","LxShellLeft","LxShellMain","LxShellRight","LxSlider","LxSpectrum","LxToggleBtn","LxUiSlint","LxVaultSetupOverlay"]}}];
+      const edges = [{"source":"crates/lx-ui-slint","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/aether","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/lucent","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/lucent-relay","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"plugins/meridian","target":"crates/lx-slint-build","kind":"build_depends_on"},{"source":"crates/lx-analysis","target":"crates/lx-shm","kind":"depends_on"},{"source":"crates/lx-analysis","target":"crates/lx-vault","kind":"depends_on"},{"source":"plugins/aether","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/aether","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/aether","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/aurum-slint","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/equilibrium","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/lucent","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/lucent","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/lucent","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/lucent-relay","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/lucent-relay","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/lucent-relay","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/meridian","target":"crates/lx-analysis","kind":"depends_on"},{"source":"plugins/meridian","target":"crates/lx-dsp","kind":"depends_on"},{"source":"plugins/meridian","target":"crates/lx-slint-editor","kind":"depends_on"},{"source":"plugins/lucent","target":"plugins/lucent-relay","kind":"ipc_peer","note":"shared: relay, shm"},{"source":"plugins/lucent","target":"crates/lx-shm","kind":"runtime_depends_on","note":"via relay+shm"},{"source":"plugins/lucent-relay","target":"crates/lx-shm","kind":"runtime_depends_on","note":"via relay+shm"},{"source":"plugins/aether","target":"crates/lx-ui-slint","kind":"uses_ui","note":"14 shared Lx* components"},{"source":"plugins/aurum-slint","target":"crates/lx-ui-slint","kind":"uses_ui","note":"20 shared Lx* components"},{"source":"plugins/equilibrium","target":"crates/lx-ui-slint","kind":"uses_ui","note":"17 shared Lx* components"},{"source":"plugins/lucent","target":"crates/lx-ui-slint","kind":"uses_ui","note":"15 shared Lx* components"},{"source":"plugins/lucent-relay","target":"crates/lx-ui-slint","kind":"uses_ui","note":"3 shared Lx* components"},{"source":"plugins/meridian","target":"crates/lx-ui-slint","kind":"uses_ui","note":"23 shared Lx* components"}];
       const findings = [{"severity":"info","code":"dsp_process_methods","node":"crates/lx-dsp","message":"lx-dsp has 11 methods named process (DSP units, not plugin hooks)"},{"severity":"info","code":"large_param_surface","node":"plugins/aurum-slint","message":"aurum-slint exposes 70 visible params (70 total) — state migration / UI binding cost is high"}];
       let cy = null;
       let selectedId = null;
       let activeTab = 'info';
 
+      const tabConfig = [
+        { key: 'info', label: 'Info' },
+        { key: 'files', label: 'Files' },
+        { key: 'comps', label: 'Components' },
+        { key: 'deps', label: 'Dependencies' },
+        { key: 'params', label: 'Params' },
+        { key: 'focus', label: 'Focus' },
+      ];
+
+      function qs(sel) { return document.querySelector(sel); }
+      function qsa(sel) { return document.querySelectorAll(sel); }
+
       function setTabCounts(counts) {
-        document.querySelectorAll('#footer-tabs button[data-tab]').forEach(btn => {
+        document.querySelectorAll('#drawer-tabs button[data-tab]').forEach(btn => {
           const key = btn.dataset.tab;
           const n = counts[key];
-          const label = btn.getAttribute('data-base-label') || btn.dataset.tab;
+          const base = tabConfig.find(t => t.key === key).label;
           const wasActive = btn.classList.contains('active');
-          btn.innerHTML = (n == null || n === '')
-            ? label
-            : `${label}<span class="tab-count">${n}</span>`;
+          btn.innerHTML = (n == null || n === '') ? base : `${base}<span class="tab-count">${n}</span>`;
           if (wasActive) btn.classList.add('active');
         });
       }
 
       function switchTab(tab) {
         activeTab = tab;
-        document.querySelectorAll('#footer-tabs button[data-tab]').forEach(btn => {
+        qsa('#drawer-tabs button[data-tab]').forEach(btn => {
           btn.classList.toggle('active', btn.dataset.tab === tab);
         });
-        document.querySelectorAll('.footer-tab-panel').forEach(panel => {
+        qsa('.drawer-tab-panel').forEach(panel => {
           panel.classList.toggle('active', panel.id === 'tab-' + tab);
         });
       }
 
-      document.getElementById('footer-tabs').addEventListener('click', (ev) => {
+      document.getElementById('drawer-tabs').addEventListener('click', (ev) => {
         const btn = ev.target.closest('button[data-tab]');
-        if (!btn || btn.disabled) return;
+        if (!btn || btn.disabled || btn.classList.contains('hidden')) return;
         switchTab(btn.dataset.tab);
       });
 
@@ -623,7 +740,7 @@
       }
 
       function renderFileTree(files) {
-        if (!files.length) return '<div class="detail-value dim">no files indexed</div>';
+        if (!files.length) return '<div class="dim">no files indexed</div>';
         const groups = groupFiles(files);
         let html = '<div class="file-list">';
         Object.keys(groups).sort().forEach(dir => {
@@ -640,6 +757,42 @@
         return html;
       }
 
+      function createTabPanels() {
+        const body = document.getElementById('drawer-body');
+        body.innerHTML = '';
+        tabConfig.forEach(t => {
+          const div = document.createElement('div');
+          div.id = 'tab-' + t.key;
+          div.className = 'drawer-tab-panel';
+          div.setAttribute('role', 'tabpanel');
+          body.appendChild(div);
+        });
+      }
+
+      function createTabButtons() {
+        const tabs = document.getElementById('drawer-tabs');
+        tabs.innerHTML = '';
+        tabConfig.forEach(t => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.setAttribute('role', 'tab');
+          btn.dataset.tab = t.key;
+          btn.textContent = t.label;
+          if (t.key === 'info') btn.classList.add('active');
+          tabs.appendChild(btn);
+        });
+      }
+
+      function openDrawer() {
+        document.getElementById('detail-drawer').classList.add('open');
+      }
+
+      function closeDrawer() {
+        document.getElementById('detail-drawer').classList.remove('open');
+        selectedId = null;
+        if (cy) cy.nodes().unselect();
+      }
+
       function showDetail(n) {
         selectedId = n.id;
         const ast = n.ast_summary || {};
@@ -652,7 +805,6 @@
         const allDeps = n.dependency_names || [];
         const depCount = internal.length + external.length + allDeps.length;
 
-        // Flatten params_fields for Params tab
         const paramRows = [];
         const pf = ast.params_fields || {};
         Object.keys(pf).sort().forEach(structName => {
@@ -661,17 +813,21 @@
           });
         });
 
+        createTabPanels();
+        createTabButtons();
+
         // Header
-        document.getElementById('footer-header').innerHTML = `
-          <span class="name">${n.label}</span>
-          <span class="badge badge-${n.kind}">${n.kind}</span>
-          ${n.migration_status ? `<span class="badge badge-${n.migration_status}">${n.migration_status}</span>` : ''}
-          ${n.frameworks.map(f => `<span class="badge badge-framework">${f}</span>`).join('')}
-          <button class="btn btn-primary" id="focus-btn" style="width:auto;margin:0;padding:4px 10px">Focus + deps</button>
-          <button class="close-btn" id="footer-close-btn">✕</button>
+        const header = document.getElementById('drawer-header');
+        header.innerHTML = `
+          <div class="name">${n.label}</div>
+          <div class="actions">
+            <span class="badge badge-${n.kind}">${n.kind}</span>
+            ${n.migration_status ? `<span class="badge badge-${n.migration_status}">${n.migration_status}</span>` : ''}
+            ${n.frameworks.map(f => `<span class="badge badge-framework">${f}</span>`).join('')}
+            <button class="btn btn-primary" id="focus-btn">Focus + deps</button>
+          </div>
         `;
         document.getElementById('focus-btn').addEventListener('click', () => focusNode(n.id));
-        document.getElementById('footer-close-btn').addEventListener('click', closeFooter);
 
         // Info tab
         const roles = ast.file_roles || {};
@@ -693,7 +849,7 @@
           ${ipc.length ? `<div class="info-row"><span class="key">IPC</span> ${ipc.map(s => `<span class="badge badge-framework">${s}</span>`).join(' ')}</div>` : ''}
           ${hooks.length ? `<div class="info-row"><span class="key">Process</span> ${hooks.join(', ')}</div>` : ''}
           ${(ast.plugin_logic_impls || []).length ? `<div class="info-row"><span class="key">Logic</span> ${(ast.plugin_logic_impls || []).join(', ')}</div>` : ''}
-          ${roleList.length ? `<div class="footer-section-title">File roles</div>${roleList.map(r => `<div class="info-row">${r}</div>`).join('')}` : ''}
+          ${roleList.length ? `<div class="section-title">File roles</div>${roleList.map(r => `<div class="info-row">${r}</div>`).join('')}` : ''}
         `;
 
         // Files tab
@@ -707,20 +863,20 @@
         // Deps tab
         const depLines = [];
         if (internal.length) {
-          depLines.push('<div class="footer-section-title">Internal</div>');
+          depLines.push('<div class="section-title">Internal</div>');
           internal.slice().sort().forEach(d => {
             const short = d.replace(/^plugins\//, '').replace(/^crates\//, '');
             depLines.push(`<div class="info-row">${short}</div>`);
           });
         }
         if (external.length) {
-          depLines.push('<div class="footer-section-title">External flags</div>');
+          depLines.push('<div class="section-title">External flags</div>');
           external.slice().sort().forEach(d => {
             depLines.push(`<div class="info-row"><span class="badge badge-framework">${d}</span></div>`);
           });
         }
         if (allDeps.length) {
-          depLines.push('<div class="footer-section-title">Cargo deps</div>');
+          depLines.push('<div class="section-title">Cargo deps</div>');
           allDeps.slice().sort().forEach(d => {
             depLines.push(`<div class="info-row">${d}</div>`);
           });
@@ -735,7 +891,7 @@
           let lastStruct = '';
           paramRows.forEach(p => {
             if (p.struct !== lastStruct) {
-              html += `<div class="footer-section-title">${p.struct}</div>`;
+              html += `<div class="section-title">${p.struct}</div>`;
               lastStruct = p.struct;
             }
             const hidden = p.hidden ? ' <span class="dim">(hidden)</span>' : '';
@@ -747,10 +903,21 @@
           document.getElementById('tab-params').innerHTML = '<span class="dim">no params surface</span>';
         }
 
-        // Focus tab — cleared until Focus+deps is used
+        // Focus tab initial
         document.getElementById('tab-focus').innerHTML = '<span class="dim">Click “Focus + deps” to load neighbor summary</span>';
-        const focusBtn = document.querySelector('#footer-tabs button[data-tab="focus"]');
-        if (focusBtn) focusBtn.disabled = true;
+
+        // Hide tabs with no content
+        qsa('#drawer-tabs button[data-tab]').forEach(btn => {
+          const key = btn.dataset.tab;
+          let has = true;
+          if (key === 'files') has = files.length > 0;
+          else if (key === 'comps') has = comps.length > 0;
+          else if (key === 'deps') has = depCount > 0;
+          else if (key === 'params') has = paramRows.length > 0;
+          else if (key === 'focus') has = false; // starts disabled
+          btn.classList.toggle('hidden', !has);
+          btn.disabled = key === 'focus';
+        });
 
         setTabCounts({
           info: null,
@@ -761,18 +928,10 @@
           focus: null,
         });
 
-        // Keep current tab if still valid; else Info
         const prefer = activeTab === 'focus' ? 'info' : activeTab;
         switchTab(prefer);
-
-        document.getElementById('footer').classList.add('open');
+        openDrawer();
         if (cy) cy.resize();
-      }
-
-      function closeFooter() {
-        document.getElementById('footer').classList.remove('open');
-        selectedId = null;
-        if (cy) cy.nodes().unselect();
       }
 
       function focusNode(id) {
@@ -792,7 +951,6 @@
         cy.nodes().not(toShow).style('display', 'none');
         toShow.style('display', 'element');
 
-        // Focus tab content
         let cardsHtml = '<div class="focus-cards">';
         let cardCount = 0;
         focusedNodes.sort((a,b) => a.kind === b.kind ? a.label.localeCompare(b.label) : (a.kind === 'plugin' ? -1 : 1));
@@ -805,19 +963,18 @@
           cardsHtml += `
             <div class="focus-card">
               <div class="fc-header">${dot}${fn.label} <span class="badge badge-${fn.kind}">${fn.kind}</span></div>
-              ${fc.length ? `<div style="margin-bottom:4px">${fc.slice().sort().map(c => `<span class="comp-tag">${c}</span>`).join('')}</div>` : ''}
+              ${fc.length ? `<div style="margin-bottom:6px">${fc.slice().sort().map(c => `<span class="comp-tag">${c}</span>`).join('')}</div>` : ''}
               ${renderFileTree(ff)}
             </div>`;
         });
         cardsHtml += '</div>';
-        document.getElementById('tab-focus').innerHTML = cardCount
-          ? cardsHtml
-          : '<span class="dim">no neighbors</span>';
-        const focusTabBtn = document.querySelector('#footer-tabs button[data-tab="focus"]');
-        if (focusTabBtn) {
-          focusTabBtn.disabled = false;
-          focusTabBtn.dataset.baseLabel = 'Focus';
-          focusTabBtn.innerHTML = `Focus<span class="tab-count">${cardCount}</span>`;
+        document.getElementById('tab-focus').innerHTML = cardCount ? cardsHtml : '<span class="dim">no neighbors</span>';
+
+        const focusBtn = qs('#drawer-tabs button[data-tab="focus"]');
+        if (focusBtn) {
+          focusBtn.disabled = false;
+          focusBtn.classList.remove('hidden');
+          focusBtn.innerHTML = `Focus<span class="tab-count">${cardCount}</span>`;
         }
         switchTab('focus');
 
@@ -833,8 +990,9 @@
       function resetFocus() {
         selectedId = null;
         if (!cy) return;
+        closeDrawer();
         cy.nodes().style('display', 'element');
-        document.getElementById('footer').classList.remove('open');
+        cy.edges().style('display', 'element');
         applyFilters();
       }
 
@@ -861,8 +1019,6 @@
           if (kindMatch && fwMatch && termMatch) matchedIds.add(d.id);
         });
 
-        // Kind filter is strict: plugins-only / crates-only — no neighbor expansion.
-        // Framework + search still pull 1-hop neighbors (only if kind allows them).
         const idsToShow = new Set(matchedIds);
         if (kind === 'all') {
           edges.forEach(e => {
@@ -874,7 +1030,6 @@
         const toShow = cy.nodes().filter(n => idsToShow.has(n.data().id));
         cy.nodes().not(toShow).style('display', 'none');
         toShow.style('display', 'element');
-        // Hide edges that leave the visible set
         cy.edges().forEach(e => {
           const s = e.data('source');
           const t = e.data('target');
@@ -882,7 +1037,6 @@
         });
 
         if (toShow.length > 0) {
-          // Grid for pure kind views (disconnected plugins); cose for mixed subgraphs
           const layoutName = kind !== 'all' && fw === 'all' && !term ? 'grid' : 'cose';
           toShow.layout({
             name: layoutName,
@@ -905,7 +1059,27 @@
       document.getElementById('kind-filter').addEventListener('change', applyFilters);
       document.getElementById('framework-filter').addEventListener('change', applyFilters);
       document.getElementById('search').addEventListener('input', applyFilters);
+      document.getElementById('drawer-close').addEventListener('click', closeDrawer);
 
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeDrawer();
+      });
+
+      document.getElementById('cy').addEventListener('click', (e) => {
+        if (e.target.id === 'cy') closeDrawer();
+      });
+
+      // Floating card toggles
+      document.querySelectorAll('.card-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const card = document.getElementById(btn.dataset.target);
+          card.classList.toggle('collapsed');
+          btn.textContent = card.classList.contains('collapsed') ? '+' : '−';
+          btn.setAttribute('aria-label', card.classList.contains('collapsed') ? 'expand' : 'collapse');
+        });
+      });
+
+      // Framework options
       const frameworks = [...new Set(nodes.flatMap(n => n.frameworks))].sort();
       const frameworkSelect = document.getElementById('framework-filter');
       frameworks.forEach(f => {
@@ -915,27 +1089,28 @@
         frameworkSelect.appendChild(opt);
       });
 
-      const legendItems = [
-        { label: 'plugin', color: '#f97316' },
-        { label: 'crate', color: '#5b8def' },
-        { label: 'migrated ring', color: '#3dd68c' },
-        { label: 'legacy ring', color: '#ff6b6b' },
-      ];
+      // Legends
       const legend = document.getElementById('legend');
-      legendItems.forEach(item => {
+      [
+        { label: 'plugin', color: '#8b5cf6' },
+        { label: 'crate', color: '#64748b' },
+        { label: 'migrated', color: '#10b981', ring: true },
+        { label: 'legacy', color: '#f59e0b', ring: true },
+      ].forEach(item => {
         const div = document.createElement('div');
         div.className = 'legend-item';
-        div.innerHTML = `<div class="legend-dot" style="background:${item.color}"></div><span>${item.label}</span>`;
+        const style = item.ring ? `background:transparent;border:2px solid ${item.color}` : `background:${item.color}`;
+        div.innerHTML = `<div class="legend-dot" style="${style}"></div><span>${item.label}</span>`;
         legend.appendChild(div);
       });
 
       const edgeLegend = document.getElementById('edge-legend');
       [
-        { label: 'depends_on', color: '#4a4a55', cls: '' },
-        { label: 'build', color: '#4a4a55', cls: 'dashed' },
-        { label: 'uses_ui', color: '#fbbf24', cls: 'dashed' },
-        { label: 'ipc_peer', color: '#a78bfa', cls: '' },
-        { label: 'runtime', color: '#22d3ee', cls: 'dotted' },
+        { label: 'depends_on', color: '#334155', cls: '' },
+        { label: 'build', color: '#334155', cls: 'dashed' },
+        { label: 'uses_ui', color: '#6366f1', cls: 'dashed' },
+        { label: 'ipc_peer', color: '#a855f7', cls: '' },
+        { label: 'runtime', color: '#06b6d4', cls: 'dotted' },
       ].forEach(item => {
         const div = document.createElement('div');
         div.className = 'legend-item';
@@ -943,19 +1118,76 @@
         edgeLegend.appendChild(div);
       });
 
-      // Meta chips
-      const plugins = nodes.filter(n => n.kind === 'plugin');
-      const legacy = plugins.filter(n => n.migration_status === 'legacy').length;
-      const migrated = plugins.filter(n => n.migration_status === 'migrated').length;
-      const chips = document.getElementById('meta-chips');
-      chips.innerHTML = `
-        <span class="chip">${plugins.length} plugins</span>
-        <span class="chip">${nodes.filter(n => n.kind === 'crate').length} crates</span>
-        ${migrated ? `<span class="chip chip-ok">${migrated} migrated</span>` : ''}
-        ${legacy ? `<span class="chip chip-warn">${legacy} legacy</span>` : ''}
-        <span class="chip">${findings.length} findings</span>
-      `;
+      // Overview
+      function renderOverview() {
+        const plugins = nodes.filter(n => n.kind === 'plugin');
+        const crates = nodes.filter(n => n.kind === 'crate');
+        const legacy = plugins.filter(n => n.migration_status === 'legacy').length;
+        const migrated = plugins.filter(n => n.migration_status === 'migrated').length;
+        const err = findings.filter(f => f.severity === 'error').length;
+        const warn = findings.filter(f => f.severity === 'warn').length;
+        const info = findings.filter(f => f.severity === 'info').length;
 
+        document.getElementById('overview-metrics').innerHTML = `
+          <div class="metric"><div class="metric-label">Plugins</div><div class="metric-value">${plugins.length}</div></div>
+          <div class="metric"><div class="metric-label">Crates</div><div class="metric-value">${crates.length}</div></div>
+          <div class="metric"><div class="metric-label">Edges</div><div class="metric-value">${edges.length}</div></div>
+          <div class="metric"><div class="metric-label">Findings</div><div class="metric-value ${err ? 'err' : warn ? 'warn' : ''}">${findings.length}</div></div>
+        `;
+
+        const chips = document.getElementById('overview-chips');
+        let chipHtml = '';
+        if (migrated) chipHtml += `<span class="chip chip-ok">${migrated} migrated</span>`;
+        if (legacy) chipHtml += `<span class="chip chip-warn">${legacy} legacy</span>`;
+        if (err) chipHtml += `<span class="chip chip-err">${err} errors</span>`;
+        if (warn) chipHtml += `<span class="chip chip-warn">${warn} warnings</span>`;
+        if (info) chipHtml += `<span class="chip">${info} infos</span>`;
+        chips.innerHTML = chipHtml;
+      }
+      renderOverview();
+
+      // Findings
+      function renderFindings() {
+        const el = document.getElementById('findings-body');
+        if (!findings || !findings.length) {
+          el.innerHTML = '<span class="dim">none</span>';
+          return;
+        }
+        const bySev = { error: [], warn: [], info: [] };
+        findings.forEach(f => {
+          const sev = (f.severity || 'info').toLowerCase();
+          (bySev[sev] || bySev.info).push(f);
+        });
+
+        let html = '';
+        ['error', 'warn', 'info'].forEach(sev => {
+          const list = bySev[sev];
+          if (!list.length) return;
+          html += `<div class="finding-group"><div class="finding-group-title">${sev} (${list.length})</div>`;
+          list.slice(0, 8).forEach(f => {
+            const short = f.node ? f.node.replace(/^plugins\//, '').replace(/^crates\//, '') : '';
+            const nodeRef = short ? ` <span class="node-ref">${short}</span>` : '';
+            html += `<div class="finding-item" data-node="${f.node || ''}"><span class="badge badge-${sev}">${sev}</span><b>${f.code}</b>${nodeRef}<br>${f.message}</div>`;
+          });
+          if (list.length > 8) {
+            html += `<div class="dim" style="font-size:11px;margin-top:4px">+ ${list.length - 8} more</div>`;
+          }
+          html += '</div>';
+        });
+        el.innerHTML = html;
+
+        el.querySelectorAll('.finding-item').forEach(item => {
+          item.addEventListener('click', () => {
+            const nodeId = item.dataset.node;
+            if (!nodeId) return;
+            const n = nodes.find(x => x.id === nodeId);
+            if (n) showDetail(n);
+          });
+        });
+      }
+      renderFindings();
+
+      // Cytoscape
       const container = document.getElementById('cy');
       const elements = [
         ...nodes.map(n => ({ data: { id: n.id, label: n.label, ...n } })),
@@ -977,19 +1209,19 @@
           { selector: 'node', style: {
             'background-color': 'data(color)',
             'label': 'data(label)',
-            'color': '#f0c14a',
-            'font-size': '11px',
+            'color': '#e2e8f0',
+            'font-size': '12px',
             'font-weight': '600',
-            'font-family': 'IBM Plex Sans, Segoe UI, system-ui, sans-serif',
+            'font-family': 'Inter, Segoe UI, system-ui, sans-serif',
             'text-valign': 'bottom',
             'text-halign': 'center',
-            'text-margin-y': 8,
-            'text-outline-color': '#0e0e10',
+            'text-margin-y': 9,
+            'text-outline-color': '#0b0c10',
             'text-outline-width': 2,
-            'width': 26,
-            'height': 26,
+            'width': 28,
+            'height': 28,
             'border-width': 3,
-            'border-color': '#0e0e10',
+            'border-color': '#0b0c10',
             'transition-property': 'background-color, border-color, width, height, opacity',
             'transition-duration': '0.18s'
           }},
@@ -1000,30 +1232,30 @@
           { selector: 'node[kind = "plugin"]', style: { 'shape': 'round-rectangle' } },
           { selector: 'node[kind = "crate"]', style: { 'shape': 'ellipse' } },
           { selector: 'node:selected', style: {
-            'border-color': '#ffb000',
+            'border-color': '#6366f1',
             'border-width': 3,
-            'width': 32,
-            'height': 32,
-            'color': '#fff6d6'
+            'width': 34,
+            'height': 34,
+            'color': '#f8fafc'
           }},
           { selector: 'node:active', style: {
             'overlay-opacity': 0.08,
-            'overlay-color': '#ffb000'
+            'overlay-color': '#6366f1'
           }},
           { selector: 'edge', style: {
             'width': 1.4,
-            'line-color': '#3a3a48',
-            'target-arrow-color': '#3a3a48',
+            'line-color': '#334155',
+            'target-arrow-color': '#334155',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             'arrow-scale': 0.75,
             'opacity': 0.9
           }},
-          { selector: 'edge[kind = "build_depends_on"]', style: { 'line-style': 'dashed', 'line-color': '#454555', 'target-arrow-color': '#454555' } },
-          { selector: 'edge[kind = "dev_depends_on"]', style: { 'line-style': 'dotted', 'line-color': '#454555', 'target-arrow-color': '#454555' } },
-          { selector: 'edge[kind = "uses_ui"]', style: { 'line-color': '#fbbf24', 'line-style': 'dashed', 'target-arrow-color': '#fbbf24', 'width': 1.6 } },
-          { selector: 'edge[kind = "ipc_peer"]', style: { 'line-color': '#a78bfa', 'width': 2.4, 'target-arrow-color': '#a78bfa' } },
-          { selector: 'edge[kind = "runtime_depends_on"]', style: { 'line-color': '#22d3ee', 'line-style': 'dotted', 'target-arrow-color': '#22d3ee', 'width': 1.8 } },
+          { selector: 'edge[kind = "build_depends_on"]', style: { 'line-style': 'dashed', 'line-color': '#334155', 'target-arrow-color': '#334155' } },
+          { selector: 'edge[kind = "dev_depends_on"]', style: { 'line-style': 'dotted', 'line-color': '#334155', 'target-arrow-color': '#334155' } },
+          { selector: 'edge[kind = "uses_ui"]', style: { 'line-color': '#6366f1', 'line-style': 'dashed', 'target-arrow-color': '#6366f1', 'width': 1.6 } },
+          { selector: 'edge[kind = "ipc_peer"]', style: { 'line-color': '#a855f7', 'width': 2.4, 'target-arrow-color': '#a855f7' } },
+          { selector: 'edge[kind = "runtime_depends_on"]', style: { 'line-color': '#06b6d4', 'line-style': 'dotted', 'target-arrow-color': '#06b6d4', 'width': 1.8 } },
           { selector: 'edge:selected', style: { 'opacity': 1, 'width': 2.5 } }
         ],
         layout: {
@@ -1052,43 +1284,9 @@
 
       cy.on('tap', function(evt){
         if (evt.target === cy) {
-          closeFooter();
+          closeDrawer();
         }
       });
-
-      function renderFindings() {
-        const el = document.getElementById('findings-list');
-        if (!el) return;
-        if (!findings || !findings.length) {
-          el.innerHTML = '<span class="dim">none</span>';
-          return;
-        }
-        el.innerHTML = findings.slice(0, 40).map(f => {
-          const sev = (f.severity || 'info').toLowerCase();
-          const short = f.node ? f.node.replace(/^plugins\//, '').replace(/^crates\//, '') : '';
-          const node = short ? ` <span class="dim">${short}</span>` : '';
-          return `<div class="finding-item"><span class="badge badge-${sev}">${sev}</span><b>${f.code}</b>${node}<br>${f.message}</div>`;
-        }).join('');
-      }
-
-      function updateStats() {
-        const total = nodes.length;
-        const plugins = nodes.filter(n => n.kind === 'plugin').length;
-        const crates = nodes.filter(n => n.kind === 'crate').length;
-        const legacy = nodes.filter(n => n.migration_status === 'legacy').length;
-        const migrated = nodes.filter(n => n.migration_status === 'migrated').length;
-        document.getElementById('stats').innerHTML = `
-          <div class="stat"><span>nodes</span><span class="value">${total}</span></div>
-          <div class="stat"><span>plugins</span><span class="value">${plugins}</span></div>
-          <div class="stat"><span>crates</span><span class="value">${crates}</span></div>
-          <div class="stat"><span>legacy</span><span class="value" style="color:var(--err)">${legacy}</span></div>
-          <div class="stat"><span>migrated</span><span class="value" style="color:var(--ok)">${migrated}</span></div>
-          <div class="stat"><span>edges</span><span class="value">${edges.length}</span></div>
-          <div class="stat"><span>findings</span><span class="value">${findings.length}</span></div>
-        `;
-      }
-      updateStats();
-      renderFindings();
     }
 
     if (document.readyState === 'loading') {

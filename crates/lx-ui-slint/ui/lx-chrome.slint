@@ -190,6 +190,8 @@ export component LxToggleBtn inherits Rectangle {
     in property <bool> danger: false;
     // Dense body only (e.g. solo "S"). Never set true for LxShellHeader actions.
     in property <bool> small: false;
+    // Greyed + no click (e.g. Lucent Masking in Own mode).
+    in property <bool> enabled: true;
 
     callback toggled(bool);
 
@@ -209,6 +211,7 @@ export component LxToggleBtn inherits Rectangle {
     drop-shadow-offset-y: Lx.shadow-btn-y;
     drop-shadow-blur: Lx.shadow-btn-blur;
     drop-shadow-color: Lx.shadow-soft;
+    opacity: root.enabled ? 1.0 : 0.4;
 
     Text {
         width: 100%;
@@ -224,6 +227,7 @@ export component LxToggleBtn inherits Rectangle {
     }
 
     ta := TouchArea {
+        enabled: root.enabled;
         clicked => {
             root.active = !root.active;
             root.toggled(root.active);
@@ -231,17 +235,17 @@ export component LxToggleBtn inherits Rectangle {
     }
 
     states [
-        hover when ta.has-hover && !root.active: {
+        hover when root.enabled && ta.has-hover && !root.active: {
             background: root.danger
                 ? @linear-gradient(180deg, #5c2828 0%, #3a1818 100%)
                 : @linear-gradient(180deg, Lx.control-hover 0%, Lx.control 55%, Lx.raise-lo 100%);
         }
-        hover-active when ta.has-hover && root.active: {
+        hover-active when root.enabled && ta.has-hover && root.active: {
             background: root.danger
                 ? @linear-gradient(180deg, #ff7070 0%, Lx.crimson 55%, Lx.crimson-lo 100%)
                 : @linear-gradient(180deg, Lx.amber-soft 0%, Lx.amber 55%, Lx.amber-lo 100%);
         }
-        pressed when ta.pressed: {
+        pressed when root.enabled && ta.pressed: {
             background: root.active
                 ? (root.danger
                     ? @linear-gradient(180deg, Lx.crimson-lo 0%, Lx.crimson 100%)

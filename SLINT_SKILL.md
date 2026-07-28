@@ -42,7 +42,7 @@ DAW plugin context can't expose TCP ports. Use `slint-viewer --screenshot` for v
 
 ```sh
 # Build a single plugin (CLAP)
-cargo truce install --clap -p lucent-slint
+cargo truce install --clap -p lucent
 
 # Check .slint files without building Rust
 slint-viewer --check crates/lx-slint-build/ui/widgets.slint
@@ -65,12 +65,12 @@ lx-audiolabs-slint/
 │   ├── lx-vault/           ← Preset management
 │   └── lx-shm/             ← Shared memory (Lucent Relay)
 ├── plugins/
-│   ├── lucent-slint/       ← Spectrum analyzer
+│   ├── lucent/             ← Spectrum analyzer
 │   ├── meridian/           ← Channel strip
 │   ├── aether/             ← EQ + crossfeed
 │   ├── equilibrium/        ← Spectral balancer (canonical; Vizia retired)
 │   ├── aurum-slint/        ← Saturation
-│   └── lucent-relay-slint/ ← Relay sender
+│   └── lucent-relay/       ← Relay sender
 └── Cargo.toml              ← slint-baseview git-dep, baseview next
 ```
 

@@ -14,11 +14,14 @@ export component LxKnob inherits VerticalLayout {
     in property <float> step: 0.0;          // 0 = continuous; 1, 2, ... = discrete
     in property <bool> small: false;        // uses Lx.knob-d-sm instead of Lx.knob-d
     in property <float> default-value: 0.5; // right-click resets to this value
+    // Greyed + no drag (e.g. Aurum Ceil S / Soft S when clip M/S off).
+    in property <bool> enabled: true;
 
     callback changed(float);
 
     spacing: Lx.knob-gap;
     alignment: center;
+    opacity: root.enabled ? 1.0 : 0.35;
 
     property <length> diameter: root.small ? Lx.knob-d-sm : Lx.knob-d;
     property <float> norm: clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0, 1);
@@ -190,10 +193,12 @@ export component LxKnob inherits VerticalLayout {
         }
 
         ta := TouchArea {
+            enabled: root.enabled;
             property <length> drag_start_y;
             property <float> drag_start_norm;
 
             pointer-event(event) => {
+                if !root.enabled { return; }
                 if event.kind == PointerEventKind.down {
                     if event.button == PointerEventButton.right {
                         root.value = root.default-value;
@@ -205,7 +210,7 @@ export component LxKnob inherits VerticalLayout {
                 }
             }
             moved => {
-                if self.pressed {
+                if root.enabled && self.pressed {
                     root.value = root.value_from_drag(
                         self.drag_start_norm,
                         self.drag_start_y - self.mouse_y,
@@ -245,6 +250,8 @@ export component LxLineEdit inherits Rectangle {
     // Focus-lost commit. Host callbacks MUST ignore this during editor teardown
     // (TextInput loses focus while the component tree is destroyed).
     callback committed(string);
+    // Live keystroke edits (Vizia on_edit parity) — Lucent/Relay name ↔ SHM.
+    callback edited(string);
 
     height: Lx.button-h;
     // field-width > 0 → fixed width; otherwise stretch in parent.
@@ -301,6 +308,11 @@ export component LxLineEdit inherits Rectangle {
                 accepted => {
                     if root.allow-commit {
                         root.accepted(root.text);
+                    }
+                }
+                edited => {
+                    if root.allow-commit {
+                        root.edited(root.text);
                     }
                 }
                 changed has-focus => {
@@ -463,10 +475,13 @@ export component LxSegmentedButton inherits Rectangle {
     border-width: 1px;
     border-color: Lx.edge-dark;
     // Inset look for the tray (shadow under raised pills only).
+    // Compact = fixed pill strip. Default horizontal used to min-width:0 +
+    // stretch:1 and collapsed under header siblings (Lucent Own/Both/Relay).
     horizontal-stretch: root.compact ? 0 : 1;
     vertical-stretch: 0;
-    // Compact ABC fixed width; vertical 12/24 needs a bit more.
-    min-width: root.compact ? 66px : (root.vertical ? 44px : 0px);
+    // Compact ABC fixed width; vertical 12/24 needs a bit more;
+    // horizontal non-compact: room for ~3 short labels (caller may override).
+    min-width: root.compact ? 66px : (root.vertical ? 44px : 96px);
     max-width: root.compact ? 66px : 9999px;
 
     property <length> seg-h: root.compact ? 16px : Lx.button-h-sm;

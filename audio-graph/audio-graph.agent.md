@@ -1,7 +1,7 @@
 # audio-graph agent summary
 
 project: **lx-audiolabs-slint**  
-generated: `2026-07-27T17:13:09Z`  
+generated: `2026-07-28T11:56:08Z`  
 version: 0.3.2  
 nodes: 13 · edges: 36 · findings: 2
 
@@ -21,12 +21,12 @@ plugins: 6 · legacy: 0 · migrated: 6
 - **aether** `plugins/aether` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=Aether params=AetherParams(26) ipc=shared_state slint_comp=16 roles=audio,build,entry,manifest,slint,state,ui
 - **aurum-slint** `plugins/aurum-slint` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=Aurum params=AurumParams(70) ipc=shared_state slint_comp=22 roles=audio,build,entry,manifest,slint,ui
 - **equilibrium** `plugins/equilibrium` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=Equilibrium params=EquilibriumParams(29) ipc=shared_state slint_comp=20 roles=audio,build,entry,manifest,slint,state,ui
-- **lucent-relay-slint** `plugins/lucent-relay-slint` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=LucentRelay params=LucentRelayParams(2) ipc=relay,shared_state,shm slint_comp=6 roles=audio,build,entry,manifest,slint,ui
-- **lucent-slint** `plugins/lucent-slint` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=Lucent params=LucentParams(5) ipc=relay,shared_state,shm slint_comp=19 roles=audio,build,entry,ipc,manifest,slint,ui
+- **lucent** `plugins/lucent` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=Lucent params=LucentParams(5) ipc=relay,shared_state,shm slint_comp=17 roles=audio,build,entry,ipc,manifest,slint,ui
+- **lucent-relay** `plugins/lucent-relay` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=LucentRelay params=LucentRelayParams(2) ipc=relay,shared_state,shm slint_comp=4 roles=audio,build,entry,manifest,slint,ui
 - **meridian** `plugins/meridian` [migrated] fw=`clap+lx-slint-editor+slint+truce` deps=[lx-analysis, lx-dsp, lx-slint-build, lx-slint-editor] logic=Meridian params=MeridianParams(40) ipc=shared_state slint_comp=25 roles=audio,build,entry,manifest,slint,state,ui
 
 ## crates
-- **lx-analysis** `crates/lx-analysis` deps=[lx-shm, lx-vault] api=11 ipc=relay,shared_state,shm
+- **lx-analysis** `crates/lx-analysis` deps=[lx-shm, lx-vault] api=12 ipc=relay,shared_state,shm
 - **lx-dsp** `crates/lx-dsp` deps=[] api=19 process_methods=11
 - **lx-shm** `crates/lx-shm` deps=[] api=6 ipc=relay,seqlock,shm
 - **lx-slint-build** `crates/lx-slint-build` deps=[] api=2
@@ -47,12 +47,12 @@ plugins: 6 · legacy: 0 · migrated: 6
 - `equilibrium` → `lx-analysis`
 - `equilibrium` → `lx-dsp`
 - `equilibrium` → `lx-slint-editor`
-- `lucent-relay-slint` → `lx-analysis`
-- `lucent-relay-slint` → `lx-dsp`
-- `lucent-relay-slint` → `lx-slint-editor`
-- `lucent-slint` → `lx-analysis`
-- `lucent-slint` → `lx-dsp`
-- `lucent-slint` → `lx-slint-editor`
+- `lucent` → `lx-analysis`
+- `lucent` → `lx-dsp`
+- `lucent` → `lx-slint-editor`
+- `lucent-relay` → `lx-analysis`
+- `lucent-relay` → `lx-dsp`
+- `lucent-relay` → `lx-slint-editor`
 - `meridian` → `lx-analysis`
 - `meridian` → `lx-dsp`
 - `meridian` → `lx-slint-editor`
@@ -61,21 +61,21 @@ plugins: 6 · legacy: 0 · migrated: 6
 - `aether` → `lx-slint-build`
 - `aurum-slint` → `lx-slint-build`
 - `equilibrium` → `lx-slint-build`
-- `lucent-relay-slint` → `lx-slint-build`
-- `lucent-slint` → `lx-slint-build`
+- `lucent` → `lx-slint-build`
+- `lucent-relay` → `lx-slint-build`
 - `meridian` → `lx-slint-build`
 ### uses_ui
 - `aether` → `lx-ui-slint` — 14 shared Lx* components
 - `aurum-slint` → `lx-ui-slint` — 20 shared Lx* components
 - `equilibrium` → `lx-ui-slint` — 17 shared Lx* components
-- `lucent-relay-slint` → `lx-ui-slint` — 5 shared Lx* components
-- `lucent-slint` → `lx-ui-slint` — 17 shared Lx* components
+- `lucent` → `lx-ui-slint` — 15 shared Lx* components
+- `lucent-relay` → `lx-ui-slint` — 3 shared Lx* components
 - `meridian` → `lx-ui-slint` — 23 shared Lx* components
 ### ipc_peer
-- `lucent-relay-slint` → `lucent-slint` — shared: relay, shm
+- `lucent` → `lucent-relay` — shared: relay, shm
 ### runtime_depends_on
-- `lucent-relay-slint` → `lx-shm` — via relay+shm
-- `lucent-slint` → `lx-shm` — via relay+shm
+- `lucent` → `lx-shm` — via relay+shm
+- `lucent-relay` → `lx-shm` — via relay+shm
 
 ## findings (error=0 warn=0 info=2)
 - [INF] **dsp_process_methods** `lx-dsp`: lx-dsp has 11 methods named process (DSP units, not plugin hooks)
@@ -89,5 +89,5 @@ _no structural changes since previous graph._
 2. Check **delta** / `audio-graph.delta.md` for what changed since last gen.  
 3. Open `audio-graph.json` only for params_fields, public_api, or full edges.  
 4. Use graphify only for deep non-audio symbol searches.  
-5. Scope: `lx-audio-graph --plugin <name> .` for one-hop slice.  
+5. Scope: `rust-audio-graph --plugin <name> .` for one-hop slice.  
 

@@ -10,8 +10,8 @@ Target: DAW audio plugins via `cargo truce install --clap`.
 ## Build
 
 ```sh
-cargo truce install --clap -p lucent-slint    # build + install one plugin
-cargo check -p lucent-slint                   # verify without full build
+cargo truce install --clap -p lucent          # build + install one plugin
+cargo check -p lucent                         # verify without full build
 cargo check --workspace                       # verify all plugins
 ```
 

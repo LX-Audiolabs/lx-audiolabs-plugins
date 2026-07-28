@@ -2,14 +2,14 @@ import {
     Lx, LxLineEdit, LxSelectTrigger,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 
-/// Lucent-Relay — compact sender (Vizia 260×160). Dark LX chrome, form pinned left.
+/// Lucent-Relay — compact sender. Dark LX chrome, form controls pinned left.
 export component LucentRelayUi inherits Window {
-    // Same footprint as Vizia lucent-relay (editor.rs: Pixels(260) × 160).
-    preferred-width: 260px;
+    // Wider than Vizia 260 so Name field is actually usable.
+    preferred-width: 300px;
     preferred-height: 160px;
-    min-width: 260px;
+    min-width: 300px;
     min-height: 160px;
-    max-width: 260px;
+    max-width: 300px;
     max-height: 160px;
     title: "Lucent Relay";
     background: Lx.window;
@@ -29,21 +29,23 @@ export component LucentRelayUi inherits Window {
         spacing: 4px;
         padding: 0;
 
-        // ── Compact header (Vizia 36px row — not full LxShellHeader) ──
+        // ── Header — same brand chrome as LxShellHeader (compact height) ──
         Rectangle {
-            height: 36px;
+            height: 40px;
             vertical-stretch: 0;
-            background: #141419;
+            background: @linear-gradient(180deg, Lx.section 0%, Lx.window 70%, Lx.void 100%);
 
             HorizontalLayout {
+                width: 100%;
+                height: 100%;
                 padding-left: 8px;
                 padding-right: 8px;
                 spacing: 6px;
-                alignment: center;
+                alignment: start;
 
                 Text {
                     text: "LX";
-                    font-size: 16px;
+                    font-size: 18px;
                     font-weight: 800;
                     color: Lx.amber;
                     vertical-alignment: center;
@@ -57,23 +59,58 @@ export component LucentRelayUi inherits Window {
                     vertical-alignment: center;
                     horizontal-stretch: 0;
                 }
-                Rectangle { horizontal-stretch: 1; background: transparent; }
-                Text {
-                    text: "Lucent-Relay v" + root.version;
-                    font-size: 10px;
-                    color: Lx.text-muted;
-                    vertical-alignment: center;
-                    horizontal-stretch: 0;
+
+                Rectangle { width: 10px; background: transparent; }
+                Rectangle {
+                    width: 1px;
+                    height: 24px;
+                    background: #2e3838;
+                    vertical-stretch: 0;
                 }
+                Rectangle { width: 10px; background: transparent; }
+
+                // Plugin name + version stack (same tokens as LxShellHeader)
+                VerticalLayout {
+                    spacing: 0;
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    vertical-stretch: 0;
+
+                    Text {
+                        text: "Lucent-Relay";
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: #ffa64d;
+                    }
+                    Text {
+                        text: "v" + root.version;
+                        font-size: 10px;
+                        color: #808080;
+                    }
+                }
+            }
+
+            // Bottom hairline + amber rail (shell header parity)
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%;
+                height: 1px;
+                background: Lx.edge-dark;
+            }
+            Rectangle {
+                y: parent.height - 2px;
+                width: 100%;
+                height: 1px;
+                background: #ff731a33;
             }
         }
 
-        // ── Name — label left, dark LxLineEdit fills rest ──
+        // ── Name — same left-pin pattern as Target, wider field ──
         HorizontalLayout {
             padding-left: 8px;
             padding-right: 8px;
             spacing: 8px;
-            alignment: center;
+            alignment: start;
             vertical-stretch: 0;
             height: 32px;
 
@@ -84,17 +121,20 @@ export component LucentRelayUi inherits Window {
                 vertical-alignment: center;
                 horizontal-stretch: 0;
                 min-width: 44px;
+                height: 100%;
             }
             LxLineEdit {
                 text <=> root.relay_name;
                 placeholder-text: "Relay name";
-                // default dark chrome (not light white box)
+                field-width: 230px;
+                // Live keystrokes so Lucent relay button renames without blur wait.
+                edited(t) => { root.relay_name_changed(t); }
                 accepted(t) => { root.relay_name_changed(t); }
                 committed(t) => { root.relay_name_changed(t); }
             }
         }
 
-        // ── Target — label left, LxSelectTrigger fixed 190px (Vizia width) ──
+        // ── Target — label left, fixed trigger pinned left ──
         HorizontalLayout {
             padding-left: 8px;
             padding-right: 8px;
@@ -113,8 +153,7 @@ export component LucentRelayUi inherits Window {
                 height: 100%;
             }
             target_dd := LxSelectTrigger {
-                // Vizia Dropdown was Pixels(190.0) — pin left under label.
-                trigger-width: 190px;
+                trigger-width: 230px;
                 text: root.target_index >= 0 && root.target_index < root.target_names.length
                     ? root.target_names[root.target_index] : "(broadcast)";
                 placeholder: "(broadcast)";
@@ -151,7 +190,7 @@ export component LucentRelayUi inherits Window {
 
     // Target list popup — under trigger, left-pinned (Vizia Placement::BottomStart).
     target_popup := PopupWindow {
-        width: max(190px, target_dd.width);
+        width: max(230px, target_dd.width);
         x: target_dd.absolute-position.x;
         y: target_dd.absolute-position.y + target_dd.height + 2px;
         height: min(56px, 4px + root.target_names.length * 20px);

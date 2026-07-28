@@ -1,39 +1,39 @@
 {
   "edges": [
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent",
       "kind": "build_depends_on",
       "to": "crates/lx-slint-build"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent",
       "kind": "depends_on",
       "to": "crates/lx-analysis"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent",
       "kind": "depends_on",
       "to": "crates/lx-dsp"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent",
       "kind": "depends_on",
       "to": "crates/lx-slint-editor"
     },
     {
-      "from": "plugins/lucent-relay-slint",
+      "from": "plugins/lucent-relay",
       "kind": "ipc_peer",
       "note": "shared: relay, shm",
-      "to": "plugins/lucent-slint"
+      "to": "plugins/lucent"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent",
       "kind": "runtime_depends_on",
       "note": "via relay+shm",
       "to": "crates/lx-shm"
     },
     {
-      "from": "plugins/lucent-slint",
+      "from": "plugins/lucent",
       "kind": "uses_ui",
       "note": "17 shared Lx* components",
       "to": "crates/lx-ui-slint"
@@ -135,7 +135,7 @@
         "slint",
         "truce"
       ],
-      "id": "plugins/lucent-relay-slint",
+      "id": "plugins/lucent-relay",
       "internal_deps": [
         "crates/lx-analysis",
         "crates/lx-dsp",
@@ -144,8 +144,8 @@
       ],
       "kind": "plugin",
       "migration_status": "migrated",
-      "name": "lucent-relay-slint",
-      "path": "plugins/lucent-relay-slint",
+      "name": "lucent-relay",
+      "path": "plugins/lucent-relay",
       "version": "1.0.0"
     },
     {
@@ -653,7 +653,7 @@
       "slint",
       "truce"
     ],
-    "id": "plugins/lucent-slint",
+    "id": "plugins/lucent",
     "internal_deps": [
       "crates/lx-analysis",
       "crates/lx-dsp",
@@ -662,8 +662,8 @@
     ],
     "kind": "plugin",
     "migration_status": "migrated",
-    "name": "lucent-slint",
-    "path": "plugins/lucent-slint",
+    "name": "lucent",
+    "path": "plugins/lucent",
     "version": "1.0.0"
   }
 }

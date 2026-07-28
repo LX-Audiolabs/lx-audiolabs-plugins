@@ -15,6 +15,11 @@ use lx_analysis::{
 /// Claim a consumer slot (if needed) and refresh the Lucent display name in SHM.
 /// Safe from the editor tick — relay discovery must not depend on analyze mode
 /// or transport running.
+///
+/// Prefer `name_bg` (same Arc the audio heartbeat uses). Fall back to `name`.
+/// Never treat a failed try_lock as empty name — that would flash "Hub N" in
+/// Relay target lists while the user is typing (Vizia always publishes the
+/// keystroke text immediately via `write_consumer_name`).
 pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &SharedState) {
     let now_ms = lx_analysis::shm::now_ms();
     let mut slot = shared.shm_slot.load(Ordering::Acquire);
@@ -29,11 +34,43 @@ pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &SharedState
         return;
     }
     let raw = params
-        .name
+        .name_bg
         .try_read()
         .map(|n| n.clone())
-        .unwrap_or_default();
+        .or_else(|_| params.name.try_read().map(|n| n.clone()))
+        .unwrap_or_else(|_| {
+            // Last resort: blocking read so we never advertise "" → "Hub N"
+            // while the writer holds the lock for a name edit.
+            params
+                .name_bg
+                .read()
+                .map(|n| n.clone())
+                .or_else(|_| params.name.read().map(|n| n.clone()))
+                .unwrap_or_default()
+        });
     let my_name = lx_analysis::shm::display_name(&raw, slot as u8);
+    if let Some(hub) = relay_hub() {
+        hub.write_consumer_name(slot as u8, &my_name, now_ms);
+    }
+}
+
+/// Immediate SHM consumer rename (Vizia Textbox `on_edit` parity). Call from
+/// the editor name callback so Relay target lists update without waiting for
+/// the next 33 ms tick / audio block.
+pub(crate) fn editor_publish_consumer_name(shared: &SharedState, raw: &str) {
+    let now_ms = lx_analysis::shm::now_ms();
+    let mut slot = shared.shm_slot.load(Ordering::Acquire);
+    if slot < 0
+        && let Some(hub) = relay_hub()
+        && let Some(claimed) = hub.claim_consumer_slot(now_ms)
+    {
+        slot = claimed as i32;
+        shared.shm_slot.store(slot, Ordering::Release);
+    }
+    if slot < 0 {
+        return;
+    }
+    let my_name = lx_analysis::shm::display_name(raw, slot as u8);
     if let Some(hub) = relay_hub() {
         hub.write_consumer_name(slot as u8, &my_name, now_ms);
     }
@@ -258,9 +295,9 @@ mod editor;
 mod process;
 mod relay_state;
 
-// Lucent compact shell (no footer / no OUT GAIN): 990 × 500
+// Lucent compact shell (no footer / no OUT GAIN): 940 × 500
 #[allow(dead_code)]
-const WINDOW_W: u32 = 990;
+const WINDOW_W: u32 = 940;
 #[allow(dead_code)]
 const WINDOW_H: u32 = 500;
 

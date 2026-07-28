@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use lx_analysis::{SPECTRUM_BINS, SharedState};
+use lx_analysis::{relay_hub, SPECTRUM_BINS, SharedState};
 use lx_slint_editor::{LxSlintEditor, PluginContext};
 use slint::{ModelRc, SharedString, VecModel};
 use truce_core::cast::{discrete_index, discrete_norm};
@@ -23,17 +23,17 @@ use truce_core::editor::{Editor, PluginContextReadF32};
 
 use crate::relay_state::RelayState;
 use crate::{
-    LucentParams, LucentParamsParamId as P, editor_ensure_consumer, read_masking, read_relays,
-    read_resonance,
+    LucentParams, LucentParamsParamId as P, editor_ensure_consumer, editor_publish_consumer_name,
+    read_masking, read_resonance, RelaySlot, MAX_RELAY_SLOTS,
 };
 
 slint::include_modules!();
 
-// Lucent compact shell (no footer / no OUT GAIN): 990 × 500
-const WINDOW_W: u32 = 990;
+// Lucent compact shell (no footer / no OUT GAIN): 940 × 500
+const WINDOW_W: u32 = 940;
 const WINDOW_H: u32 = 500;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// Spectrum viewBox — scales to the pit; only aspect affects stroke width.
+/// Spectrum viewBox — Path fit:fill maps these onto full pit width×height.
 const PATH_W: f32 = 620.0;
 const PATH_H: f32 = 300.0;
 
@@ -67,11 +67,11 @@ fn log_x(freq: f32) -> f32 {
     ((freq.max(20.0).ln() - 20.0f32.ln()) / (20000.0f32.ln() - 20.0f32.ln())).clamp(0.0, 1.0)
 }
 
-/// Header status per analyze mode. Process semantics: 0 = own-only,
-/// 1 = hybrid (own + relays), 2 = relay-only. The segmented button's choices
-/// `["Own", "Both", "Relay"]` map index → mode directly.
+/// Process semantics labels for analyze mode (tests / docs only).
+/// UI cycle button: STANDALONE / HYBRID / RELAY (Vizia parity), not a status line.
+#[cfg(test)]
 pub(crate) fn mode_status(mode: usize) -> &'static str {
-    ["Own bus", "Own + Relays", "Relays"]
+    ["standalone", "hybrid", "relay"]
         .get(mode)
         .copied()
         .unwrap_or("?")
@@ -328,7 +328,7 @@ fn max_hold_named(
 
 // ─── Analyzer text panels (dev editor.rs ports) ─────────────────────────────
 
-/// Top-3 own + top-3 group resonance lines.
+/// Top-5 own + top-5 group resonance lines.
 fn format_resonance_text(
     acc_own: &HashMap<usize, f32>,
     acc_relay: &HashMap<usize, (f32, Vec<String>)>,
@@ -349,11 +349,11 @@ fn format_resonance_text(
     relay.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut lines = Vec::new();
-    for (bin, score) in own.iter().take(3) {
+    for (bin, score) in own.iter().take(5) {
         let freq = *bin as f32 * sample_rate / fft_size;
         lines.push(format!("Own: {freq:.0} Hz {score:.1}"));
     }
-    for (bin, score, contributors) in relay.iter().take(3) {
+    for (bin, score, contributors) in relay.iter().take(5) {
         let freq = *bin as f32 * sample_rate / fft_size;
         if contributors.is_empty() {
             lines.push(format!("Group: {freq:.0} Hz {score:.1}"));
@@ -367,7 +367,7 @@ fn format_resonance_text(
     lines.join("\n")
 }
 
-/// Top-3 masking collision lines.
+/// Top-5 masking collision lines.
 fn format_masking_text(
     mode: usize,
     acc: &HashMap<usize, (f32, Vec<String>)>,
@@ -386,7 +386,7 @@ fn format_masking_text(
         .map(|(&bin, (db, names))| (bin, *db, names.clone()))
         .collect();
     peaks.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    peaks.truncate(3);
+    peaks.truncate(5);
     peaks
         .iter()
         .map(|(bin, db, contributors)| {
@@ -657,15 +657,19 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     ui.set_vault_path(SharedString::from(vp.as_str()));
                 }
 
+                // Vizia on_edit parity: persist + immediate SHM consumer rename
+                // so Relay target dropdown never sticks on stale "Hub N".
                 let p = params.clone();
+                let shared_name = shared.clone();
                 ui.on_display_name_changed(move |txt: SharedString| {
                     let s = txt.as_str().to_string();
                     if let Ok(mut n) = p.name.write() {
                         *n = s.clone();
                     }
                     if let Ok(mut bg) = p.name_bg.write() {
-                        *bg = s;
+                        *bg = s.clone();
                     }
+                    editor_publish_consumer_name(&shared_name, &s);
                 });
 
                 let s = state.clone();
@@ -794,7 +798,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 );
                 if changed_f32(&mut cache.mode, mode as f32) {
                     ui.set_analyze_mode(mode as f32);
-                    ui.set_status_line(SharedString::from(mode_status(mode)));
+                    // Mode shown only by STANDALONE/HYBRID/RELAY cycle button.
                 }
                 let res_active = PluginContextReadF32::get_param(state, P::ResonanceActive) > 0.5;
                 if changed_bool(&mut cache.res_active, res_active) {
@@ -823,8 +827,37 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 }
 
                 // --- relay list (EMA + toggles + mask) ---
+                // Vizia: editor reads hub live every tick (not process registry).
+                // Process `publish_relays` still feeds DSP; UI must not wait on FFT.
                 if mode != 0 {
-                    cache.relay_state.sync(&read_relays(instance_key));
+                    let now_ms = lx_analysis::shm::now_ms();
+                    let slot = shared_sync.shm_slot.load(Ordering::Acquire);
+                    let raw = params_sync
+                        .name_bg
+                        .try_read()
+                        .map(|n| n.clone())
+                        .or_else(|_| params_sync.name.try_read().map(|n| n.clone()))
+                        .unwrap_or_default();
+                    let my_name = if slot >= 0 {
+                        lx_analysis::shm::display_name(&raw, slot as u8)
+                    } else {
+                        raw
+                    };
+                    let feeds = relay_hub()
+                        .map(|hub| hub.read_active(&my_name, now_ms))
+                        .unwrap_or_default();
+                    let mut slots: Vec<RelaySlot> = Vec::with_capacity(feeds.len().min(MAX_RELAY_SLOTS));
+                    for (s, name, bins) in feeds.into_iter().take(MAX_RELAY_SLOTS) {
+                        let mut b = [-90.0f32; SPECTRUM_BINS];
+                        let n = bins.len().min(SPECTRUM_BINS);
+                        b[..n].copy_from_slice(&bins[..n]);
+                        slots.push(RelaySlot {
+                            slot: s,
+                            name,
+                            bins: b,
+                        });
+                    }
+                    cache.relay_state.sync(&slots);
                     // DRIVEN | slot-bits: all-off is not the same as mask==0.
                     shared_sync.relay_active_mask.store(
                         cache.relay_state.active_mask() | lx_analysis::RELAY_MASK_DRIVEN,
@@ -832,7 +865,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     );
                 } else {
                     cache.relay_state.clear();
-                    // Own mode: no UI preference (process ignores relays anyway).
+                    // Standalone: no UI preference (process ignores relays anyway).
                     shared_sync
                         .relay_active_mask
                         .store(0, Ordering::Release);
@@ -1112,13 +1145,12 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
 mod tests {
     use super::mode_status;
 
-    /// Process semantics: 0 = own-only, 1 = hybrid (own + relays),
-    /// 2 = relay-only. Slint segmented choices are ["Own", "Both", "Relay"]
-    /// (index → mode directly) — this pins the status line to the same map.
+    /// Process semantics: 0 = standalone (own-only), 1 = hybrid, 2 = relay-only.
+    /// Matches Vizia SNAP mode_name + cycle-button labels.
     #[test]
     fn mode_labels_match_process_semantics() {
-        assert_eq!(mode_status(0), "Own bus");
-        assert_eq!(mode_status(1), "Own + Relays");
-        assert_eq!(mode_status(2), "Relays");
+        assert_eq!(mode_status(0), "standalone");
+        assert_eq!(mode_status(1), "hybrid");
+        assert_eq!(mode_status(2), "relay");
     }
 }

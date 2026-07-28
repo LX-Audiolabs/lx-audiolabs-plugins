@@ -27,4 +27,4 @@ linker = ".cargo/zigcc-aarch64-unknown-linux-gnu.bat"
 # Shared compiler cache. Cuts cold/warm rebuilds ~40–60%.
 # `sccache --show-stats` for hit/miss rates.
 [build]
-rustc-wrapper = "sccache"
+# rustc-wrapper = "sccache"  # disabled: not installed

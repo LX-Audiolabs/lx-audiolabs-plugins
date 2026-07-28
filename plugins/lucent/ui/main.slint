@@ -1,7 +1,7 @@
 import { Palette } from "std-widgets.slint";
 import {
     Lx, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight,
-    LxSection, LxKnob, LxToggleBtn, LxButton, LxDangerBtn, LxLineEdit, LxSegmentedButton,
+    LxSection, LxKnob, LxToggleBtn, LxButton, LxDangerBtn,
     LxSpectrum, LxGoniometer, LxLedPeakMeter, LxCorrelation,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
@@ -12,17 +12,18 @@ export struct RelayCurve { cmds: string, col: color }
 export struct ResMarker { cmds: string, a: float }
 
 /// Lucent — FFT spectrum analyser / masking.
-/// Compact shell (no footer / no OUT GAIN): 990 × 500 — right bar is
+/// Compact shell (no footer / no OUT GAIN): 940 × 500 — right bar is
 /// Peak → correlation → goniometer only (Meridian order, tight pack).
 export component LucentUi inherits Window {
     init => { Palette.color-scheme = ColorScheme.dark; }
 
     title: "Lucent";
     background: Lx.window;
-    preferred-width: Lx.window-w;
+    // 50px under vault 990 so main pit width matches spectrum path better.
+    preferred-width: 940px;
     // Not Lx.window-h (660): Lucent has no footer; tight right-bar stack.
     preferred-height: 500px;
-    min-width: Lx.window-w;
+    min-width: 940px;
     min-height: 500px;
 
     in property <string> version: "1.0.0";
@@ -88,41 +89,44 @@ export component LucentUi inherits Window {
         spacing: 0;
 
         // ── HEADER ───────────────────────────────────────────────────────
+        // Brand left | instance name center (layout) | mode/RESET/BYPASS right.
         LxShellHeader {
             plugin-name: "Lucent";
             version: root.version;
-            status-text: root.status_line;
+            show-instance-name: true;
+            instance-name <=> root.display_name;
+            instance-placeholder: "Instance name";
+            instance-field-width: 170px;
+            instance-name-changed(t) => { root.display_name_changed(t); };
 
-            // Free choice of controls; chrome = lx-ui-slint defaults (button-h).
-            // Name field uses default dark LxLineEdit (not light white box).
-            HorizontalLayout {
-                spacing: 4px;
-                alignment: center;
+            // Vizia labels + cycle: HYBRID→STANDALONE→RELAY→HYBRID.
+            // Fixed width = STANDALONE (Vizia 110px) so header doesn't jump.
+            LxButton {
+                text: root.analyze_mode < 0.5 ? "STANDALONE"
+                    : (root.analyze_mode < 1.5 ? "HYBRID" : "RELAY");
+                horizontal-stretch: 0;
+                min-width: 110px;
+                preferred-width: 110px;
+                max-width: 110px;
+                clicked => {
+                    // 1→0→2→1 (not linear 0→1→2)
+                    root.analyze_mode = root.analyze_mode >= 0.5 && root.analyze_mode < 1.5
+                        ? 0.0
+                        : (root.analyze_mode < 0.5 ? 2.0 : 1.0);
+                    root.analyze_mode_changed(root.analyze_mode);
+                }
+            }
 
-                LxLineEdit {
-                    text <=> root.display_name;
-                    placeholder-text: "Instance name";
-                    field-width: 130px;
-                    accepted(t) => { root.display_name_changed(t); }
-                    committed(t) => { root.display_name_changed(t); }
-                }
-                LxSegmentedButton {
-                    choices: ["Own", "Both", "Relay"];
-                    index <=> root.analyze_mode;
-                    changed(v) => { root.analyze_mode_changed(v); }
-                }
+            Rectangle { width: 6px; background: transparent; }
 
-                Rectangle { width: 6px; background: transparent; }
-
-                LxDangerBtn {
-                    label: "RESET";
-                    clicked => { root.reset_peaks(); }
-                }
-                LxToggleBtn {
-                    label: "BYPASS";
-                    active <=> root.bypass_active;
-                    toggled(v) => { root.bypass_active_changed(v); }
-                }
+            LxDangerBtn {
+                label: "RESET";
+                clicked => { root.reset_peaks(); }
+            }
+            LxToggleBtn {
+                label: "BYPASS";
+                active <=> root.bypass_active;
+                toggled(v) => { root.bypass_active_changed(v); }
             }
         }
 
@@ -230,6 +234,7 @@ export component LucentUi inherits Window {
                             viewbox-y: 0;
                             viewbox-width: 620;
                             viewbox-height: 300;
+                            fit: ImageFit.fill;
                             commands: r.cmds;
                             stroke: r.col;
                             stroke-width: 1px;
@@ -245,6 +250,7 @@ export component LucentUi inherits Window {
                             viewbox-y: 0;
                             viewbox-width: 620;
                             viewbox-height: 300;
+                            fit: ImageFit.fill;
                             commands: root.mask_cmds;
                             fill: #e0454533;
                             stroke: Lx.crimson;
@@ -260,6 +266,7 @@ export component LucentUi inherits Window {
                             viewbox-y: 0;
                             viewbox-width: 620;
                             viewbox-height: 300;
+                            fit: ImageFit.fill;
                             commands: m.cmds;
                             stroke: Lx.amber.with-alpha(m.a);
                             stroke-width: 1px;
@@ -282,7 +289,7 @@ export component LucentUi inherits Window {
                 }
 
                 // Analyzer panels: resonance / masking / sensitivity.
-                // Res/mask cards ~3× former content height so multi-line top-N fits.
+                // Height tuned for top-5 lines (150 − 20).
                 HorizontalLayout {
                     spacing: Lx.gap-sm;
                     vertical-stretch: 0;
@@ -291,8 +298,8 @@ export component LucentUi inherits Window {
                         show-title: false;
                         horizontal-stretch: 1;
                         vertical-stretch: 0;
-                        min-height: 150px;
-                        preferred-height: 150px;
+                        min-height: 130px;
+                        preferred-height: 130px;
 
                         HorizontalLayout {
                             spacing: Lx.gap-sm;
@@ -329,8 +336,8 @@ export component LucentUi inherits Window {
                         show-title: false;
                         horizontal-stretch: 1;
                         vertical-stretch: 0;
-                        min-height: 150px;
-                        preferred-height: 150px;
+                        min-height: 130px;
+                        preferred-height: 130px;
 
                         HorizontalLayout {
                             spacing: Lx.gap-sm;
@@ -355,7 +362,14 @@ export component LucentUi inherits Window {
                                     vertical-alignment: top;
                                 }
                             }
-                            LxToggleBtn {
+                            // Own: no masking (Vizia grey OFF). Param kept for Both/Relay.
+                            if root.analyze_mode < 0.5: LxToggleBtn {
+                                danger: true;
+                                enabled: false;
+                                label: "OFF";
+                                active: false;
+                            }
+                            if root.analyze_mode >= 0.5: LxToggleBtn {
                                 danger: true;
                                 label: root.masking_active ? "ON" : "OFF";
                                 active <=> root.masking_active;
@@ -368,12 +382,18 @@ export component LucentUi inherits Window {
                         title: "SENSITIVITY";
                         horizontal-stretch: 0;
                         vertical-stretch: 0;
+                        min-height: 130px;
+                        preferred-height: 130px;
 
-                        LxKnob {
-                            label: "";
-                            value <=> root.sensitivity;
-                            value-text: root.sensitivity_text;
-                            changed(v) => { root.sensitivity_changed(v); }
+                        // Cross-axis center — LxSection body is left-pin VerticalLayout.
+                        HorizontalLayout {
+                            alignment: center;
+                            LxKnob {
+                                label: "";
+                                value <=> root.sensitivity;
+                                value-text: root.sensitivity_text;
+                                changed(v) => { root.sensitivity_changed(v); }
+                            }
                         }
                     }
                 }

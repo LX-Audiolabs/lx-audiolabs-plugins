@@ -23,8 +23,8 @@ pub use lx_vault::{
 pub const SCOPE_BUFFER_LEN: usize = 4096;
 
 /// Pre-clipper waveform ring (signed linear samples) — Aurum SHAPE clipper display.
-/// ~340 ms at 48 kHz — longer window slows/stretches the scrolling waveform so
-/// clipping transients are easier to see and aim.
+/// Ring length alone ≈340 ms @ 48 kHz of *slots*; Aurum peak-hold-hops writes so
+/// the visible window is longer without EMA (peaks stay exact within each hop).
 pub const CLIP_WAVE_LEN: usize = 16384;
 
 /// Pixel columns in the clipper mini-display (min/max bucketed from the ring).

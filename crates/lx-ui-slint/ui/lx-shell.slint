@@ -25,6 +25,7 @@
 // automatically vertically centered. LxShellBody is the horizontal body row.
 
 import { Lx } from "lx-theme.slint";
+import { LxLineEdit } from "lx-controls.slint";
 
 // ── Zones ────────────────────────────────────────────────────────────────────
 
@@ -153,6 +154,15 @@ export component LxShellHeader inherits Rectangle {
     in property <string> version: "";
     in property <string> status-text: "";
 
+    // Optional centered instance/name field (Lucent). Layout-owned — never
+    // absolute-overlay: free-geometry LineEdit defaults width:100% and paints
+    // over logo + actions.
+    in property <bool> show-instance-name: false;
+    in-out property <string> instance-name: "";
+    in property <string> instance-placeholder: "Instance name";
+    in property <length> instance-field-width: 170px;
+    callback instance-name-changed(string);
+
     height: Lx.header-h;
     vertical-stretch: 0;
     background: @linear-gradient(180deg, Lx.section 0%, Lx.window 70%, Lx.void 100%);
@@ -173,7 +183,7 @@ export component LxShellHeader inherits Rectangle {
         background: #ff731a33;
     }
 
-    // Full-height row: brand LEFT, flex spacer, actions RIGHT.
+    // Full-height row: brand LEFT | optional name CENTER | actions RIGHT.
     // Cross-axis: VerticalLayout wrappers with alignment:center (HorizontalLayout
     // alone with vertical-stretch:0 pins children to the top of the 50px header).
     HorizontalLayout {
@@ -254,11 +264,29 @@ export component LxShellHeader inherits Rectangle {
             }
         }
 
-        // ── Center: flex spacer pushes actions to the right ──
-        Rectangle {
+        // ── Center: stretch; name field vertically centered like brand/actions ──
+        VerticalLayout {
             horizontal-stretch: 1;
             min-width: 0px;
-            background: transparent;
+            vertical-stretch: 1;
+            alignment: center;
+
+            HorizontalLayout {
+                horizontal-stretch: 0;
+                vertical-stretch: 0;
+                alignment: center;
+
+                if root.show-instance-name: LxLineEdit {
+                    text <=> root.instance-name;
+                    placeholder-text: root.instance-placeholder;
+                    field-width: root.instance-field-width;
+                    horizontal-stretch: 0;
+                    vertical-stretch: 0;
+                    edited(t) => { root.instance-name-changed(t); }
+                    accepted(t) => { root.instance-name-changed(t); }
+                    committed(t) => { root.instance-name-changed(t); }
+                }
+            }
         }
 
         // ── Right: caller-supplied actions, vertically centered in header ──

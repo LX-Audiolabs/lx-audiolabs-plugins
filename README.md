@@ -10,7 +10,7 @@ crates/                 # libraries
   lx-ui-slint/          # design system
   lx-dsp/ lx-analysis/ lx-vault/ lx-shm/
 plugins/                # products (truce / lx-slint-editor)
-  lucent-relay-slint/ lucent-slint/
+  lucent-relay/ lucent/
   aurum-slint/
   aether/ meridian/ equilibrium/
 ```
