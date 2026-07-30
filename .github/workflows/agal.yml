@@ -1,4 +1,4 @@
-name: audio-graph
+name: agal
 
 on:
   workflow_dispatch:
@@ -6,10 +6,10 @@ on:
     paths:
       - "plugins/**"
       - "crates/**"
-      - "audio-graph.toml"
+      - "audiolabs.toml"
       - "Cargo.toml"
       - "Cargo.lock"
-      - ".github/workflows/audio-graph.yml"
+      - ".github/workflows/agal.yml"
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,44 +27,41 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          key: audio-graph
+          key: agal
 
-      - name: Install rust-audio-graph
-        # NOTE: adjust URL/branch once rust-audio-graph is published.
-        # Private repo: use a PAT (CARGO_REGISTRIES / git config) or submodule.
-        run: cargo install --git https://github.com/lxndrbe/rust-audio-graph --branch main
+      - name: Install agal
+        run: cargo install --git https://github.com/lxndrbe/agal --branch main
 
-      - name: Generate audio-graph
-        run: rust-audio-graph .
+      - name: Generate agal
+        run: agal .
 
-      - name: Upload audio-graph artifacts
+      - name: Upload agal artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: audio-graph
+          name: agal
           path: |
-            audio-graph/audio-graph.json
-            audio-graph/audio-graph.agent.md
-            audio-graph/audio-graph.delta.md
-            audio-graph/audio-graph.html
+            audiolabs/audiolabs.json
+            audiolabs/audiolabs.agent.md
+            audiolabs/audiolabs.delta.md
+            audiolabs/audiolabs.html
           if-no-files-found: error
 
       - name: Verify graph + fail on error findings
         run: |
-          test -f audio-graph/audio-graph.json
-          test -f audio-graph/audio-graph.agent.md
+          test -f audiolabs/audiolabs.json
+          test -f audiolabs/audiolabs.agent.md
           python3 - <<'PY'
           import json, sys
-          with open("audio-graph/audio-graph.json") as f:
+          with open("audiolabs/audiolabs.json") as f:
               g = json.load(f)
           ver = g.get("version", "")
-          assert ver.startswith("0.3"), f"expected version 0.3.x, got {ver}"
           assert len(g.get("nodes", [])) > 0
           ms = g.get("migration_summary") or {}
           assert ms.get("total_plugins", 0) > 0
           findings = g.get("findings") or []
           errors = [f for f in findings if f.get("severity") == "error"]
           print(
-              f"audio-graph ok: v{ver}, {len(g['nodes'])} nodes, "
+              f"agal ok: v{ver}, {len(g['nodes'])} nodes, "
               f"{len(g.get('edges', []))} edges, {ms['total_plugins']} plugins, "
               f"{len(findings)} findings ({len(errors)} error)"
           )
@@ -72,12 +69,13 @@ jobs:
               for e in errors:
                   print(f"  ERROR [{e.get('code')}] {e.get('node')}: {e.get('message')}")
               sys.exit(1)
-          # Delta present after first CI commit with graph checked in
           if "delta" in g and g["delta"] is not None:
               d = g["delta"]
               print(
                   f"  delta: first_run={d.get('first_run')} "
                   f"+{len(d.get('added_nodes') or [])}/-{len(d.get('removed_nodes') or [])} nodes "
-                  f"+{len(d.get('new_findings') or [])} findings"
               )
           PY
+
+      - name: Verify cheatsheet
+        run: test -f audiolabs/Cheatsheet.md

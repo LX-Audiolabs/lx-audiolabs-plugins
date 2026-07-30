@@ -1,5 +1,4 @@
 # LX Audiolabs — config for agal (agentic-audiolab).
-# Output: audiolabs/ (gitignored). Legacy: audio-graph.toml still works if this file is removed.
 
 output_dir = "audiolabs"
 
