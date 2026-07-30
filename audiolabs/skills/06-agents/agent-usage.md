@@ -56,7 +56,7 @@ agal never overwrites root `AGENTS.md`.
 - **Cheatsheet.md** — all CLI commands in this folder
 - **HTML** — overview graph, focus 1-hop, findings
 - **notes/** — intent, open work, decisions (edit below HUMAN fence)
-- **audiolabs.toml** — migrations, rules, `[[suppress]]`
+- **agal.toml** — migrations, rules, `[[suppress]]`
 - Tool packs: `agal skills sync` (default: **core**)
 
 ## Commands
