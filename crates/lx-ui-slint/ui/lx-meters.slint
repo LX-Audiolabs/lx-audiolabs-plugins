@@ -40,7 +40,7 @@ export component LxMeterBar inherits Rectangle {
 }
 
 // Slint-native LED peak column — thin hardware LED stack.
-// `level` 0..1 maps −60..+6 dB (same range as LxStereoMeter / frozen Vizia stereo meter).
+// `level` 0..1 maps −60..+6 dB (same range as frozen Vizia stereo meter).
 // Caller: norm = ((db + 60) / 66).clamp(0, 1). Colors follow real dB zones, not segment index.
 //
 // Many thin segments (default 32) ≈ 3–4px each at sidebar height — same thin look
@@ -114,7 +114,7 @@ export component LxLedColumn inherits Rectangle {
 }
 
 // Stereo LED peak meter — Aurum / master bus style.
-// Levels are 0..1 with −60..+6 dB mapping (same as LxStereoMeter).
+// Levels are 0..1 with −60..+6 dB mapping.
 // Caller: ((db + 60) / 66).clamp(0, 1). Full-scale 0 dBFS ≈ 0.91 (top is +6).
 //
 // Layout: LED columns + scale share one row (same height); L/R labels below
@@ -235,29 +235,6 @@ export component LxLedPeakMeter inherits Rectangle {
     }
 }
 
-// Gain-reduction meter strip with label.
-export component LxGrMeter inherits VerticalLayout {
-    in property <float> level: 0.0;   // 0..1 (1 = full reduction)
-    in property <string> label: "GR";
-
-    spacing: 4px;
-    alignment: start;
-
-    Text {
-        text: root.label;
-        font-size: Lx.font-sm;
-        color: Lx.text-muted;
-    }
-
-    LxMeterBar {
-        height: 12px;
-        level: root.level;
-        bar-color: Lx.gr;
-        clip-threshold: 1.1; // never "clip" color for GR
-        horizontal: true;
-    }
-}
-
 // Phase correlation readout + mini bar (−1..+1 → 0..1 with center at 0.5).
 export component LxCorrelation inherits VerticalLayout {
     in property <float> correlation: 0.0; // −1..+1
@@ -297,223 +274,5 @@ export component LxCorrelation inherits VerticalLayout {
                 : Lx.crimson;
             border-radius: 1px;
         }
-    }
-}
-
-// Full stereo peak meter per frozen layout-spec v0.2.
-// Levels are 0..1 (caller maps dB → norm, typically −60..+6 dB).
-export component LxStereoMeter inherits Rectangle {
-    in property <float> level-l: 0.0;
-    in property <float> level-r: 0.0;
-    in property <float> hold-l: 0.0;
-    in property <float> hold-r: 0.0;
-    in property <float> balance: 0.0; // −1..+1 (L..R convention from lx-analysis)
-    in property <string> readout-l: "";
-    in property <string> readout-r: "";
-
-    callback reset-peaks;
-
-    background: @linear-gradient(180deg, Lx.section 0%, Lx.stage 100%);
-    border-radius: Lx.radius-md;
-    border-width: 1px;
-    border-color: Lx.stage-rim;
-    preferred-height: Lx.stereo-meter-h;
-    min-height: 120px;
-
-    // Layout: [L bar] [gap 36%] [R bar] with ticks in the gap.
-    // Using fractional widths so it scales; 36px gap ≈ 23% of 155px sidebar.
-    property <length> gap: 36px;
-    property <float> lv-l: clamp(root.level-l, 0, 1);
-    property <float> lv-r: clamp(root.level-r, 0, 1);
-    property <float> hv-l: clamp(root.hold-l, 0, 1);
-    property <float> hv-r: clamp(root.hold-r, 0, 1);
-
-    pure function bar-color(lv: float) -> color {
-        // Approximate dB colour breaks on 0..1 mapped from −60..+6:
-        // 0 dB ≈ 60/66 ≈ 0.91, −6 dB ≈ 54/66 ≈ 0.82
-        if lv > 0.91 { return Lx.crimson; }
-        if lv > 0.82 { return Lx.amber; }
-        return Lx.green;
-    }
-
-    HorizontalLayout {
-        padding: 4px;
-        spacing: 0;
-
-        // Left bar
-        Rectangle {
-            horizontal-stretch: 1;
-            background: transparent;
-
-            Rectangle {
-                x: 1px;
-                width: parent.width - 2px;
-                y: parent.height * (1.0 - lv-l);
-                height: parent.height * lv-l;
-                background: @linear-gradient(90deg, #00000040 0%, bar-color(lv-l) 40%, #ffffff33 50%, bar-color(lv-l) 70%, #00000040 100%);
-                border-radius: 1px;
-            }
-            // Peak hold
-            Rectangle {
-                x: 0;
-                width: parent.width;
-                y: parent.height * (1.0 - hv-l);
-                height: 1.5px;
-                background: @linear-gradient(90deg, transparent 0%, white 50%, transparent 100%);
-            }
-            Text {
-                y: parent.height - 14px;
-                width: 100%;
-                text: "L";
-                font-size: Lx.font-xs;
-                color: Lx.text-dim;
-                horizontal-alignment: center;
-            }
-        }
-
-        // Center gap with dB ticks + balance cursor
-        Rectangle {
-            width: root.gap;
-            horizontal-stretch: 0;
-            background: transparent;
-
-            // Tick marks at −3 / −6 / −12 / −24 / −48 relative to −60..+6 range
-            // norm = (db - (-60)) / 66
-            for tick[i] in [
-                { db: "-3",  n: 0.864 },
-                { db: "-6",  n: 0.818 },
-                { db: "-12", n: 0.727 },
-                { db: "-24", n: 0.545 },
-                { db: "-48", n: 0.182 },
-            ]: Rectangle {
-                y: parent.height * (1.0 - tick.n) - 0.5px;
-                height: 1px;
-                x: parent.width * 0.5 - (i < 2 ? 5px : 3px);
-                width: i < 2 ? 10px : 6px;
-                background: Lx.tick;
-
-                Text {
-                    x: -parent.x + 1px;
-                    y: -6px;
-                    text: tick.db;
-                    font-size: 8px;
-                    color: #ffffff99;
-                }
-            }
-
-            // Balance cursor near bottom (spec: y ≈ 0.82 of height from top… actually
-            // canvas put cursor at h * 0.82 from top). Green if |bal| < 0.08.
-            Rectangle {
-                property <float> bn: clamp(root.balance, -1, 1);
-                // canvas: cursor_x = center_x - balance_norm * (gap * 0.35)
-                // positive balance (R louder) moves cursor left of center in their formula
-                x: parent.width * 0.5 - bn * (parent.width * 0.35) - 3.5px;
-                y: parent.height * 0.82 - 3.5px;
-                width: 7px;
-                height: 7px;
-                border-radius: 3.5px;
-                background: abs(bn) < 0.08 ? Lx.green-soft : Lx.amber;
-            }
-        }
-
-        // Right bar
-        Rectangle {
-            horizontal-stretch: 1;
-            background: transparent;
-
-            Rectangle {
-                x: 1px;
-                width: parent.width - 2px;
-                y: parent.height * (1.0 - lv-r);
-                height: parent.height * lv-r;
-                background: @linear-gradient(90deg, #00000040 0%, bar-color(lv-r) 40%, #ffffff33 50%, bar-color(lv-r) 70%, #00000040 100%);
-                border-radius: 1px;
-            }
-            Rectangle {
-                x: 0;
-                width: parent.width;
-                y: parent.height * (1.0 - hv-r);
-                height: 1.5px;
-                background: @linear-gradient(90deg, transparent 0%, white 50%, transparent 100%);
-            }
-            Text {
-                y: parent.height - 14px;
-                width: 100%;
-                text: "R";
-                font-size: Lx.font-xs;
-                color: Lx.text-dim;
-                horizontal-alignment: center;
-            }
-        }
-    }
-
-    // Clickable readouts under bars
-    if root.readout-l != "" || root.readout-r != "": HorizontalLayout {
-        y: parent.height - 1px;
-        height: 0; // reserved — parent plugins can place readouts below
-    }
-
-    TouchArea {
-        double-clicked => { root.reset-peaks(); }
-    }
-}
-
-// Sidebar block: meters + correlation + optional GR + optional goniometer slot.
-export component LxLevelPanel inherits Rectangle {
-    in property <float> level-l: 0.0;
-    in property <float> level-r: 0.0;
-    in property <float> hold-l: 0.0;
-    in property <float> hold-r: 0.0;
-    in property <float> balance: 0.0;
-    in property <float> correlation: 0.0;
-    in property <float> gr: 0.0;
-    in property <bool> show-gr: false;
-    in property <string> corr-text: "";
-    in property <string> bal-text: "";
-    in property <string> title: "LEVEL / PHASE";
-
-    callback reset-peaks;
-
-    background: Lx.panel;
-    border-radius: Lx.radius-md;
-    preferred-width: Lx.sidebar-w;
-
-    VerticalLayout {
-        padding: Lx.pad-sm;
-        spacing: Lx.gap-sm;
-
-        Text {
-            text: root.title;
-            font-size: Lx.font-md;
-            font-weight: 700;
-            color: Lx.text-secondary;
-        }
-
-        LxStereoMeter {
-            height: 160px;
-            level-l: root.level-l;
-            level-r: root.level-r;
-            hold-l: root.hold-l;
-            hold-r: root.hold-r;
-            balance: root.balance;
-            reset-peaks => { root.reset-peaks(); }
-        }
-
-        Text {
-            text: root.bal-text != "" ? root.bal-text : "bal: " + round(root.balance * 100) / 100;
-            font-size: Lx.font-sm;
-            color: Lx.text-muted;
-        }
-
-        LxCorrelation {
-            correlation: root.correlation;
-            text: root.corr-text;
-        }
-
-        if root.show-gr: LxGrMeter {
-            level: root.gr;
-        }
-
-        @children
     }
 }

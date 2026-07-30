@@ -6,3 +6,8 @@
 *.swo
 /graphify-out
 .aider*
+# agal PM layer (local). Optional: version adapted skill packs only.
+/audiolabs/*
+!/audiolabs/skills/
+# legacy output name (pre-audiolabs folder)
+/audio-graph

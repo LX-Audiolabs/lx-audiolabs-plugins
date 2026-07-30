@@ -7,10 +7,9 @@ description = "truce::Editor adapter for slint-baseview — LX Audiolabs"
 publish = false
 
 [dependencies]
-# truce integration
+# truce integration (core + params only; full `truce` umbrella unused)
 truce-core = { path = "../../../truce-dev/crates/truce-core" }
 truce-params = { path = "../../../truce-dev/crates/truce-params" }
-truce = { path = "../../../truce-dev/crates/truce", default-features = false }
 
 # raw-window-handle 0.6 bridge (slint-baseview uses rwh 0.6)
 raw-window-handle = "0.6"

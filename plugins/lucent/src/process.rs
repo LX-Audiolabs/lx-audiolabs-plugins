@@ -1,6 +1,7 @@
 //! Lucent process path — RT polish from dev 1.0.0:
 //! FtzDazGuard, relay_scratch / read_active_into, masking id path,
 //! EMA α=1/6, no SnapFFT on audio thread.
+//! Peak/resonance/masking publish uses reused scratch + in-place registries.
 //!
 //! ponytail: same-crate module split — behavior matches lx-audiolabs-dev lucent.
 
@@ -10,9 +11,8 @@ use lx_analysis::{relay_hub, SPECTRUM_BINS};
 use lx_dsp::FtzDazGuard;
 
 use crate::{
-    attribute_contributors, gain_to_db, power_sum_named_into, publish_masking, publish_relays,
-    publish_resonance, sensitivity_thresholds, suppress_harmonics, LucentDspState, LucentParams,
-    ResonanceLists,
+    attribute_contributors_into, gain_to_db, power_sum_named_into, publish_masking, publish_relays,
+    publish_resonance, sensitivity_thresholds, LucentDspState, LucentParams,
 };
 
 pub(crate) fn run(
@@ -130,20 +130,13 @@ pub(crate) fn run(
                     0 => {
                         // Standalone: no relay interaction — UI registry cleared.
                         publish_relays(state.instance_key, &[]);
-                        let peaks =
-                            state.peak_tracker
-                                .find_peaks(&frame, &sensitivity, sample_rate);
-                        let peaks = suppress_harmonics(&frame, peaks);
-                        state.peak_tracker.update(&peaks);
-                        let own_resonances = state.peak_tracker.resonance_peaks(&sensitivity);
+                        state.peak_tracker.detect(&frame, &sensitivity, sample_rate);
                         publish_resonance(
                             state.instance_key,
-                            ResonanceLists {
-                                own: own_resonances,
-                                relay: Vec::new(),
-                            },
+                            state.peak_tracker.res_peaks(),
+                            &[],
                         );
-                        publish_masking(state.instance_key, Vec::new());
+                        publish_masking(state.instance_key, &[]);
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.iter_mut().for_each(|m| *m = -90.0);
                         }
@@ -166,73 +159,70 @@ pub(crate) fn run(
                         }
                     }
                     1 => {
-                        let peaks =
-                            state.peak_tracker
-                                .find_peaks(&frame, &sensitivity, sample_rate);
-                        let peaks = suppress_harmonics(&frame, peaks);
-                        state.peak_tracker.update(&peaks);
-                        let own_resonances = state.peak_tracker.resonance_peaks(&sensitivity);
+                        state.peak_tracker.detect(&frame, &sensitivity, sample_rate);
 
                         let mask = params
                             .shared
                             .relay_active_mask
                             .load(Ordering::Acquire);
                         if let Some(hub) = relay_hub() {
-                            hub.read_active_into(
+                            state.relay_scratch_n = hub.read_active_into(
                                 &state.cached_display_name,
                                 now_ms,
                                 &mut state.relay_scratch,
                             );
                         } else {
-                            state.relay_scratch.clear();
+                            state.relay_scratch_n = 0;
                         }
+                        let n_feeds = state.relay_scratch_n;
 
                         // Relay feeds for the editor (curves + toggle bar +
                         // "N relays online") — before the active-mask filter.
-                        publish_relays(state.instance_key, &state.relay_scratch);
+                        publish_relays(
+                            state.instance_key,
+                            &state.relay_scratch[..n_feeds],
+                        );
 
                         // Group-level resonance: power-sum of Relay tracks (scratch buf).
                         power_sum_named_into(
-                            &state.relay_scratch,
+                            &state.relay_scratch[..n_feeds],
                             mask,
                             &mut state.relay_sum_buf,
                         );
-                        let relay_peaks = state.relay_peak_tracker.find_peaks(
+                        state.relay_peak_tracker.detect(
                             &state.relay_sum_buf,
                             &sensitivity,
                             sample_rate,
                         );
-                        let relay_peaks =
-                            suppress_harmonics(&state.relay_sum_buf, relay_peaks);
-                        state.relay_peak_tracker.update(&relay_peaks);
-                        let relay_resonances = attribute_contributors(
-                            &state.relay_peak_tracker.resonance_peaks(&sensitivity),
-                            &state.relay_scratch,
+                        attribute_contributors_into(
+                            state.relay_peak_tracker.res_peaks(),
+                            &state.relay_scratch[..n_feeds],
                             mask,
+                            &mut state.contrib_scratch,
+                            &mut state.contrib_n,
                         );
 
                         publish_resonance(
                             state.instance_key,
-                            ResonanceLists {
-                                own: own_resonances,
-                                relay: relay_resonances,
-                            },
+                            state.peak_tracker.res_peaks(),
+                            &state.contrib_scratch[..state.contrib_n],
                         );
 
                         state.masking_analyzer.compute_masking(
                             Some(&frame),
-                            &state.relay_scratch,
+                            &state.relay_scratch[..n_feeds],
                             mask,
                             sensitivity.masking_floor_db,
                             sample_rate,
                             sensitivity.persistence_min,
                         );
                         // Full list for SNAP; UI still truncates when formatting text.
+                        state
+                            .masking_analyzer
+                            .fill_peaks_above_floor(sensitivity.masking_floor_db);
                         publish_masking(
                             state.instance_key,
-                            state
-                                .masking_analyzer
-                                .peaks_above_floor(sensitivity.masking_floor_db),
+                            state.masking_analyzer.peaks_above_floor(),
                         );
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.copy_from_slice(&state.masking_analyzer.masking_map);
@@ -266,56 +256,58 @@ pub(crate) fn run(
                             .relay_active_mask
                             .load(Ordering::Acquire);
                         if let Some(hub) = relay_hub() {
-                            hub.read_active_into(
+                            state.relay_scratch_n = hub.read_active_into(
                                 &state.cached_display_name,
                                 now_ms,
                                 &mut state.relay_scratch,
                             );
                         } else {
-                            state.relay_scratch.clear();
+                            state.relay_scratch_n = 0;
                         }
-                        publish_relays(state.instance_key, &state.relay_scratch);
+                        let n_feeds = state.relay_scratch_n;
+                        publish_relays(
+                            state.instance_key,
+                            &state.relay_scratch[..n_feeds],
+                        );
 
                         // RELAY mode: group resonance from Relay sum only.
                         power_sum_named_into(
-                            &state.relay_scratch,
+                            &state.relay_scratch[..n_feeds],
                             mask,
                             &mut state.relay_sum_buf,
                         );
-                        let relay_peaks = state.relay_peak_tracker.find_peaks(
+                        state.relay_peak_tracker.detect(
                             &state.relay_sum_buf,
                             &sensitivity,
                             sample_rate,
                         );
-                        let relay_peaks =
-                            suppress_harmonics(&state.relay_sum_buf, relay_peaks);
-                        state.relay_peak_tracker.update(&relay_peaks);
-                        let relay_resonances = attribute_contributors(
-                            &state.relay_peak_tracker.resonance_peaks(&sensitivity),
-                            &state.relay_scratch,
+                        attribute_contributors_into(
+                            state.relay_peak_tracker.res_peaks(),
+                            &state.relay_scratch[..n_feeds],
                             mask,
+                            &mut state.contrib_scratch,
+                            &mut state.contrib_n,
                         );
                         publish_resonance(
                             state.instance_key,
-                            ResonanceLists {
-                                own: Vec::new(),
-                                relay: relay_resonances,
-                            },
+                            &[],
+                            &state.contrib_scratch[..state.contrib_n],
                         );
 
                         state.masking_analyzer.compute_masking(
                             None,
-                            &state.relay_scratch,
+                            &state.relay_scratch[..n_feeds],
                             mask,
                             sensitivity.masking_floor_db,
                             sample_rate,
                             sensitivity.persistence_min,
                         );
+                        state
+                            .masking_analyzer
+                            .fill_peaks_above_floor(sensitivity.masking_floor_db);
                         publish_masking(
                             state.instance_key,
-                            state
-                                .masking_analyzer
-                                .peaks_above_floor(sensitivity.masking_floor_db),
+                            state.masking_analyzer.peaks_above_floor(),
                         );
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.copy_from_slice(&state.masking_analyzer.masking_map);

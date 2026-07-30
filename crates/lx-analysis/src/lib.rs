@@ -16,8 +16,7 @@ pub use lx_shm::{
 // Re-export vault/preset/config types so existing callers don't need to change imports
 pub use lx_vault::{
     export_preset_to_markdown, get_plugin_dir, list_custom_presets, load_config,
-    parse_preset_from_markdown, preset_plugin_name, save_config, PluginConfig, Profile,
-    DEFAULT_TOLERANCES,
+    preset_plugin_name, save_config, PluginConfig, Profile, DEFAULT_TOLERANCES,
 };
 
 pub const SCOPE_BUFFER_LEN: usize = 4096;
@@ -26,9 +25,6 @@ pub const SCOPE_BUFFER_LEN: usize = 4096;
 /// Ring length alone ≈340 ms @ 48 kHz of *slots*; Aurum peak-hold-hops writes so
 /// the visible window is longer without EMA (peaks stay exact within each hop).
 pub const CLIP_WAVE_LEN: usize = 16384;
-
-/// Pixel columns in the clipper mini-display (min/max bucketed from the ring).
-pub const CLIP_WAVE_DISPLAY: usize = 320;
 
 #[derive(Clone, Default)]
 pub struct ClipWaveRing {
@@ -238,8 +234,6 @@ pub struct SharedState {
     pub reset_peak: Arc<AtomicBool>,
     pub reset_analysis: Arc<AtomicBool>,
     pub gain_reduction: Arc<AtomicF32>,
-    /// Compressor sidechain input peak (dBFS, block max) — Meridian footer mini-display.
-    pub comp_peak: Arc<AtomicF32>,
     pub balance: Arc<AtomicF32>,
     /// UI sets true to start AUTO LOUD measurement
     pub auto_loud_trigger: Arc<AtomicBool>,
@@ -372,7 +366,6 @@ impl Default for SharedState {
             reset_peak: Arc::new(AtomicBool::new(false)),
             reset_analysis: Arc::new(AtomicBool::new(false)),
             gain_reduction: Arc::new(AtomicF32::new(0.0)),
-            comp_peak: Arc::new(AtomicF32::new(-90.0)),
             balance: Arc::new(AtomicF32::new(0.0)),
             auto_loud_trigger: Arc::new(AtomicBool::new(false)),
             auto_loud_measuring: Arc::new(AtomicBool::new(false)),
@@ -412,38 +405,21 @@ pub fn relay_slot_active(mask: u32, slot: u8) -> bool {
     mask & (1u32 << slot) != 0
 }
 
-/// Filter relay feeds by the editor's per-slot active mask.
-/// See [`relay_slot_active`] / [`RELAY_MASK_DRIVEN`].
-#[inline]
-pub fn filter_relays_by_mask(
-    mask: u32,
-    feeds: Vec<(u8, String, Vec<f32>)>,
-) -> Vec<(String, Vec<f32>)> {
-    feeds
-        .into_iter()
-        .filter(|(slot, _, _)| relay_slot_active(mask, *slot))
-        .map(|(_, name, spec)| (name, spec))
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn filter_relays_by_mask_respects_bits() {
-        let feeds = vec![
-            (0, "A".into(), vec![]),
-            (2, "B".into(), vec![]),
-        ];
+    fn relay_slot_active_respects_bits() {
         // No driven bit → all pass (editor not driving).
-        let all = filter_relays_by_mask(0, feeds.clone());
-        assert_eq!(all.len(), 2);
-        let one = filter_relays_by_mask((1 << 2) | RELAY_MASK_DRIVEN, feeds.clone());
-        assert_eq!(one.len(), 1);
-        assert_eq!(one[0].0, "B");
+        assert!(relay_slot_active(0, 0));
+        assert!(relay_slot_active(0, 2));
+        // Driven + bit 2 only → slot 2 on, slot 0 off.
+        let mask = (1 << 2) | RELAY_MASK_DRIVEN;
+        assert!(!relay_slot_active(mask, 0));
+        assert!(relay_slot_active(mask, 2));
         // Driven + zero bits → none pass (user disabled every relay).
-        let none = filter_relays_by_mask(RELAY_MASK_DRIVEN, feeds);
-        assert!(none.is_empty());
+        assert!(!relay_slot_active(RELAY_MASK_DRIVEN, 0));
+        assert!(!relay_slot_active(RELAY_MASK_DRIVEN, 2));
     }
 }

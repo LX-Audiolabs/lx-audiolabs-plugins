@@ -2708,10 +2708,7 @@ dependencies = [
  "atomic_float",
  "lx-shm",
  "lx-vault",
- "num-complex",
  "realfft",
- "serde",
- "serde_json",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -2750,7 +2747,6 @@ dependencies = [
  "raw-window-handle",
  "slint",
  "slint-baseview",
- "truce",
  "truce-core",
  "truce-params",
 ]

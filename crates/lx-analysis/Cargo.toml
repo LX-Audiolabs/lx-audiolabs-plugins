@@ -5,17 +5,14 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 
 [features]
-dev-logging = ["tracing-subscriber", "tracing-appender"]
+dev-logging = ["tracing", "tracing-subscriber", "tracing-appender"]
 
 [dependencies]
 atomic_float = "0.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tracing = "0.1"
+tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 tracing-appender = { version = "0.2", optional = true }
 lx-vault = { path = "../lx-vault" }
 lx-shm = { path = "../lx-shm" }
 realfft = "3"
-num-complex = "0.4"
 

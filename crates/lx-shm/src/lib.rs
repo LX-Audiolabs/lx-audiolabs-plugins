@@ -580,22 +580,33 @@ impl RelayHub {
     ///
     /// Each slot is read up to 16 times if the writer interferes (seqlock conflict).
     /// If all retries fail, that slot is silently skipped.
-    pub fn read_active(&self, my_name: &str, now_ms: u64) -> Vec<(u8, String, Vec<f32>)> {
+    pub fn read_active(
+        &self,
+        my_name: &str,
+        now_ms: u64,
+    ) -> Vec<(u8, String, [f32; SPECTRUM_BINS])> {
         let mut out = Vec::new();
-        self.read_active_into(my_name, now_ms, &mut out);
+        let n = self.read_active_into(my_name, now_ms, &mut out);
+        out.truncate(n);
         out
     }
 
-    /// [`read_active`] variant that reuses a caller-owned buffer: as long as the
-    /// live relay set stays the same, no heap allocation happens after the first
-    /// call (names and bin vectors keep their capacity across calls). Intended
-    /// for the audio-thread FFT-hop path; UI/debug code can keep `read_active`.
+    /// [`read_active`] variant that reuses a caller-owned buffer.
+    ///
+    /// Returns the live feed count `n`. Entries beyond `n` are left intact so
+    /// their `String` capacity is not dropped when relays go offline and come
+    /// back (audio-thread FFT hop: no steady-state heap after warmup).
+    /// Callers must use only `&out[..n]`.
+    ///
+    /// Spectrum bins are fixed `[f32; SPECTRUM_BINS]` (no per-hop `Vec` growth).
+    /// Prefer pre-filling `out` with `MAX_SLOTS` slots (`String::with_capacity(MAX_NAME_LEN)`)
+    /// so the first hop never `push`es either.
     pub fn read_active_into(
         &self,
         my_name: &str,
         now_ms: u64,
-        out: &mut Vec<(u8, String, Vec<f32>)>,
-    ) {
+        out: &mut Vec<(u8, String, [f32; SPECTRUM_BINS])>,
+    ) -> usize {
         let mut n = 0;
         for idx in 0..MAX_SLOTS {
             let s = unsafe { &(*self.shared).slots[idx] };
@@ -642,17 +653,19 @@ impl RelayHub {
                 fence(Ordering::Acquire);
                 let seq2 = s.seq.load(Ordering::Acquire);
                 if seq1 == seq2 {
-                    let target = String::from_utf8_lossy(&target_buf[..target_len]);
+                    // Valid UTF-8 from publishers — no Cow alloc on the happy path.
+                    let target = std::str::from_utf8(&target_buf[..target_len]).unwrap_or("");
                     if target.is_empty() || target == my_name {
-                        let name = String::from_utf8_lossy(&name_buf[..name_len]);
+                        let name = std::str::from_utf8(&name_buf[..name_len]).unwrap_or("");
                         if let Some(entry) = out.get_mut(n) {
                             entry.0 = idx as u8;
                             entry.1.clear();
-                            entry.1.push_str(&name);
-                            entry.2.clear();
-                            entry.2.extend_from_slice(&bins);
+                            entry.1.push_str(name);
+                            entry.2 = bins;
                         } else {
-                            out.push((idx as u8, name.into_owned(), bins.to_vec()));
+                            let mut s = String::with_capacity(MAX_NAME_LEN.max(name.len()));
+                            s.push_str(name);
+                            out.push((idx as u8, s, bins));
                         }
                         n += 1;
                     }
@@ -660,7 +673,7 @@ impl RelayHub {
                 }
             }
         }
-        out.truncate(n);
+        n
     }
 
     /// Diagnostic dump of all publisher slots — which are active, their labels,

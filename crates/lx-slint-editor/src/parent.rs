@@ -14,11 +14,11 @@ use truce_core::editor::RawWindowHandle as TruceRaw;
 
 /// A window handle that implements `HasWindowHandle` (rwh 0.6) for any
 /// platform, constructed from truce's `RawWindowHandle` enum.
-pub struct ParentedWindow(RawWindowHandle);
+pub(crate) struct ParentedWindow(RawWindowHandle);
 
 impl ParentedWindow {
     /// Create from truce's platform-specific raw handle.
-    pub fn from_raw(raw: TruceRaw) -> Self {
+    pub(crate) fn from_raw(raw: TruceRaw) -> Self {
         let handle = match raw {
             #[cfg(target_os = "windows")]
             TruceRaw::Win32(hwnd) => {

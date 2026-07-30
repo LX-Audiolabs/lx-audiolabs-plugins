@@ -2,13 +2,13 @@
 //
 // Import from a plugin (path relative to plugin ui/main.slint):
 //   import {
-//       Lx, LxShell, LxShellHeader, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
-//       LxKnob, LxSpectrum, LxGoniometer, LxStereoMeter, ...
+//       Lx, LxShellHeader, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
+//       LxKnob, LxSpectrum, LxGoniometer, LxLedPeakMeter, ...
 //   } from "../../../crates/lx-ui-slint/ui/lx.slint";
 
 import { Lx } from "lx-theme.slint";
 import {
-    LxTabs, LxPanel, LxSection, LxHeader, LxMonitorStrip, LxToggleBtn, LxButton, LxDangerBtn,
+    LxTabs, LxPanel, LxSection, LxToggleBtn, LxButton, LxDangerBtn,
     LxSelectTrigger,
 } from "lx-chrome.slint";
 import {
@@ -19,21 +19,19 @@ import {
     LxSlider, LxEqBandColumn, LxBandColumn,
 } from "lx-controls.slint";
 import {
-    LxMeterBar, LxGrMeter, LxCorrelation, LxStereoMeter, LxLevelPanel,
-    LxLedColumn, LxLedPeakMeter,
+    LxMeterBar, LxCorrelation, LxLedColumn, LxLedPeakMeter,
 } from "lx-meters.slint";
 import {
     LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
 } from "lx-viz.slint";
 export {
     Lx,
-    LxTabs, LxPanel, LxSection, LxHeader, LxMonitorStrip, LxToggleBtn, LxButton, LxDangerBtn,
+    LxTabs, LxPanel, LxSection, LxToggleBtn, LxButton, LxDangerBtn,
     LxSelectTrigger,
     LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
     LxKnob, LxLineEdit, LxParamField, LxCycleBtn, LxSegmentedButton,
     LxSlider, LxEqBandColumn, LxBandColumn,
-    LxMeterBar, LxGrMeter, LxCorrelation, LxStereoMeter, LxLevelPanel,
-    LxLedColumn, LxLedPeakMeter,
+    LxMeterBar, LxCorrelation, LxLedColumn, LxLedPeakMeter,
     LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
 }
 

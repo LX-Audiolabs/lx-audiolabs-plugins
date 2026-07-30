@@ -25,9 +25,6 @@ truce-vst3      = { path = "../truce-dev/crates/truce-vst3" }
 truce-lv2       = { path = "../truce-dev/crates/truce-lv2" }
 truce-loader    = { path = "../truce-dev/crates/truce-loader" }
 truce-test      = { path = "../truce-dev/crates/truce-test" }
-truce-slint     = { path = "../truce-dev/crates/truce-slint" }
-truce-slint-build = { path = "../truce-dev/crates/truce-slint/build" }
-# keep for @truce widget materialize at Slint 1.17.1 (match truce-slint)
 lx-slint-build  = { path = "crates/lx-slint-build" }
 lx-slint-editor = { path = "crates/lx-slint-editor" }
 # Our private fork: baseview 0.3, slint 1.17.1, 3 backends
@@ -35,7 +32,7 @@ lx-slint-editor = { path = "crates/lx-slint-editor" }
 slint-baseview  = { path = "../slint-baseview", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", branch = "next" }
 clap-sys        = "0.5"
-# MUST match truce-slint pin
+# Pin must match slint-baseview / lx-slint-editor
 slint           = { version = "=1.17.1", default-features = false, features = [
     "compat-1-2",
     "renderer-software",

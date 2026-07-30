@@ -1,0 +1,26 @@
+# LX Audiolabs — config for agal (agentic-audiolab).
+# Output: audiolabs/ (gitignored). Legacy: audio-graph.toml still works if this file is removed.
+
+output_dir = "audiolabs"
+
+ui_crates = ["lx-ui-slint"]
+ipc_hubs = ["lx-shm", "lx-analysis"]
+
+[migrations.truce-slint]
+from = "truce-slint"
+to = "lx-slint-editor"
+
+[rules]
+plugin_target_editor = "Plugins should use lx-slint-editor, not truce-slint."
+crate_vs_plugin = "Reusable logic belongs in crates/, product logic belongs in plugins/."
+
+# Intentional product / DSP-crate noise — keep graph health green without losing rules.
+[[suppress]]
+code = "large_param_surface"
+node = "aurum-slint"
+reason = "Aurum product surface (~70 params) is intentional"
+
+[[suppress]]
+code = "dsp_process_methods"
+node = "lx-dsp"
+reason = "Shared DSP units named process — not plugin hooks"

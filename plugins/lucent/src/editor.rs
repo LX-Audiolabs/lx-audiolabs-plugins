@@ -23,8 +23,9 @@ use truce_core::editor::{Editor, PluginContextReadF32};
 
 use crate::relay_state::RelayState;
 use crate::{
-    LucentParams, LucentParamsParamId as P, editor_ensure_consumer, editor_publish_consumer_name,
-    read_masking, read_resonance, RelaySlot, MAX_RELAY_SLOTS,
+    editor_ensure_consumer, editor_publish_consumer_name, read_masking, read_resonance,
+    AttributedPeak, LucentParams, LucentParamsParamId as P, RelaySlot, CONTRIB_NONE, CONTRIB_OWN,
+    MAX_RELAY_SLOTS,
 };
 
 slint::include_modules!();
@@ -310,20 +311,33 @@ fn max_hold_score(map: &mut HashMap<usize, f32>, bin: usize, score: f32) {
         .or_insert(score);
 }
 
-fn max_hold_named(
-    map: &mut HashMap<usize, (f32, Vec<String>)>,
-    bin: usize,
-    score: f32,
-    names: &[String],
-) {
-    map.entry(bin)
-        .and_modify(|(s, n)| {
-            if score > *s {
-                *s = score;
-                *n = names.to_vec();
+fn max_hold_attributed(map: &mut HashMap<usize, AttributedPeak>, peak: AttributedPeak) {
+    map.entry(peak.bin)
+        .and_modify(|p| {
+            if peak.score > p.score {
+                *p = peak;
             }
         })
-        .or_insert((score, names.to_vec()));
+        .or_insert(peak);
+}
+
+/// Resolve audio-thread contributor ids → display names (UI thread only).
+fn resolve_contrib_names(ids: &[u8], relays: &[crate::relay_state::RelayUi]) -> Vec<String> {
+    let mut out = Vec::with_capacity(ids.len());
+    for &id in ids {
+        match id {
+            CONTRIB_NONE => {}
+            CONTRIB_OWN => out.push(String::from("Own")),
+            slot => {
+                if let Some(r) = relays.iter().find(|r| r.slot == slot) {
+                    out.push(r.name.clone());
+                } else {
+                    out.push(format!("R{slot}"));
+                }
+            }
+        }
+    }
+    out
 }
 
 // ─── Analyzer text panels (dev editor.rs ports) ─────────────────────────────
@@ -331,7 +345,8 @@ fn max_hold_named(
 /// Top-5 own + top-5 group resonance lines.
 fn format_resonance_text(
     acc_own: &HashMap<usize, f32>,
-    acc_relay: &HashMap<usize, (f32, Vec<String>)>,
+    acc_relay: &HashMap<usize, AttributedPeak>,
+    relays: &[crate::relay_state::RelayUi],
     sample_rate: f32,
 ) -> String {
     if acc_own.is_empty() && acc_relay.is_empty() {
@@ -342,24 +357,23 @@ fn format_resonance_text(
     let mut own: Vec<(usize, f32)> = acc_own.iter().map(|(&bin, &score)| (bin, score)).collect();
     own.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut relay: Vec<(usize, f32, Vec<String>)> = acc_relay
-        .iter()
-        .map(|(&bin, (score, names))| (bin, *score, names.clone()))
-        .collect();
-    relay.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let mut relay: Vec<AttributedPeak> = acc_relay.values().copied().collect();
+    relay.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut lines = Vec::new();
     for (bin, score) in own.iter().take(5) {
         let freq = *bin as f32 * sample_rate / fft_size;
         lines.push(format!("Own: {freq:.0} Hz {score:.1}"));
     }
-    for (bin, score, contributors) in relay.iter().take(5) {
-        let freq = *bin as f32 * sample_rate / fft_size;
+    for p in relay.iter().take(5) {
+        let freq = p.bin as f32 * sample_rate / fft_size;
+        let contributors = resolve_contrib_names(p.ids_slice(), relays);
         if contributors.is_empty() {
-            lines.push(format!("Group: {freq:.0} Hz {score:.1}"));
+            lines.push(format!("Group: {freq:.0} Hz {score:.1}", score = p.score));
         } else {
             lines.push(format!(
-                "Group: {freq:.0} Hz {score:.1} ({})",
+                "Group: {freq:.0} Hz {:.1} ({})",
+                p.score,
                 contributors.join(", ")
             ));
         }
@@ -370,7 +384,8 @@ fn format_resonance_text(
 /// Top-5 masking collision lines.
 fn format_masking_text(
     mode: usize,
-    acc: &HashMap<usize, (f32, Vec<String>)>,
+    acc: &HashMap<usize, AttributedPeak>,
+    relays: &[crate::relay_state::RelayUi],
     relays_empty: bool,
     sample_rate: f32,
 ) -> String {
@@ -381,20 +396,22 @@ fn format_masking_text(
         return "No masking detected".to_string();
     }
     let fft_size = (SPECTRUM_BINS * 2) as f32;
-    let mut peaks: Vec<(usize, f32, Vec<String>)> = acc
-        .iter()
-        .map(|(&bin, (db, names))| (bin, *db, names.clone()))
-        .collect();
-    peaks.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let mut peaks: Vec<AttributedPeak> = acc.values().copied().collect();
+    peaks.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     peaks.truncate(5);
     peaks
         .iter()
-        .map(|(bin, db, contributors)| {
-            let freq = *bin as f32 * sample_rate / fft_size;
+        .map(|p| {
+            let freq = p.bin as f32 * sample_rate / fft_size;
+            let contributors = resolve_contrib_names(p.ids_slice(), relays);
             if contributors.is_empty() {
-                format!("{freq:.0} Hz  {db:.1} dB")
+                format!("{freq:.0} Hz  {:.1} dB", p.score)
             } else {
-                format!("{freq:.0} Hz  {db:.1} dB ({})", contributors.join("-"))
+                format!(
+                    "{freq:.0} Hz  {:.1} dB ({})",
+                    p.score,
+                    contributors.join("-")
+                )
             }
         })
         .collect::<Vec<_>>()
@@ -424,8 +441,9 @@ fn snap_filename(vault_path: &str) -> String {
 fn snap_markdown(
     instance_name: &str,
     res_own: &[(usize, f32)],
-    res_relay: &[(usize, f32, Vec<String>)],
-    masking: &[(usize, f32, Vec<String>)],
+    res_relay: &[AttributedPeak],
+    masking: &[AttributedPeak],
+    relays: &[crate::relay_state::RelayUi],
     sr: f32,
     sensitivity_pct: f32,
     mode: usize,
@@ -456,10 +474,12 @@ fn snap_markdown(
             let hz = bin as f32 * bin_hz;
             rows.push(format!("| Own ({name}) | {hz:.0} | {score:.2} | |"));
         }
-        for (bin, score, names) in res_relay {
-            let hz = *bin as f32 * bin_hz;
+        for p in res_relay {
+            let hz = p.bin as f32 * bin_hz;
+            let names = resolve_contrib_names(p.ids_slice(), relays);
             rows.push(format!(
-                "| Group | {hz:.0} | {score:.2} | {} |",
+                "| Group | {hz:.0} | {:.2} | {} |",
+                p.score,
                 names.join(", ")
             ));
         }
@@ -479,9 +499,10 @@ fn snap_markdown(
     } else {
         let rows = masking
             .iter()
-            .map(|(bin, db, names)| {
-                let hz = *bin as f32 * bin_hz;
-                format!("| {hz:.0} | {db:.1} | {} |", names.join(" / "))
+            .map(|p| {
+                let hz = p.bin as f32 * bin_hz;
+                let names = resolve_contrib_names(p.ids_slice(), relays);
+                format!("| {hz:.0} | {:.1} | {} |", p.score, names.join(" / "))
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -537,12 +558,13 @@ struct SyncCache {
     res_markers_shown: bool,
     mask_shown: bool,
     // Display (500 ms window) + session (SNAP) max-hold accumulators.
+    // Attributed peaks keep SHM-slot ids; names resolved at format/SNAP time.
     display_own: HashMap<usize, f32>,
-    display_relay: HashMap<usize, (f32, Vec<String>)>,
-    display_mask: HashMap<usize, (f32, Vec<String>)>,
+    display_relay: HashMap<usize, AttributedPeak>,
+    display_mask: HashMap<usize, AttributedPeak>,
     snap_res_own: HashMap<usize, f32>,
-    snap_res_relay: HashMap<usize, (f32, Vec<String>)>,
-    snap_mask: HashMap<usize, (f32, Vec<String>)>,
+    snap_res_relay: HashMap<usize, AttributedPeak>,
+    snap_mask: HashMap<usize, AttributedPeak>,
     display_window_start: Instant,
     snap_blink: u32,
     snap_label: String,
@@ -846,15 +868,13 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     let feeds = relay_hub()
                         .map(|hub| hub.read_active(&my_name, now_ms))
                         .unwrap_or_default();
-                    let mut slots: Vec<RelaySlot> = Vec::with_capacity(feeds.len().min(MAX_RELAY_SLOTS));
+                    let mut slots: Vec<RelaySlot> =
+                        Vec::with_capacity(feeds.len().min(MAX_RELAY_SLOTS));
                     for (s, name, bins) in feeds.into_iter().take(MAX_RELAY_SLOTS) {
-                        let mut b = [-90.0f32; SPECTRUM_BINS];
-                        let n = bins.len().min(SPECTRUM_BINS);
-                        b[..n].copy_from_slice(&bins[..n]);
                         slots.push(RelaySlot {
                             slot: s,
                             name,
-                            bins: b,
+                            bins,
                         });
                     }
                     cache.relay_state.sync(&slots);
@@ -950,10 +970,10 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                             a: (score / 20.0).clamp(0.2, 0.9),
                         });
                     }
-                    for (bin, score, _) in &lists.relay {
+                    for p in &lists.relay {
                         markers.push(ResMarker {
-                            cmds: SharedString::from(res_marker_cmds(*bin, sr)),
-                            a: (*score / 20.0).clamp(0.2, 0.9),
+                            cmds: SharedString::from(res_marker_cmds(p.bin, sr)),
+                            a: (p.score / 20.0).clamp(0.2, 0.9),
                         });
                     }
                 }
@@ -988,18 +1008,24 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     max_hold_score(&mut cache.display_own, bin, score);
                     max_hold_score(&mut cache.snap_res_own, bin, score);
                 }
-                for (bin, score, names) in &lists.relay {
-                    max_hold_named(&mut cache.display_relay, *bin, *score, names);
-                    max_hold_named(&mut cache.snap_res_relay, *bin, *score, names);
+                for &p in &lists.relay {
+                    max_hold_attributed(&mut cache.display_relay, p);
+                    max_hold_attributed(&mut cache.snap_res_relay, p);
                 }
-                for (bin, db, names) in &masking_top {
-                    max_hold_named(&mut cache.display_mask, *bin, *db, names);
-                    max_hold_named(&mut cache.snap_mask, *bin, *db, names);
+                for &p in &masking_top {
+                    max_hold_attributed(&mut cache.display_mask, p);
+                    max_hold_attributed(&mut cache.snap_mask, p);
                 }
 
                 if cache.display_window_start.elapsed().as_millis() >= DISPLAY_HOLD_MS {
+                    let relays = &cache.relay_state.relays;
                     let rt = if res_active {
-                        format_resonance_text(&cache.display_own, &cache.display_relay, sr)
+                        format_resonance_text(
+                            &cache.display_own,
+                            &cache.display_relay,
+                            relays,
+                            sr,
+                        )
                     } else {
                         "Off".to_string()
                     };
@@ -1010,7 +1036,8 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                         format_masking_text(
                             mode,
                             &cache.display_mask,
-                            cache.relay_state.relays.is_empty(),
+                            relays,
+                            relays.is_empty(),
                             sr,
                         )
                     };
@@ -1033,20 +1060,20 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                             .collect();
                         res_own
                             .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                        let mut res_relay: Vec<(usize, f32, Vec<String>)> = cache
-                            .snap_res_relay
-                            .iter()
-                            .map(|(&bin, (score, names))| (bin, *score, names.clone()))
-                            .collect();
-                        res_relay
-                            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                        let mut mask_v: Vec<(usize, f32, Vec<String>)> = cache
-                            .snap_mask
-                            .iter()
-                            .map(|(&bin, (db, names))| (bin, *db, names.clone()))
-                            .collect();
-                        mask_v
-                            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                        let mut res_relay: Vec<AttributedPeak> =
+                            cache.snap_res_relay.values().copied().collect();
+                        res_relay.sort_by(|a, b| {
+                            b.score
+                                .partial_cmp(&a.score)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                        let mut mask_v: Vec<AttributedPeak> =
+                            cache.snap_mask.values().copied().collect();
+                        mask_v.sort_by(|a, b| {
+                            b.score
+                                .partial_cmp(&a.score)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        });
                         let instance_name = params_sync
                             .name
                             .try_read()
@@ -1057,6 +1084,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                             &res_own,
                             &res_relay,
                             &mask_v,
+                            &cache.relay_state.relays,
                             sr,
                             plain,
                             mode,
