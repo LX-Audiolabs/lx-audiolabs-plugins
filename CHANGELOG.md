@@ -7,12 +7,13 @@
 ## Alle Plugins
 
 - **Neue UI-Engine:** Slint 1.17.1 mit `lx-slint-editor` statt Vizia.
-  - Drei Render-Backends: FemtoVG/OpenGL (Standard), Skia (GPU), Software.
-  - Läuft auch auf Systemen ohne GPU — Software-Renderer inklusive Screenshot-Funktion.
+  - Standard-Backend jetzt FemtoVG/OpenGL — Plugins nur noch halb so groß wie mit Skia.
+  - Alternativ: Skia (GPU) oder Software-Renderer inklusive Screenshot-Funktion.
 - **baseview 0.3 direkt von crates.io** — kein eigener Fork mehr nötig.
 - **Soft-3D Design** mit software-sicheren Knöpfen und konsistentem Look.
 - **Clipboard-Support:** Ctrl+V für Vault-Pfade in allen Plugins.
 - **Peak-dB-Anzeige** jetzt per Klick auf den Wert zurücksetzbar.
+- **Canvas-Größe stabil bei DPI-Änderung** — kein Versatz mehr in Bitwig.
 - **Linux CLAP:** Offizielle Linux-Builds via Zig-Cross-Compilation.
 
 ---
