@@ -26,7 +26,7 @@ export component LucentUi inherits Window {
     min-width: 940px;
     min-height: 500px;
 
-    in property <string> version: "1.0.0";
+    in property <string> version: "1.1.0";
 
     // Identity
     in-out property <string> display_name: "";
@@ -199,14 +199,27 @@ export component LucentUi inherits Window {
 
                 // Spectrum pit: own curve + fill, relay curves, masking bars,
                 // resonance markers (all path-driven from Rust).
+                // Hover: log-axis read cursor (vertical bar + Hz/kHz) — pure UI,
+                // same 20 Hz…20 kHz map as Rust log_x.
                 LxSection {
                     show-title: false;
                     vertical-stretch: 1;
 
-                    Rectangle {
+                    pit := Rectangle {
                         background: Lx.void;
                         border-radius: Lx.radius-sm;
                         clip: true;
+
+                        // Log-x invert: f = 20 * (20000/20)^t = 20 * 1000^t
+                        property <float> hover-t: pit_ta.has-hover && pit.width > 0px
+                            ? (pit_ta.mouse-x / pit.width).clamp(0.0, 1.0)
+                            : 0.0;
+                        property <float> hover-hz: 20.0 * Math.pow(1000.0, hover-t);
+                        property <string> hover-freq-text: hover-hz < 1000.0
+                            ? Math.round(hover-hz) + " Hz"
+                            : (hover-hz < 10000.0
+                                ? (Math.floor(hover-hz / 100.0) / 10.0) + " kHz"
+                                : Math.round(hover-hz / 1000.0) + " kHz");
 
                         LxSpectrum {
                             width: 100%;
@@ -273,9 +286,47 @@ export component LucentUi inherits Window {
                             fill: Lx.amber.with-alpha(m.a);
                         }
 
+                        // Full-pit hover hit target (under SMOOTH so toggle stays clickable).
+                        pit_ta := TouchArea {
+                            width: 100%;
+                            height: 100%;
+                            mouse-cursor: MouseCursor.crosshair;
+                        }
+
+                        if pit_ta.has-hover: Rectangle {
+                            x: pit_ta.mouse-x;
+                            y: 0;
+                            width: 1px;
+                            height: 100%;
+                            background: #ffffff88;
+                        }
+
+                        // Freq readout: top of bar, flip left near right edge.
+                        if pit_ta.has-hover: Rectangle {
+                            x: (pit_ta.mouse-x + 64px > pit.width)
+                                ? pit_ta.mouse-x - 58px
+                                : pit_ta.mouse-x + 6px;
+                            y: 4px;
+                            width: 52px;
+                            height: 16px;
+                            background: #000000aa;
+                            border-radius: 2px;
+                            Text {
+                                width: 100%;
+                                height: 100%;
+                                text: pit.hover-freq-text;
+                                font-size: Lx.font-xs;
+                                font-weight: 600;
+                                color: Lx.text;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
                         // Display smoothing toggle — sits left of the dB labels.
                         // Explicit width: positioned (no layout), min-width 36px
                         // would clip the 6-char label. Default OFF (Meridian ON).
+                        // Drawn last → above hover TA (still clickable).
                         LxToggleBtn {
                             x: parent.width - 100px;
                             y: 4px;

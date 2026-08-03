@@ -39,15 +39,18 @@
 - Vault-Pfad mit Clipboard-Paste.
 - TextInput-Fokus im Vault-Overlay korrigiert.
 
-## Lucent 1.0.0 (noch keine BETA)
+## Lucent 1.1.0 (noch keine BETA)
 
-- Volle Feature-Parität zur Vizia-Version.
+- **FFT-Hover-Cursor:** vertikaler Balken + Hz/kHz an der Maus (log 20 Hz…20 kHz).
+- Resonance/Masking-Panels stabil: gleiche Breite, kleine ON/OFF, kein Layout-Jump.
+- Volle Feature-Parität zur Vizia-Version (1.0.0-Linie).
 - **SPAN-äquivalente Spektrum-Anzeige:** Smooth-Toggle, Range −78 dB.
 - Session-SNAP für max-hold Resonance/Masking.
 - RT-Stack-Port aus dev: SHM-into-APIs, Masking, Resolve-Cache.
 
-## Lucent Relay 1.0.0 (noch keine BETA)
+## Lucent Relay 1.1.0 (noch keine BETA)
 
+- SemVer-Align mit Lucent Slint-Edition (1.0.0 war noch Vizia-Linie).
 - All-off-Maske korrigiert.
 - Feature-Parität zur Vizia-Version.
 
