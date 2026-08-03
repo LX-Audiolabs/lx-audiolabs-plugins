@@ -14,7 +14,7 @@ truce-params = { path = "../../../truce-dev/crates/truce-params" }
 # raw-window-handle 0.6 bridge (lx-slint-baseview uses rwh 0.6)
 raw-window-handle = "0.6"
 
-# Our lx-slint-baseview fork (baseview 0.3, slint 1.17.1)
+# lx-slint-baseview (public git, workspace dep; baseview 0.3 + slint 1.17.1)
 # Default: FemtoVG OpenGL (stable in DAW hosts on Windows; easier cross than Skia).
 # A/B later: backend-skia | backend-wgpu when host/GPU path is ready.
 lx-slint-baseview = { workspace = true, features = ["backend-femtovg"] }

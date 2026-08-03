@@ -12,7 +12,7 @@ import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.s
 //   live fill     → Lx.amber  (Vizia rgb 1.0, 0.45, 0.1)
 //   target band   → white wash + white center line
 //   listen range  → soft red wash (min…max excursion)
-//   listen tol    → violet #7F00FF corridor around listen mean
+//   listen tol    → dark red corridor around listen mean (same family)
 //   listen line   → stronger red
 //
 // Norm 0..1 = display window −20…+22 dB around band mean (editor).
@@ -86,12 +86,12 @@ component BandBar inherits Rectangle {
         height: parent.height * max(root.ls-hi - root.ls-lo, 0.02);
         background: #ff4d4d1f;
     }
-    // Listen tolerance corridor — brand-adjacent violet #7F00FF (wash alpha ~22%)
+    // Listen tolerance corridor — dark red (Lx.crimson-lo), wash alpha ~22%
     if root.show-listen: Rectangle {
         width: 100%;
         y: parent.height * (1.0 - root.l-hi);
         height: parent.height * max(root.l-hi - root.l-lo, 0.02);
-        background: #7F00FF38;
+        background: #a0282838;
     }
     // Listen mean line (red ~70%)
     if root.show-listen: Rectangle {

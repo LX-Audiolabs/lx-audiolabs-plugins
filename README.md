@@ -58,6 +58,40 @@ import {
 # Workspace check
 cargo check --workspace
 
-# Single plugin CLAP install (release)
+# Single plugin CLAP install (release, Windows host)
 cargo truce install --clap -p meridian
+
+# Package release ZIPs → dist/
+.\build-local-zip.ps1                         # all plugins, Windows
+.\build-local-zip.ps1 aether,equilibrium      # subset
+.\build-local-zip.ps1 -Platform linux         # cross-compile Linux CLAPs
 ```
+
+### Linux CLAPs (from Windows)
+
+Cross-compile via Zig (already wired in `.cargo/`):
+
+```powershell
+winget install zig.zig --source winget
+cargo install cargo-zigbuild
+rustup target add x86_64-unknown-linux-gnu
+
+# one plugin
+cargo truce build --clap -p aether --target x86_64-unknown-linux-gnu
+# → target\bundles\x86_64-unknown-linux-gnu\Aether.clap
+
+# or all + zip
+.\build-local-zip.ps1 -Platform linux
+# → dist\*-vX.Y.Z-linux.zip
+```
+
+Native Linux CI: GitHub Actions → **Build Linux CLAPs** (`workflow_dispatch`).
+
+### Dependencies
+
+| Dep | Source |
+|-----|--------|
+| truce | path `../truce-dev` (local) / clone for CI |
+| lx-slint-baseview | public git [`lxndrbe/lx-slint-baseview`](https://github.com/lxndrbe/lx-slint-baseview) |
+
+Local baseview edits: uncomment the `[patch]` block at the bottom of root `Cargo.toml`.

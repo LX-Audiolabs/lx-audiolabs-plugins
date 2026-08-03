@@ -1,0 +1,138 @@
+# Native Linux x86_64 CLAP builds (workflow_dispatch).
+# truce is a path dep → clone LX-Audiolabs/truce as sibling ../truce-dev.
+# lx-slint-baseview comes from public git (Cargo.toml).
+
+name: Build Linux CLAPs
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugins:
+        description: "Comma-separated crates (empty = all)"
+        required: false
+        default: ""
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    name: Linux ${{ matrix.crate }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crate: aether
+            clap: "Aether"
+            version_toml: plugins/aether/Cargo.toml
+          - crate: aurum-slint
+            clap: "Aurum (Slint)"
+            version_toml: plugins/aurum-slint/Cargo.toml
+          - crate: equilibrium
+            clap: "Equilibrium"
+            version_toml: plugins/equilibrium/Cargo.toml
+          - crate: meridian
+            clap: "Meridian"
+            version_toml: plugins/meridian/Cargo.toml
+          - crate: lucent
+            clap: "Lucent"
+            version_toml: plugins/lucent/Cargo.toml
+            extra_crate: lucent-relay
+            extra_clap: "Lucent Relay"
+          # lucent-relay is produced with lucent (above)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout truce (path dep ../truce-dev)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/truce.git ../truce-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-${{ matrix.crate }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y || sudo apt-get update -y || true
+          sudo apt-get install -y \
+            pkg-config \
+            libfreetype6-dev \
+            libfontconfig1-dev \
+            libgles2-mesa-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxrandr-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libegl-dev \
+            libgl-dev
+
+      - name: Filter matrix by input
+        id: filter
+        run: |
+          WANT="${{ github.event.inputs.plugins }}"
+          CRATE="${{ matrix.crate }}"
+          if [ -z "$WANT" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # comma list, trim spaces
+          echo "$WANT" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -qx "$CRATE" \
+            && echo "run=true" >> "$GITHUB_OUTPUT" \
+            || echo "run=false" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        if: steps.filter.outputs.run == 'true'
+        run: |
+          PKGS=(--package "${{ matrix.crate }}")
+          if [ -n "${{ matrix.extra_crate }}" ]; then
+            PKGS+=(--package "${{ matrix.extra_crate }}")
+          fi
+          cargo build --release "${PKGS[@]}"
+
+      - name: Read version
+        if: steps.filter.outputs.run == 'true'
+        id: version
+        run: |
+          echo "version=$(grep '^version' "${{ matrix.version_toml }}" | head -1 | sed 's/.*"\(.*\)"/\1/')" >> "$GITHUB_OUTPUT"
+
+      - name: Bundle CLAP
+        if: steps.filter.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf target/bundled
+          mkdir -p target/bundled
+          # cdylib: lib{crate with - → _}.so
+          so_name() { echo "lib$(echo "$1" | tr '-' '_').so"; }
+          cp "target/release/$(so_name "${{ matrix.crate }}")" \
+             "target/bundled/${{ matrix.clap }}.clap"
+          echo "✓ ${{ matrix.clap }}.clap"
+          if [ -n "${{ matrix.extra_crate }}" ]; then
+            cp "target/release/$(so_name "${{ matrix.extra_crate }}")" \
+               "target/bundled/${{ matrix.extra_clap }}.clap"
+            echo "✓ ${{ matrix.extra_clap }}.clap"
+          fi
+
+      - name: Zip
+        if: steps.filter.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          VER="${{ steps.version.outputs.version }}"
+          CRATE="${{ matrix.crate }}"
+          mkdir -p dist
+          # download-friendly zip base (crate name)
+          zip -j "dist/${CRATE}-v${VER}-linux.zip" target/bundled/*.clap
+          ls -la dist/
+
+      - uses: actions/upload-artifact@v4
+        if: steps.filter.outputs.run == 'true'
+        with:
+          name: ${{ matrix.crate }}-v${{ steps.version.outputs.version }}-linux
+          path: dist/*.zip
+          if-no-files-found: error
