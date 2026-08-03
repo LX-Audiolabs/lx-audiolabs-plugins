@@ -289,7 +289,9 @@ export component LucentUi inherits Window {
                 }
 
                 // Analyzer panels: resonance / masking / sensitivity.
-                // Height tuned for top-5 lines (150 − 20).
+                // Res+Mask: equal stretch (min-width 0 + same preferred base) so
+                // live top-5 lines do not steal width / jump the layout.
+                // Toggle sits in title row (small); body text clips in fixed height.
                 HorizontalLayout {
                     spacing: Lx.gap-sm;
                     vertical-stretch: 0;
@@ -297,37 +299,59 @@ export component LucentUi inherits Window {
                     LxSection {
                         show-title: false;
                         horizontal-stretch: 1;
+                        min-width: 0px;
+                        preferred-width: 0px;
                         vertical-stretch: 0;
                         min-height: 130px;
                         preferred-height: 130px;
+                        max-height: 130px;
+                        clip: true;
 
-                        HorizontalLayout {
-                            spacing: Lx.gap-sm;
-                            vertical-stretch: 1;
-                            VerticalLayout {
-                                spacing: 2px;
-                                horizontal-stretch: 1;
-                                vertical-stretch: 1;
+                        VerticalLayout {
+                            spacing: 4px;
+                            min-width: 0px;
+
+                            HorizontalLayout {
+                                spacing: Lx.gap-sm;
+                                vertical-stretch: 0;
                                 Text {
                                     text: "RESONANCE";
                                     font-size: Lx.font-xs;
                                     font-weight: 700;
                                     color: Lx.amber;
-                                    vertical-stretch: 0;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                    min-width: 0px;
+                                    overflow: elide;
                                 }
+                                LxToggleBtn {
+                                    small: true;
+                                    width: 36px;
+                                    horizontal-stretch: 0;
+                                    label: root.resonance_active ? "ON" : "OFF";
+                                    active <=> root.resonance_active;
+                                    toggled(v) => { root.resonance_active_changed(v); }
+                                }
+                            }
+                            // Fixed body: content swaps every ~500 ms — no reflow.
+                            Rectangle {
+                                vertical-stretch: 1;
+                                min-width: 0px;
+                                horizontal-stretch: 1;
+                                clip: true;
+                                background: transparent;
                                 Text {
+                                    x: 0;
+                                    y: 0;
+                                    width: parent.width;
+                                    height: parent.height;
                                     text: root.resonance_text;
                                     font-size: Lx.font-sm;
                                     color: Lx.text-secondary;
                                     wrap: word-wrap;
-                                    vertical-stretch: 1;
+                                    overflow: elide;
                                     vertical-alignment: top;
                                 }
-                            }
-                            LxToggleBtn {
-                                label: root.resonance_active ? "ON" : "OFF";
-                                active <=> root.resonance_active;
-                                toggled(v) => { root.resonance_active_changed(v); }
                             }
                         }
                     }
@@ -335,45 +359,70 @@ export component LucentUi inherits Window {
                     LxSection {
                         show-title: false;
                         horizontal-stretch: 1;
+                        min-width: 0px;
+                        preferred-width: 0px;
                         vertical-stretch: 0;
                         min-height: 130px;
                         preferred-height: 130px;
+                        max-height: 130px;
+                        clip: true;
 
-                        HorizontalLayout {
-                            spacing: Lx.gap-sm;
-                            vertical-stretch: 1;
-                            VerticalLayout {
-                                spacing: 2px;
-                                horizontal-stretch: 1;
-                                vertical-stretch: 1;
+                        VerticalLayout {
+                            spacing: 4px;
+                            min-width: 0px;
+
+                            HorizontalLayout {
+                                spacing: Lx.gap-sm;
+                                vertical-stretch: 0;
                                 Text {
                                     text: "MASKING";
                                     font-size: Lx.font-xs;
                                     font-weight: 700;
                                     color: Lx.crimson;
-                                    vertical-stretch: 0;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                    min-width: 0px;
+                                    overflow: elide;
                                 }
+                                // Own: no masking (Vizia grey OFF). Param kept for Both/Relay.
+                                // Always one small toggle so header row width stays stable.
+                                if root.analyze_mode < 0.5: LxToggleBtn {
+                                    small: true;
+                                    width: 36px;
+                                    horizontal-stretch: 0;
+                                    danger: true;
+                                    enabled: false;
+                                    label: "OFF";
+                                    active: false;
+                                }
+                                if root.analyze_mode >= 0.5: LxToggleBtn {
+                                    small: true;
+                                    width: 36px;
+                                    horizontal-stretch: 0;
+                                    danger: true;
+                                    label: root.masking_active ? "ON" : "OFF";
+                                    active <=> root.masking_active;
+                                    toggled(v) => { root.masking_active_changed(v); }
+                                }
+                            }
+                            Rectangle {
+                                vertical-stretch: 1;
+                                min-width: 0px;
+                                horizontal-stretch: 1;
+                                clip: true;
+                                background: transparent;
                                 Text {
+                                    x: 0;
+                                    y: 0;
+                                    width: parent.width;
+                                    height: parent.height;
                                     text: root.masking_text;
                                     font-size: Lx.font-sm;
                                     color: Lx.text-secondary;
                                     wrap: word-wrap;
-                                    vertical-stretch: 1;
+                                    overflow: elide;
                                     vertical-alignment: top;
                                 }
-                            }
-                            // Own: no masking (Vizia grey OFF). Param kept for Both/Relay.
-                            if root.analyze_mode < 0.5: LxToggleBtn {
-                                danger: true;
-                                enabled: false;
-                                label: "OFF";
-                                active: false;
-                            }
-                            if root.analyze_mode >= 0.5: LxToggleBtn {
-                                danger: true;
-                                label: root.masking_active ? "ON" : "OFF";
-                                active <=> root.masking_active;
-                                toggled(v) => { root.masking_active_changed(v); }
                             }
                         }
                     }
@@ -384,6 +433,7 @@ export component LucentUi inherits Window {
                         vertical-stretch: 0;
                         min-height: 130px;
                         preferred-height: 130px;
+                        max-height: 130px;
 
                         // Cross-axis center — LxSection body is left-pin VerticalLayout.
                         HorizontalLayout {
