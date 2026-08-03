@@ -2731,6 +2731,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lx-slint-baseview"
+version = "0.1.0"
+dependencies = [
+ "baseview",
+ "copypasta",
+ "keyboard-types 0.8.3",
+ "raw-window-handle",
+ "slint",
+]
+
+[[package]]
 name = "lx-slint-build"
 version = "0.1.0"
 dependencies = [
@@ -2744,10 +2755,10 @@ version = "0.1.0"
 dependencies = [
  "baseview",
  "log",
+ "lx-slint-baseview",
  "paste",
  "raw-window-handle",
  "slint",
- "slint-baseview",
  "truce-core",
  "truce-params",
 ]
@@ -4581,17 +4592,6 @@ dependencies = [
  "slint-macros",
  "unicode-segmentation",
  "vtable",
-]
-
-[[package]]
-name = "slint-baseview"
-version = "0.1.0"
-dependencies = [
- "baseview",
- "copypasta",
- "keyboard-types 0.8.3",
- "raw-window-handle",
- "slint",
 ]
 
 [[package]]

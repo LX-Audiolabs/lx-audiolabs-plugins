@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "truce build (debug)",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["truce", "install", "--clap", "-p", "${input:pluginName}"],
+            "group": "build",
+            "problemMatcher": "$rustc"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "pluginName",
+            "type": "pickString",
+            "description": "Plugin to build",
+            "options": ["aether", "aurum-slint", "equilibrium", "lucent", "lucent-relay", "meridian"]
+        }
+    ]
+}

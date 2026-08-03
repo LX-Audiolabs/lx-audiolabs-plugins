@@ -1,6 +1,6 @@
 //! Bridge from truce `RawWindowHandle` to `raw_window_handle 0.6`.
 //!
-//! baseview 0.3 / slint-baseview expect rwh 0.6 `HasWindowHandle`.
+//! baseview 0.3 / lx-slint-baseview expect rwh 0.6 `HasWindowHandle`.
 
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, WindowHandle,

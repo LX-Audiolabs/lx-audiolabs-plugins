@@ -3,7 +3,7 @@ name = "lx-slint-editor"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
-description = "truce::Editor adapter for slint-baseview — LX Audiolabs"
+description = "truce::Editor adapter for lx-slint-baseview — LX Audiolabs"
 publish = false
 
 [dependencies]
@@ -11,13 +11,13 @@ publish = false
 truce-core = { path = "../../../truce-dev/crates/truce-core" }
 truce-params = { path = "../../../truce-dev/crates/truce-params" }
 
-# raw-window-handle 0.6 bridge (slint-baseview uses rwh 0.6)
+# raw-window-handle 0.6 bridge (lx-slint-baseview uses rwh 0.6)
 raw-window-handle = "0.6"
 
-# Our slint-baseview fork (baseview 0.3, slint 1.17.1)
+# Our lx-slint-baseview fork (baseview 0.3, slint 1.17.1)
 # Default: FemtoVG OpenGL (stable in DAW hosts on Windows; easier cross than Skia).
 # A/B later: backend-skia | backend-wgpu when host/GPU path is ready.
-slint-baseview = { workspace = true, features = ["backend-femtovg"] }
+lx-slint-baseview = { workspace = true, features = ["backend-femtovg"] }
 baseview = { workspace = true, features = ["opengl"] }
 slint = { workspace = true }
 log = "0.4"

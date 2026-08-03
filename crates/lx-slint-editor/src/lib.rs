@@ -1,4 +1,4 @@
-//! `LxSlintEditor` — truce `Editor` adapter for slint-baseview.
+//! `LxSlintEditor` — truce `Editor` adapter for lx-slint-baseview.
 //!
 //! Default: FemtoVG + OpenGL (baseview 0.3, slint 1.17.1). Stable in Windows
 //! DAW hosts; better cross-compile story than Skia. Swap Cargo feature later
@@ -17,8 +17,8 @@ use slint::platform::software_renderer::{
     MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType,
 };
 use slint::ComponentHandle;
-use slint_baseview::slint_window::SlintWindow;
-use slint_baseview::{pack_size, to_physical_px, SizePolicy};
+use lx_slint_baseview::slint_window::SlintWindow;
+use lx_slint_baseview::{pack_size, to_physical_px, SizePolicy};
 use truce_core::editor::{Editor, RawWindowHandle};
 use truce_params::Params;
 
@@ -29,9 +29,9 @@ pub use paste::paste;
 /// Re-export so plugins need not depend on truce-core editor types directly.
 pub use truce_core::editor::PluginContext;
 /// OS clipboard helper (vault PASTE button, Ctrl+V inject, etc.).
-pub use slint_baseview::platform::clipboard_get_retry;
+pub use lx_slint_baseview::platform::clipboard_get_retry;
 /// Shared content-scale cell (also used by the window handler).
-pub use slint_baseview::EditorScale;
+pub use lx_slint_baseview::EditorScale;
 
 /// Build closure: creates the Slint component and wires UI callbacks.
 pub type BuildFn<P, C> = Arc<dyn Fn(PluginContext<P>) -> C + Send + Sync>;
@@ -42,7 +42,7 @@ pub type SyncFn<P, C> = Arc<dyn Fn(&C, &PluginContext<P>) + Send + Sync>;
 /// Slint-based editor implementing truce's `Editor` trait.
 ///
 /// Generic over the concrete Slint component type, because the GPU-backed
-/// `slint_baseview::SlintWindow` needs to own the generated component.
+/// `lx_slint_baseview::SlintWindow` needs to own the generated component.
 ///
 /// # Example
 ///
@@ -221,7 +221,7 @@ where
         let request_resize = {
             let resize_ctx = ctx.clone();
             Some(Arc::new(move |rw: u32, rh: u32| resize_ctx.request_resize(rw, rh))
-                as slint_baseview::RequestResizeFn)
+                as lx_slint_baseview::RequestResizeFn)
         };
 
         let window = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -316,14 +316,14 @@ where
         let state = truce_core::editor::for_test_params(self.params.clone())
             .with_params(self.params.clone());
 
-        slint_baseview::platform::ensure_platform();
+        lx_slint_baseview::platform::ensure_platform();
 
         // Create software renderer window, keep Rc for direct draw_if_needed.
         // MinimalSoftwareWindow::new() already returns Rc<MinimalSoftwareWindow>.
         let msw = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
         // Hand off a clone to the platform so Component::new() attaches to it.
         let adapter: Rc<dyn slint::platform::WindowAdapter> = msw.clone();
-        slint_baseview::platform::set_next_adapter(adapter);
+        lx_slint_baseview::platform::set_next_adapter(adapter);
 
         // Build the Slint component (attaches to the MinimalSoftwareWindow via platform).
         let component = (self.build)(state.clone());
