@@ -159,10 +159,13 @@ where
 
     fn size_policy(&self) -> SizePolicy {
         // Plugins: content scale is host set_scale only (default 1.0), never
-        // raw OS DPI. CLAP/VST3 report HWND size as size()*host_scale; the
-        // child must use the same pixel size. Following GetDpiForWindow made
-        // a larger child than the host frame → clipped top + gray margins.
-        // Standalone may opt into system scale via set_uses_system_scale.
+        // raw OS DPI (Xft.dpi / GetDpiForWindow). CLAP/VST3 report HWND size
+        // as size()*host_scale; the child must match that pixel size.
+        // Following OS DPI made a larger child than the host frame → clipped
+        // footer + gray margins, and mouse (phys/content_scale) desynced.
+        // Linux: lx-slint-baseview skips continuous host request_resize
+        // push-back (Bitwig grows the frame in a fight). Standalone may opt
+        // into system scale via set_uses_system_scale.
         let host_driven_scale = !self.use_system_scale;
         SizePolicy {
             design_size: self.size,

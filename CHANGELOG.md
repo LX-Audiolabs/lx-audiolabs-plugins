@@ -15,6 +15,10 @@
 - **Peak-dB-Anzeige** jetzt per Klick auf den Wert zurücksetzbar.
 - **Canvas-Größe stabil bei DPI-Änderung** — kein Versatz mehr in Bitwig.
 - **Linux CLAP:** Offizielle Linux-Builds via Zig-Cross-Compilation.
+- **Linux UI-Stabilität (lx-slint-baseview):** Kein pro-Frame Geometry-Rebuild
+  und kein Host-`request_resize`-Kampf (Bitwig wuchs dagegen an) → weniger
+  Knob/Slider-Ruckeln und weniger abgeschnittene Footer. Content-Scale bleibt
+  Host-`set_scale` (nicht Xft.dpi).
 
 ---
 
