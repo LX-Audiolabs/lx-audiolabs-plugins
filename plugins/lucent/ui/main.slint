@@ -301,12 +301,13 @@ export component LucentUi inherits Window {
                             background: #ffffff88;
                         }
 
-                        // Freq readout: top of bar, flip left near right edge.
+                        // Freq readout: bottom of bar (top collides with SMOOTH).
+                        // Flip left near right edge; sit above the static freq labels.
                         if pit_ta.has-hover: Rectangle {
                             x: (pit_ta.mouse-x + 64px > pit.width)
                                 ? pit_ta.mouse-x - 58px
                                 : pit_ta.mouse-x + 6px;
-                            y: 4px;
+                            y: pit.height - 32px;
                             width: 52px;
                             height: 16px;
                             background: #000000aa;
