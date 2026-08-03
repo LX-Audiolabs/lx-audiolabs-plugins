@@ -7,6 +7,8 @@
 *.swo
 /graphify-out
 .aider*
+# Local scratch (soft-fail notes, personal checklists)
+/TODO.md
 # agal PM layer (local). Optional: version adapted skill packs only.
 /audiolabs/*
 !/audiolabs/skills/
