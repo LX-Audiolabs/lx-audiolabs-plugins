@@ -28,7 +28,7 @@ truce-test      = { path = "../truce-dev/crates/truce-test" }
 lx-slint-build  = { path = "crates/lx-slint-build" }
 lx-slint-editor = { path = "crates/lx-slint-editor" }
 # Our private fork: baseview 0.3, slint 1.17.1, 3 backends
-lx-slint-baseview  = { path = "../slint-baseview", default-features = false }
+lx-slint-baseview  = { path = "../lx-slint-baseview", default-features = false }
 baseview = "0.3"
 clap-sys        = "0.5"
 # Pin must match lx-slint-baseview / lx-slint-editor
