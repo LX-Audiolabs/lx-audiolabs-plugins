@@ -38,24 +38,22 @@
 - Vault-Pfad mit Clipboard-Paste.
 - TextInput-Fokus im Vault-Overlay korrigiert.
 
-## Lucent 1.0.0
+## Lucent 1.0.0 (noch keine BETA)
 
 - Volle Feature-Parität zur Vizia-Version.
 - **SPAN-äquivalente Spektrum-Anzeige:** Smooth-Toggle, Range −78 dB.
 - Session-SNAP für max-hold Resonance/Masking.
 - RT-Stack-Port aus dev: SHM-into-APIs, Masking, Resolve-Cache.
 
-## Lucent Relay 1.0.0
+## Lucent Relay 1.0.0 (noch keine BETA)
 
 - All-off-Maske korrigiert.
 - Feature-Parität zur Vizia-Version.
 
-## Aurum 0.2.6
+## Aurum 0.2.6 (noch garkeine BETA)
 
 - Peak-Hold-Reset.
 - Clipper-Waveforms gefüllt.
 - LIMIT/COLOR Layout-Politur.
 
 ---
-
-*Build: `cargo truce install --clap -p <plugin>` · Release-ZIPs via `.\build-local-zip.ps1`*

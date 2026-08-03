@@ -61,10 +61,11 @@ cargo check --workspace
 # Single plugin CLAP install (release, Windows host)
 cargo truce install --clap -p meridian
 
-# Package release ZIPs → dist/
-.\build-local-zip.ps1                         # all plugins, Windows
-.\build-local-zip.ps1 aether,equilibrium      # subset
-.\build-local-zip.ps1 -Platform linux         # cross-compile Linux CLAPs
+# Package release ZIPs → dist/  (default: Aether+Meridian+Equilibrium × win+linux)
+.\build-local-zip.ps1
+.\build-local-zip.ps1 -Platform win           # Windows only
+.\build-local-zip.ps1 -Platform linux         # Linux cross only
+.\build-local-zip.ps1 -Plugins lucent         # opt-in WIP (not in default set)
 ```
 
 ### Linux CLAPs (from Windows)
@@ -80,10 +81,15 @@ rustup target add x86_64-unknown-linux-gnu
 cargo truce build --clap -p aether --target x86_64-unknown-linux-gnu
 # → target\bundles\x86_64-unknown-linux-gnu\Aether.clap
 
-# or all + zip
+# or zip packaging (default already includes linux via -Platform both)
 .\build-local-zip.ps1 -Platform linux
 # → dist\*-vX.Y.Z-linux.zip
 ```
+
+Cross-builds: `lx-slint-editor` enables `fontique/fontconfig-dlopen` on Linux
+targets, and `.cargo/config.toml` sets `RUST_FONTCONFIG_DLOPEN=on`, so no
+Linux fontconfig sysroot / pkg-config is needed. Fontconfig is loaded at
+runtime (`libfontconfig.so.1`) on the Linux host.
 
 Native Linux CI: GitHub Actions → **Build Linux CLAPs** (`workflow_dispatch`).
 

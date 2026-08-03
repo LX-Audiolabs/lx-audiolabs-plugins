@@ -23,3 +23,10 @@ slint = { workspace = true }
 log = "0.4"
 # Re-exported for plugin bind macros (same role as truce-slint::paste)
 paste = "1"
+
+# Linux (incl. Windows→Linux cross): unify fontique/fontconfig-dlopen into the
+# shared Slint tree. Without this, RUST_FONTCONFIG_DLOPEN alone builds
+# fontconfig-sys in dlopen mode but fontique still imports linked symbols → E0432.
+# Feature also enables yeslogic-fontconfig-sys/dlopen (no pkg-config sysroot).
+[target.'cfg(target_os = "linux")'.dependencies]
+fontique = { version = "0.10", default-features = true, features = ["fontconfig-dlopen"] }

@@ -9,6 +9,7 @@ use raw_window_handle::{
 use raw_window_handle::AppKitWindowHandle;
 #[cfg(target_os = "linux")]
 use raw_window_handle::{RawDisplayHandle, XlibDisplayHandle, XlibWindowHandle};
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use std::num::NonZero;
 use truce_core::editor::RawWindowHandle as TruceRaw;
 
@@ -36,10 +37,9 @@ impl ParentedWindow {
             }
             #[cfg(target_os = "linux")]
             TruceRaw::X11(xid) => {
-                let id = NonZero::new(xid as u32).expect("X11 Window ID must not be null");
-                RawWindowHandle::Xlib(
-                    XlibWindowHandle::new(id),
-                )
+                // rwh 0.6: XlibWindowHandle::new takes c_ulong (X11 Window = u64)
+                assert!(xid != 0, "X11 Window ID must not be null");
+                RawWindowHandle::Xlib(XlibWindowHandle::new(xid))
             }
             #[allow(unreachable_patterns)]
             _ => panic!("unsupported platform for parent window"),

@@ -10,6 +10,16 @@
 # Requires: `zig` + `cargo-zigbuild` on PATH
 #   winget install zig.zig --source winget
 #   cargo install cargo-zigbuild
+#
+# Fontconfig (Linux cross from Windows):
+# 1) lx-slint-editor enables fontique/fontconfig-dlopen for target_os=linux
+#    so fontique uses dlopen bindings (not linked Fc* symbols).
+# 2) RUST_FONTCONFIG_DLOPEN makes yeslogic-fontconfig-sys skip pkg-config
+#    even if the feature flag is not unified for some reason.
+# Runtime: libfontconfig.so.1 is loaded on the Linux DAW host.
+
+[env]
+RUST_FONTCONFIG_DLOPEN = "on"
 
 [target.x86_64-unknown-linux-musl]
 linker = "rust-lld"
