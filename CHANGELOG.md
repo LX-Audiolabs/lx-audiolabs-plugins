@@ -6,6 +6,16 @@
 
 ## Alle Plugins
 
+### INFO — Systemanforderung UI (OpenGL)
+
+- Standard-Renderer: **FemtoVG** → braucht **OpenGL 3.2 Core** (oder neuer).
+  OpenGL ES 3.0+ mit funktionierendem Treiber ist vergleichbar.
+- Sehr alte GPUs/Treiber, reines GL 2.x oder kaputte GLX-Embeds in der DAW
+  (z. B. altes Linux + REAPER) sind **nicht unterstützt** — Editor kann crashen
+  oder nicht öffnen. Die frühere **Vizia + Skia**-UI war hier weicher.
+- **wgpu** würde dieselben alten Rechner nicht retten. Nur der Editor hängt an
+  OpenGL; die Audio-Engine nicht.
+
 - **Neue UI-Engine:** Slint 1.17.1 mit `lx-slint-editor` statt Vizia.
   - Standard-Backend jetzt FemtoVG/OpenGL — Plugins nur noch halb so groß wie mit Skia.
   - Alternativ: Skia (GPU) oder Software-Renderer inklusive Screenshot-Funktion.

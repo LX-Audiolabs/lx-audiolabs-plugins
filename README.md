@@ -16,7 +16,21 @@ plugins/                # products
   aurum-slint/
 ```
 
-Runtime GUI: **lx-slint-editor** + **slint-baseview** (default `backend-femtovg` + OpenGL). Optional A/B: `backend-skia`, `backend-wgpu`, `backend-wgpu-vulkan`.
+Runtime GUI: **lx-slint-editor** + **lx-slint-baseview** (default `backend-femtovg` + OpenGL). Optional A/B: `backend-skia`, `backend-wgpu`, `backend-wgpu-vulkan`.
+
+## System requirements (UI)
+
+**INFO — GPU / OpenGL**
+
+Default editor path is **FemtoVG** (custom path shaders). That needs a working
+**OpenGL 3.2 Core** context (or newer). OpenGL ES 3.0+ with a solid driver is in
+the same class; pure GL 2.x / ancient Mesa / broken plugin-host GL embeds are
+**unsupported** — the UI may fail to open or crash the host (seen on old Linux +
+REAPER). The older Vizia + Skia builds were softer on weak GL; FemtoVG is not.
+
+A future **wgpu** backend would not revive those machines either (modern GPU API).
+
+Audio processing does not depend on OpenGL — only the editor window does.
 
 ## Shared UI (`crates/lx-ui-slint`)
 
