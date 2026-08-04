@@ -75,6 +75,10 @@ impl SnapFFT {
     /// Compute FFT and return frame (dB magnitudes).
     /// `sample_rate` must be the actual host sample rate — tilt is computed
     /// per bin so the pink-noise reference stays flat independent of sample rate.
+    ///
+    /// Uses [`crate::compute_spectrum_bins`]: 4.5 dB/oct pink tilt, **gated** so
+    /// true digital silence (−90 dB floor) is not boosted. Without the gate, silence
+    /// draws a rising high-end ramp (tilt ≈ +19 dB @ 20 kHz → −71 dB display).
     pub fn compute_fft(&mut self, sample_rate: f32) -> [f32; SPECTRUM_BINS] {
         // Window
         for i in 0..self.fft_input.len() {
@@ -85,27 +89,13 @@ impl SnapFFT {
         let fft = self.fft_planner.plan_fft_forward(self.fft_input.len());
         let _ = fft.process(&mut self.fft_windowed, &mut self.fft_output_cache);
 
-        // Convert to dB with per-bin tilt (4.5 dB/octave pink-noise compensation)
-        let fft_size = self.fft_input.len() as f32;
-        let inv_norm = 2.0 / fft_size;
         let mut frame = [-90.0f32; SPECTRUM_BINS];
-
-        for (k, slot) in frame.iter_mut().enumerate() {
-            let mag = self.fft_output_cache[k].norm() * inv_norm;
-            let db = if mag > 1e-9 {
-                20.0 * mag.log10()
-            } else {
-                -90.0
-            };
-            let freq = k as f32 * sample_rate / fft_size;
-            let tilt = if freq > 20.0 {
-                4.5 * (freq / 1000.0).log2()
-            } else {
-                0.0
-            };
-            *slot = (db + tilt).clamp(-90.0, 12.0);
-        }
-
+        crate::compute_spectrum_bins(
+            &self.fft_output_cache,
+            &mut frame,
+            self.fft_input.len(),
+            sample_rate,
+        );
         frame
     }
 
