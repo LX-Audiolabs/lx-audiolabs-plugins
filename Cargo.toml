@@ -11,7 +11,7 @@ members = [
     "plugins/meridian",
     "plugins/lucent-relay",
     "plugins/lucent",
-    "plugins/aurum-slint",
+    "plugins/aurum",
     "plugins/equilibrium",
 ]
 resolver = "3"

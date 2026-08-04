@@ -13,7 +13,7 @@ crates/                 # libraries
 plugins/                # products
   aether/ meridian/ equilibrium/
   lucent/ lucent-relay/
-  aurum-slint/
+  aurum/
 ```
 
 Runtime GUI: **lx-slint-editor** + **lx-slint-baseview** (default `backend-femtovg` + OpenGL). Optional A/B: `backend-skia`, `backend-wgpu`, `backend-wgpu-vulkan`.
@@ -64,7 +64,7 @@ import {
 | `equilibrium` | Pre-master spectral balancer |
 | `lucent` | Spectrum analyzer (standalone / hybrid / relay) |
 | `lucent-relay` | Relay publisher |
-| `aurum-slint` | Saturation / clipper / color / limit |
+| `aurum` | All-in-one mastering (M/S EQ, comp, sat, limiters) |
 
 ## Build
 
@@ -75,11 +75,12 @@ cargo check --workspace
 # Single plugin CLAP install (release, Windows host)
 cargo truce install --clap -p meridian
 
-# Package release ZIPs → dist/  (default: Aether+Meridian+Equilibrium × win+linux)
+# Package release ZIPs → dist/  (default: Aether+Meridian+Equilibrium+Lucent+Relay × win+linux)
+# also writes Lucent-Bundle-vX.Y.Z-{win|linux}.zip when lucent is in the set
 .\build-local-zip.ps1
 .\build-local-zip.ps1 -Platform win           # Windows only
 .\build-local-zip.ps1 -Platform linux         # Linux cross only
-.\build-local-zip.ps1 -Plugins lucent         # opt-in WIP (not in default set)
+.\build-local-zip.ps1 -Plugins aether,meridian  # subset only
 ```
 
 ### Linux CLAPs (from Windows)

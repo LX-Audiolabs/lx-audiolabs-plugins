@@ -15,7 +15,7 @@
             "id": "pluginName",
             "type": "pickString",
             "description": "Plugin to build",
-            "options": ["aether", "aurum-slint", "equilibrium", "lucent", "lucent-relay", "meridian"]
+            "options": ["aether", "aurum", "equilibrium", "lucent", "lucent-relay", "meridian"]
         }
     ]
 }

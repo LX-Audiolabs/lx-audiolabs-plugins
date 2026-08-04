@@ -8,6 +8,33 @@ unchanged), **major** = breaking.
 
 ---
 
+## 2026-08-04 — Aurum: Rename `aurum-slint` → `aurum` + UI-Fixes
+
+### Aurum 0.4.0 (noch garkeine BETA)
+
+- **Rename:** Crate/Ordner `aurum-slint` → `aurum`; CLAP heißt jetzt "Aurum"
+  (`bundle_id = "aurum"`, fourcc `Aurm`). Das alte Vizia-Aurum ist damit
+  endgültig ersetzt. Workspace/CI/Build-Skripte/README nachgezogen.
+- **SHAPE:** Clipper Soft M / Soft S Defaults 50 % → **0 %** (kein Clipping
+  im Default); RESET-Button setzt ebenfalls 0 %.
+- **M/S EQ:** Gain-Slider → kleine Knobs, Shelf/Q-Buttons (A/B/C) rechts
+  daneben; Spektren-Pits flacher (72/88/104 px) → SIDE-Reihe ohne Scrollen
+  erreichbar.
+- **COLOR / SWEETEN:** EQ-Curve deckt wieder den vollen Pit ab (X-Achse =
+  Spektrum-Achse), HPF-Rampe sitzt korrekt am linken Rand.
+- **LIMIT:** True Peak Limiter jetzt rechts neben dem M/S MB Limiter statt
+  darunter → kein Scrollen.
+- **Header:** `MONO` → `MID` (Reihenfolge MID | SIDE), Param-Name "Mid".
+
+### lx-ui-slint (shared)
+
+- `LxEqCurve`: `fit: ImageFit.fill` auf dem Curve-Path — Koordinaten sind in
+  Rust vorgemappt; Default `contain` letterboxte die Curve (sichtbar als
+  X-Achsen-Versatz in Aurum SWEETEN). Betrifft auch Meridian/Aether (gleiche
+  Overlay-Logik, jetzt überall exakt).
+
+---
+
 ## 2026-08-04 — UI Zoom + shared SVG brand + OpenGL soft-fail
 
 ### Alle Plugins (shared)

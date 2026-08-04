@@ -183,6 +183,9 @@ export component LxEqCurve inherits LxPanel {
         viewbox-y: 0;
         viewbox-width: root.path-w;
         viewbox-height: root.path-h;
+        // ImageFit.fill (like LxSpectrum): coords are pre-mapped in Rust —
+        // default `contain` letterboxes the curve and breaks x-axis alignment.
+        fit: ImageFit.fill;
         commands: root.commands;
         stroke: root.stroke-color;
         stroke-width: root.stroke-width;

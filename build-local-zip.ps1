@@ -1,14 +1,15 @@
 # build-local-zip.ps1
 # Builds release CLAPs via cargo-truce, packages Plugin-vX.Y.Z-{win|linux}.zip
 #
-# Default: finished shipping set (Aether, Meridian, Equilibrium) x both platforms.
-# Lucent / Aurum still map if passed explicitly - not default (WIP).
+# Default: Aether, Meridian, Equilibrium, Lucent, Lucent Relay x both platforms.
+# Aurum still map if passed explicitly - not default (WIP).
+# Lucent in the set also builds Lucent-Bundle (Lucent + Lucent Relay together).
 #
 # Usage:
-#   .\build-local-zip.ps1                              # Aether+Meridian+Equilibrium, win+linux
+#   .\build-local-zip.ps1                              # full shipping set, win+linux
 #   .\build-local-zip.ps1 -Platform win                # Windows only
 #   .\build-local-zip.ps1 -Platform linux              # Linux cross only
-#   .\build-local-zip.ps1 -Plugins lucent,lucent-relay # opt-in WIP plugins
+#   .\build-local-zip.ps1 -Plugins aether,meridian     # subset
 #
 # Linux cross (from Windows) requires:
 #   winget install zig.zig --source winget
@@ -26,7 +27,9 @@ param(
     [string[]]$Plugins = @(
         "aether",
         "meridian",
-        "equilibrium"
+        "equilibrium",
+        "lucent",
+        "lucent-relay"
     ),
     [ValidateSet("win", "linux", "both")]
     [string]$Platform = "both",
@@ -39,7 +42,7 @@ $distDir = "dist"
 # CLAP product names from truce.toml (cargo-truce safe_filename / file_stem)
 $clapNames = @{
     "aether"       = "Aether"
-    "aurum-slint"  = "Aurum (Slint)"
+    "aurum"        = "Aurum"
     "equilibrium"  = "Equilibrium"
     "meridian"     = "Meridian"
     "lucent"       = "Lucent"
@@ -49,6 +52,12 @@ $clapNames = @{
 # Accept comma-separated single arg: .\build-local-zip.ps1 aether,meridian
 if ($Plugins.Count -eq 1 -and $Plugins[0] -match ",") {
     $Plugins = $Plugins[0] -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+
+# Lucent-Bundle needs both CLAPs: if lucent is selected, ensure lucent-relay is built too.
+if ($Plugins -contains "lucent" -and $Plugins -notcontains "lucent-relay") {
+    $Plugins = @($Plugins) + @("lucent-relay")
+    Write-Host "Auto-added lucent-relay (required for Lucent-Bundle)" -ForegroundColor Yellow
 }
 
 $platforms = if ($Platform -eq "both") { @("win", "linux") } else { @($Platform) }
@@ -145,7 +154,7 @@ function Build-And-Package {
         Write-Host "  $zipName" -ForegroundColor Green
     }
 
-    # Lucent bundle: Lucent + Lucent Relay together (opt-in only)
+    # Lucent bundle: Lucent + Lucent Relay in one zip (version = Lucent)
     if ($PluginList -contains "lucent") {
         $lucentVer = Get-PluginVersion -CargoToml "plugins/lucent/Cargo.toml"
         $bundleZip = Join-Path $OutDir ("Lucent-Bundle-v$lucentVer-$suffix.zip")
@@ -155,7 +164,7 @@ function Build-And-Package {
             if (Test-Path $bundleZip) { Remove-Item $bundleZip -Force }
             Compress-Archive -Path $lucentClap, $relayClap -DestinationPath $bundleZip -Force
             Write-Host "  Lucent-Bundle-v$lucentVer-$suffix.zip" -ForegroundColor Green
-        } elseif ($PluginList -contains "lucent-relay") {
+        } else {
             Write-Warning "Lucent bundle skipped - missing Lucent and/or Lucent Relay .clap"
         }
     }

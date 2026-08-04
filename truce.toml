@@ -23,13 +23,13 @@ vst3_subcategory = "Analyzer|Fx"
 description = "Lucent — spectrum analyser, resonance & masking"
 
 [[plugin]]
-name = "Aurum (Slint)"
-bundle_id = "aurum-slint"
-crate = "aurum-slint"
+name = "Aurum"
+bundle_id = "aurum"
+crate = "aurum"
 category = "effect"
-fourcc = "AuSl"
+fourcc = "Aurm"
 vst3_subcategory = "Fx|Mastering"
-description = "Aurum Slint — all-in-one mastering (M/S EQ, comp, sat, limiters)"
+description = "Aurum — all-in-one mastering (M/S EQ, comp, sat, limiters)"
 
 [[plugin]]
 name = "Equilibrium"
