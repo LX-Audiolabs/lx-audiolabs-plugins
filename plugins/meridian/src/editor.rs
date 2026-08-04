@@ -6,7 +6,7 @@ use slint::{ModelRc, SharedString, VecModel};
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
 use truce_params::FloatParam;
-use lx_slint_editor::{LxSlintEditor, PluginContext};
+use lx_slint_editor::{apply_ui_zoom, LxSlintEditor, PluginContext, UiZoom};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -320,9 +320,11 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
         scanning_for: init_vp.clone(),
     }));
 
-    LxSlintEditor::new(
+    let ui_zoom = UiZoom::new(WINDOW_W, WINDOW_H);
+    let zoom_build = ui_zoom.clone();
+    LxSlintEditor::new_with_zoom(
         params.clone(),
-        (WINDOW_W, WINDOW_H),
+        ui_zoom,
         {
             let params = params.clone();
             let shared = shared.clone();
@@ -330,6 +332,15 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
             let init_vp = init_vp.clone();
             move |state: PluginContext<MeridianParams>| {
                 let ui = MeridianUi::new().unwrap();
+
+                ui.set_ui_zoom_percent(zoom_build.percent() as i32);
+                {
+                    let z = zoom_build.clone();
+                    let s = state.clone();
+                    ui.on_ui_zoom_changed(move |p| {
+                        apply_ui_zoom(&z, |w, h| s.request_resize(w, h), p as u32);
+                    });
+                }
 
                 // SMOOTH default ON (display-only; not a host param).
                 shared

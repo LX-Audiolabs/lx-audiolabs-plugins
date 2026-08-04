@@ -139,6 +139,10 @@ export component MeridianUi inherits Window {
     in property <string> vault_paste_status: "";
     callback reset_clicked;
 
+    // Product UI zoom (75/100/125%) — logo menu in LxShellHeader
+    in-out property <int> ui_zoom_percent: 100;
+    callback ui_zoom_changed(int);
+
     init => { Palette.color-scheme = ColorScheme.dark; }
 
     title: "Meridian";
@@ -167,7 +171,9 @@ export component MeridianUi inherits Window {
         // ── HEADER ───────────────────────────────────────────────────────
         LxShellHeader {
             plugin-name: "MERIDIAN";
-            version: "1.10.0";
+            version: "1.11.0";
+            ui-zoom-percent <=> root.ui_zoom_percent;
+            ui-zoom-changed(p) => { root.ui_zoom_changed(p); }
 
             HorizontalLayout {
                 spacing: 4px;

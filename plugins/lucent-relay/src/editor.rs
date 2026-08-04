@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use lx_analysis::relay_hub;
-use lx_slint_editor::{LxSlintEditor, PluginContext};
+use lx_slint_editor::{LxSlintEditor, PluginContext, UiZoom};
 use slint::{ModelRc, SharedString, VecModel};
 use truce_core::editor::Editor;
 
@@ -36,9 +36,11 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
         connected: None,
         status: String::new(),
     });
-    LxSlintEditor::new(
+    // Compact UI — always 100%, ignore global zoom preference.
+    let ui_zoom = UiZoom::with_percent(WINDOW_W, WINDOW_H, 100);
+    LxSlintEditor::new_with_zoom(
         params.clone(),
-        (WINDOW_W, WINDOW_H),
+        ui_zoom,
         {
             let params = params.clone();
             move |_state: PluginContext<LucentRelayParams>| {

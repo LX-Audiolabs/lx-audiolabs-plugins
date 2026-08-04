@@ -139,6 +139,124 @@ export component LxShellFooter inherits Rectangle {
     }
 }
 
+// ── Brand logo (shared SVG wordmark) ─────────────────────────────────────────
+
+/// LX Audiolabs SVG wordmark. Optional click → fixed UI zoom menu (75/100/125%).
+/// Used by LxShellHeader and compact headers (Lucent-Relay).
+export component LxBrandLogo inherits Rectangle {
+    /// Current UI zoom percent (75, 100, or 125).
+    in-out property <int> ui-zoom-percent: 100;
+    /// When false, logo is display-only (no menu) — compact plugins.
+    in property <bool> enable-zoom: true;
+    callback ui-zoom-changed(int);
+
+    property <bool> menu-open: false;
+
+    width: 148px;
+    height: 28px;
+    background: transparent;
+    // Allow zoom menu to paint below the logo (outside 28px bounds).
+    clip: false;
+    z: 100;
+
+    Image {
+        x: 0;
+        y: 0;
+        width: 100%;
+        height: 100%;
+        source: @image-url("assets/lx-logo.svg");
+        image-fit: contain;
+    }
+
+    // Soft hover cue when zoom is available
+    if root.enable-zoom && logo-ta.has-hover: Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: 3px;
+        background: #ff731a18;
+    }
+
+    logo-ta := TouchArea {
+        width: 100%;
+        height: 100%;
+        mouse-cursor: root.enable-zoom ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            if root.enable-zoom {
+                root.menu-open = !root.menu-open;
+            }
+        }
+    }
+
+    // Dropdown under logo — Rectangle overlay (not PopupWindow; DAW hit-tests).
+    if root.enable-zoom && root.menu-open: Rectangle {
+        x: 0px;
+        y: parent.height + 4px;
+        width: 112px;
+        height: 102px;
+        z: 200;
+        border-radius: Lx.radius-md;
+        background: @linear-gradient(180deg, Lx.section 0%, Lx.panel 100%);
+        border-width: 1px;
+        border-color: Lx.stage-rim;
+        drop-shadow-offset-x: 0px;
+        drop-shadow-offset-y: 3px;
+        drop-shadow-blur: 8px;
+        drop-shadow-color: Lx.shadow-hard;
+
+        VerticalLayout {
+            padding: 4px;
+            spacing: 2px;
+
+            Text {
+                text: "UI SCALE";
+                font-size: 9px;
+                font-weight: 700;
+                color: Lx.text-muted;
+                horizontal-alignment: center;
+                vertical-stretch: 0;
+            }
+
+            for step[i] in [75, 100, 125]: Rectangle {
+                height: 26px;
+                vertical-stretch: 0;
+                border-radius: Lx.radius-sm;
+                background: root.ui-zoom-percent == step
+                    ? #ff731a33
+                    : (step-ta.has-hover ? Lx.control-hover : transparent);
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 8px;
+                    spacing: 6px;
+                    alignment: space-between;
+
+                    Text {
+                        text: step + "%";
+                        font-size: 12px;
+                        font-weight: root.ui-zoom-percent == step ? 700 : 500;
+                        color: root.ui-zoom-percent == step ? Lx.amber-hot : Lx.text;
+                        vertical-alignment: center;
+                    }
+                    if root.ui-zoom-percent == step: Text {
+                        text: "✓";
+                        font-size: 12px;
+                        color: Lx.amber;
+                        vertical-alignment: center;
+                    }
+                }
+
+                step-ta := TouchArea {
+                    clicked => {
+                        root.ui-zoom-percent = step;
+                        root.menu-open = false;
+                        root.ui-zoom-changed(step);
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── Header ───────────────────────────────────────────────────────────────────
 
 /// Brand + plugin name + version (left). Plugin-specific actions as children
@@ -147,12 +265,18 @@ export component LxShellFooter inherits Rectangle {
 /// Style rule: free choice of which controls, but all use default Lx chrome
 /// (Lx.button-h / LxButton / LxToggleBtn / LxDangerBtn / LxSelectTrigger /
 /// LxLineEdit). No local height overrides, no `small` in the header.
+///
+/// Logo click opens fixed UI zoom menu (75/100/125%). Forward
+/// `ui-zoom-percent` / `ui-zoom-changed` from the plugin Window root.
 export component LxShellHeader inherits Rectangle {
-    in property <string> brand-left: "LX";
-    in property <string> brand-right: "AUDIOLABS";
     in property <string> plugin-name: "";
     in property <string> version: "";
     in property <string> status-text: "";
+
+    // Product UI zoom (fixed steps). Wired by plugins to lx-slint-editor::UiZoom.
+    in-out property <int> ui-zoom-percent: 100;
+    in property <bool> enable-ui-zoom: true;
+    callback ui-zoom-changed(int);
 
     // Optional centered instance/name field (Lucent). Layout-owned — never
     // absolute-overlay: free-geometry LineEdit defaults width:100% and paints
@@ -165,6 +289,9 @@ export component LxShellHeader inherits Rectangle {
 
     height: Lx.header-h;
     vertical-stretch: 0;
+    // Menu drops below header — must paint over body siblings.
+    clip: false;
+    z: 50;
     background: @linear-gradient(180deg, Lx.section 0%, Lx.window 70%, Lx.void 100%);
     border-width: 0px;
 
@@ -206,21 +333,10 @@ export component LxShellHeader inherits Rectangle {
                 horizontal-stretch: 0;
                 vertical-stretch: 0;
 
-                // LX monogram slightly larger than AUDIOLABS — same 18px looks
-                // optically smaller on a 2-letter word next to a long wordmark.
-                Text {
-                    text: root.brand-left;
-                    font-size: 22px;
-                    font-weight: 800;
-                    color: Lx.amber;
-                    vertical-alignment: center;
-                }
-                Text {
-                    text: root.brand-right;
-                    font-size: 18px;
-                    font-weight: 700;
-                    color: Lx.text;
-                    vertical-alignment: center;
+                LxBrandLogo {
+                    enable-zoom: root.enable-ui-zoom;
+                    ui-zoom-percent <=> root.ui-zoom-percent;
+                    ui-zoom-changed(p) => { root.ui-zoom-changed(p); }
                 }
 
                 Rectangle {

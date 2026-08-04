@@ -1,5 +1,5 @@
 import {
-    Lx, LxLineEdit, LxSelectTrigger,
+    Lx, LxBrandLogo, LxLineEdit, LxSelectTrigger,
 } from "../../../crates/lx-ui-slint/ui/lx.slint";
 
 /// Lucent-Relay — compact sender. Dark LX chrome, form controls pinned left.
@@ -23,7 +23,7 @@ export component LucentRelayUi inherits Window {
 
     in property <string> status_text: "—";
     in property <bool> connected: false;
-    in property <string> version: "1.1.0";
+    in property <string> version: "1.1.1";
 
     VerticalLayout {
         spacing: 4px;
@@ -43,21 +43,13 @@ export component LucentRelayUi inherits Window {
                 spacing: 6px;
                 alignment: start;
 
-                Text {
-                    text: "LX";
-                    font-size: 18px;
-                    font-weight: 800;
-                    color: Lx.amber;
-                    vertical-alignment: center;
+                // Shared SVG wordmark (no zoom menu — compact window).
+                LxBrandLogo {
+                    enable-zoom: false;
+                    width: 120px;
+                    height: 24px;
                     horizontal-stretch: 0;
-                }
-                Text {
-                    text: "AUDIOLABS";
-                    font-size: 16px;
-                    font-weight: 700;
-                    color: Lx.text;
-                    vertical-alignment: center;
-                    horizontal-stretch: 0;
+                    vertical-stretch: 0;
                 }
 
                 Rectangle { width: 10px; background: transparent; }

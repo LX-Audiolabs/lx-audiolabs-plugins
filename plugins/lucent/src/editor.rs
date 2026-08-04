@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use lx_analysis::{relay_hub, SPECTRUM_BINS, SharedState};
-use lx_slint_editor::{LxSlintEditor, PluginContext};
+use lx_slint_editor::{apply_ui_zoom, LxSlintEditor, PluginContext, UiZoom};
 use slint::{ModelRc, SharedString, VecModel};
 use truce_core::cast::{discrete_index, discrete_norm};
 use truce_core::editor::{Editor, PluginContextReadF32};
@@ -659,9 +659,11 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
     let init_vp = lx_analysis::load_config("Lucent").vault_path;
     let sync_cache = Arc::new(Mutex::new(SyncCache::new(init_vp.clone())));
 
-    LxSlintEditor::new(
+    let ui_zoom = UiZoom::new(WINDOW_W, WINDOW_H);
+    let zoom_build = ui_zoom.clone();
+    LxSlintEditor::new_with_zoom(
         params.clone(),
-        (WINDOW_W, WINDOW_H),
+        ui_zoom,
         {
             let params = params.clone();
             let shared = shared.clone();
@@ -672,6 +674,14 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 let ui = LucentUi::new().expect("LucentUi::new");
 
                 ui.set_version(SharedString::from(VERSION));
+                ui.set_ui_zoom_percent(zoom_build.percent() as i32);
+                {
+                    let z = zoom_build.clone();
+                    let s = state.clone();
+                    ui.on_ui_zoom_changed(move |p| {
+                        apply_ui_zoom(&z, |w, h| s.request_resize(w, h), p as u32);
+                    });
+                }
                 let name0 = params.name.read().map(|s| s.clone()).unwrap_or_default();
                 ui.set_display_name(SharedString::from(name0.as_str()));
                 ui.set_spectrum_smooth(shared.spectrum_smooth.load(Ordering::Relaxed));

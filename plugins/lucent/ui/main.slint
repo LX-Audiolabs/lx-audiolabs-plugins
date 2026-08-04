@@ -26,7 +26,11 @@ export component LucentUi inherits Window {
     min-width: 940px;
     min-height: 500px;
 
-    in property <string> version: "1.1.0";
+    in property <string> version: "1.2.0";
+
+    // Product UI zoom (75/100/125%) — logo menu in LxShellHeader
+    in-out property <int> ui_zoom_percent: 100;
+    callback ui_zoom_changed(int);
 
     // Identity
     in-out property <string> display_name: "";
@@ -93,6 +97,8 @@ export component LucentUi inherits Window {
         LxShellHeader {
             plugin-name: "Lucent";
             version: root.version;
+            ui-zoom-percent <=> root.ui_zoom_percent;
+            ui-zoom-changed(p) => { root.ui_zoom_changed(p); }
             show-instance-name: true;
             instance-name <=> root.display_name;
             instance-placeholder: "Instance name";

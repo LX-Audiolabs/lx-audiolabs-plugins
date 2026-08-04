@@ -7,6 +7,9 @@
 //! HiDPI / multi-monitor: mirrors truce-slint — shared [`EditorScale`],
 //! `set_scale_factor` / `set_size`, open-time scale announce, and resize
 //! reconcile that keeps logical layout stable across DPI changes.
+//!
+//! Product UI zoom (75/100/125%): layout stays at design size; effective
+//! content scale is `host_scale × ui_zoom`. Host frame is `design × ui_zoom`.
 
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -23,6 +26,7 @@ use truce_core::editor::{Editor, RawWindowHandle};
 use truce_params::Params;
 
 mod parent;
+mod ui_zoom;
 
 /// Re-export for plugin bind macros (replaces `truce_slint::paste`).
 pub use paste::paste;
@@ -32,6 +36,8 @@ pub use truce_core::editor::PluginContext;
 pub use lx_slint_baseview::platform::clipboard_get_retry;
 /// Shared content-scale cell (also used by the window handler).
 pub use lx_slint_baseview::EditorScale;
+/// Product UI zoom handle (75/100/125%) shared with logo menu callbacks.
+pub use ui_zoom::{apply_ui_zoom, UiZoom, UI_ZOOM_DEFAULT, UI_ZOOM_STEPS};
 
 /// Build closure: creates the Slint component and wires UI callbacks.
 pub type BuildFn<P, C> = Arc<dyn Fn(PluginContext<P>) -> C + Send + Sync>;
@@ -73,20 +79,21 @@ where
     C: ComponentHandle + 'static,
 {
     params: Arc<P>,
-    size: (u32, u32),
+    /// Design logical size (layout coordinates — never reflowed by UI zoom).
+    design_size: (u32, u32),
     build: BuildFn<P, C>,
     sync: SyncFn<P, C>,
     window: Option<Window>,
     can_resize: bool,
     min_size: (u32, u32),
     max_size: (u32, u32),
-    /// Live content scale shared with the baseview handler.
-    scale: EditorScale,
+    /// Product UI zoom + effective content scale (`host × zoom`).
+    ui_zoom: UiZoom,
     /// Host announced a content scale via [`Editor::set_scale_factor`].
     host_scale_set: bool,
     /// Standalone hosts set this so Linux honors desktop scale.
     use_system_scale: bool,
-    /// Packed logical size for `Editor::set_size` → handler `on_frame`.
+    /// Packed **design** logical size for handler reconcile (not host frame).
     pending_size: Arc<AtomicU64>,
 }
 
@@ -117,31 +124,68 @@ where
         build: impl Fn(PluginContext<P>) -> C + Send + Sync + 'static,
         sync: impl Fn(&C, &PluginContext<P>) + Send + Sync + 'static,
     ) -> Self {
+        Self::new_with_zoom(params, UiZoom::new(size.0, size.1), build, sync)
+    }
+
+    /// Like [`Self::new`], but takes a pre-built [`UiZoom`] so the `build`
+    /// closure can clone it and wire the logo zoom menu.
+    ///
+    /// ```ignore
+    /// let zoom = UiZoom::new(990, 660);
+    /// let z = zoom.clone();
+    /// LxSlintEditor::new_with_zoom(params, zoom, move |state| {
+    ///     let ui = MyUi::new().unwrap();
+    ///     ui.set_ui_zoom_percent(z.percent() as i32);
+    ///     let z2 = z.clone();
+    ///     let s = state.clone();
+    ///     ui.on_ui_zoom_changed(move |p| {
+    ///         z2.set_percent(p as u32);
+    ///         let (w, h) = z2.zoomed_size();
+    ///         let _ = s.request_resize(w, h);
+    ///     });
+    ///     ui
+    /// }, sync)
+    /// ```
+    pub fn new_with_zoom(
+        params: Arc<P>,
+        ui_zoom: UiZoom,
+        build: impl Fn(PluginContext<P>) -> C + Send + Sync + 'static,
+        sync: impl Fn(&C, &PluginContext<P>) + Send + Sync + 'static,
+    ) -> Self {
+        let design_size = ui_zoom.design_size();
+        let zoomed = ui_zoom.zoomed_size();
         Self {
             params,
-            size,
+            design_size,
             build: Arc::new(build),
             sync: Arc::new(sync),
             window: None,
             can_resize: false,
-            // Fixed-size default: min = max = design size (no stretch).
-            min_size: size,
-            max_size: size,
-            scale: EditorScale::new(1.0),
+            // Host min/max track zoomed frame (fixed-layout: min == max == size()).
+            min_size: zoomed,
+            max_size: zoomed,
+            ui_zoom,
             host_scale_set: false,
             use_system_scale: false,
             pending_size: Arc::new(AtomicU64::new(0)),
         }
     }
 
+    /// Shared UI-zoom handle (same cell as the live editor).
+    #[must_use]
+    pub fn ui_zoom(&self) -> UiZoom {
+        self.ui_zoom.clone()
+    }
+
     #[must_use]
     pub fn resizable(mut self, value: bool) -> Self {
-        // Report can_resize to the host if requested, but keep min=max=design
+        // Report can_resize to the host if requested, but keep min=max=zoomed
         // so format wrappers (CLAP fit_logical_size / VST3 checkSizeConstraint)
         // cannot force a stretch reflow. LX Slint UIs are fixed-layout.
         self.can_resize = value;
-        self.min_size = self.size;
-        self.max_size = self.size;
+        let z = self.ui_zoom.zoomed_size();
+        self.min_size = z;
+        self.max_size = z;
         self
     }
 
@@ -158,24 +202,32 @@ where
     }
 
     fn size_policy(&self) -> SizePolicy {
-        // Plugins: content scale is host set_scale only (default 1.0), never
-        // raw OS DPI (Xft.dpi / GetDpiForWindow). CLAP/VST3 report HWND size
-        // as size()*host_scale; the child must match that pixel size.
-        // Following OS DPI made a larger child than the host frame → clipped
-        // footer + gray margins, and mouse (phys/content_scale) desynced.
+        // Plugins: content scale is host set_scale × ui_zoom (default 1.0),
+        // never raw OS DPI (Xft.dpi / GetDpiForWindow). CLAP/VST3 report HWND
+        // size as size()*host_scale where size() is design×ui_zoom; physical
+        // child is design × (host×ui_zoom) = size() × host_scale.
+        // Layout logical size stays at design (no control reflow).
         // Linux: lx-slint-baseview skips continuous host request_resize
         // push-back (Bitwig grows the frame in a fight). Standalone may opt
         // into system scale via set_uses_system_scale.
         let host_driven_scale = !self.use_system_scale;
+        let zoomed = self.ui_zoom.zoomed_size();
         SizePolicy {
-            design_size: self.size,
-            min_size: self.min_size,
-            max_size: self.max_size,
+            // Slint layout coordinates = design (not host frame).
+            design_size: self.design_size,
+            min_size: zoomed,
+            max_size: zoomed,
             can_resize: self.can_resize,
-            scale: self.scale.clone(),
+            scale: self.ui_zoom.scale(),
             host_driven_scale,
             pending_size: Arc::clone(&self.pending_size),
         }
+    }
+
+    fn sync_minmax_to_zoom(&mut self) {
+        let z = self.ui_zoom.zoomed_size();
+        self.min_size = z;
+        self.max_size = z;
     }
 }
 
@@ -185,7 +237,8 @@ where
     C: ComponentHandle + 'static,
 {
     fn size(&self) -> (u32, u32) {
-        self.size
+        // Host frame = design × ui_zoom (layout still uses design_size).
+        self.ui_zoom.zoomed_size()
     }
 
     fn open(&mut self, parent: RawWindowHandle, context: PluginContext) {
@@ -194,17 +247,16 @@ where
 
         // Reset stale set_size from a previous open.
         self.pending_size.store(0, Ordering::Relaxed);
+        self.sync_minmax_to_zoom();
 
         let ctx = context.with_params(self.params.clone());
         let parent_window = parent::ParentedWindow::from_raw(parent);
 
-        let (w, h) = self.size;
-        // Physical pixels = design × content scale (host_scale, default 1.0).
-        // Do NOT pass LogicalSize — baseview would multiply by OS DPI and the
-        // child would no longer match CLAP get_size (logical × host_scale).
-        let content_scale = self.scale.get();
-        let phys_w = to_physical_px(w, content_scale);
-        let phys_h = to_physical_px(h, content_scale);
+        // Physical = design × (host_scale × ui_zoom) = zoomed_size × host_scale.
+        let (dw, dh) = self.design_size;
+        let content_scale = self.ui_zoom.scale().get();
+        let phys_w = to_physical_px(dw, content_scale);
+        let phys_h = to_physical_px(dh, content_scale);
         // FemtoVG needs OpenGL (baseview opengl feature).
         // alpha_bits=8 helps embedded plugin windows in DAW hosts.
         let options = WindowSettings::new()
@@ -219,18 +271,18 @@ where
         let sync = Arc::clone(&self.sync);
         let policy = self.size_policy();
 
-        // Host resize callback (corrective DPI / fixed-size push-back).
-        // Cloned PluginContext is Arc-based and Send.
+        // Host push-back must use zoomed frame size, not design logical.
+        // Baseview reconcile passes design (layout) size into this callback.
         let request_resize = {
             let resize_ctx = ctx.clone();
-            Some(Arc::new(move |rw: u32, rh: u32| resize_ctx.request_resize(rw, rh))
-                as lx_slint_baseview::RequestResizeFn)
+            let zoom = self.ui_zoom.clone();
+            Some(Arc::new(move |_rw: u32, _rh: u32| {
+                let (w, h) = zoom.zoomed_size();
+                resize_ctx.request_resize(w, h)
+            }) as lx_slint_baseview::RequestResizeFn)
         };
 
         let window = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            // Prefer host scale as fallback when the platform has none yet
-            // (old Win10 / X11 without Xft.dpi). No-op when OS already knows.
-            let host_scale = self.scale.get();
             let opened = SlintWindow::open_parented_with_policy(
                 &parent_window,
                 options,
@@ -242,24 +294,33 @@ where
                 policy,
                 request_resize,
             );
-            // Do not suggest_fallback_scale_factor here: that would reintroduce
-            // OS DPI into a surface that must stay size()*host_scale pixels.
-            let _ = host_scale;
             opened
         }));
 
         match window {
             Ok(Ok(w)) => {
-                // Snap host frame to design size after open (outside host open).
-                let (lw, lh) = self.size;
-                let _ = ctx.request_resize(lw, lh);
+                // Snap host frame to zoomed size after open (outside host open).
+                let (zw, zh) = self.ui_zoom.zoomed_size();
+                let _ = ctx.request_resize(zw, zh);
                 let _ = w.resize(baseview::dpi::Size::Physical(
                     baseview::dpi::PhysicalSize::new(phys_w, phys_h),
                 ));
                 self.window = Some(w);
             }
-            Ok(Err(e)) => log::error!("LxSlintEditor::open failed: {e}"),
-            Err(_) => log::error!("LxSlintEditor::open panicked"),
+            // Soft-fail: editor stays closed; DSP continues. Typical on old Linux/mac
+            // without OpenGL 3.2 Core / broken GLX embeds in REAPER.
+            Ok(Err(e)) => {
+                log::error!(
+                    "LX UI: OpenGL 3.2 Core unavailable or FemtoVG init failed — \
+                     editor left closed (audio still runs). Detail: {e}"
+                );
+            }
+            Err(_) => {
+                log::error!(
+                    "LX UI: OpenGL/FemtoVG open panicked — editor left closed. \
+                     Need OpenGL 3.2 Core (or newer). Audio still runs."
+                );
+            }
         }
     }
 
@@ -284,10 +345,10 @@ where
     }
 
     fn set_scale_factor(&mut self, factor: f64) {
-        // Shared cell; the live handler reconciles Slint on the next frame.
+        // Host HiDPI only — ui_zoom multiplies on top (shared effective cell).
         if factor.is_finite() && factor > 0.0 {
             self.host_scale_set = true;
-            self.scale.set(factor);
+            self.ui_zoom.set_host_scale(factor);
         }
     }
 
@@ -302,11 +363,12 @@ where
         // LX UIs are fixed-layout (stretch bands, absolute chrome). Host
         // set_size from multi-monitor / pane chrome must NOT reflow the
         // scene — that was the "nice stretching" regression. Keep design
-        // size; tell the host we did not accept a different size.
-        if (width, height) != self.size {
-            // Re-assert design size so the handler pushes the child/host back.
+        // layout; host frame is zoomed size only.
+        let zoomed = self.ui_zoom.zoomed_size();
+        if (width, height) != zoomed {
+            // Re-assert design logical for Slint; host push-back uses zoomed.
             self.pending_size
-                .store(pack_size(self.size), Ordering::Release);
+                .store(pack_size(self.design_size), Ordering::Release);
             return false;
         }
         true
@@ -334,16 +396,17 @@ where
         // Sync host params into the component so labels show defaults.
         (self.sync)(&component, &state);
 
-        // Scale: prefer live content scale, else DEFAULT_SCREENSHOT_SCALE (2.0).
+        // Scale: prefer live effective scale, else DEFAULT_SCREENSHOT_SCALE (2.0).
         let scale = {
-            let s = self.scale.get();
+            let s = self.ui_zoom.scale().get();
             if s.is_finite() && s > 0.0 && (s - 1.0).abs() > 1.0e-6 {
                 s
             } else {
                 2.0
             }
         };
-        let (w, h) = self.size;
+        // Screenshot renders design logical at the effective scale.
+        let (w, h) = self.design_size;
         let phys_w = to_physical_px(w, scale);
         let phys_h = to_physical_px(h, scale);
 

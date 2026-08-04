@@ -307,7 +307,11 @@ export component EquilibriumUi inherits Window {
     in-out property <bool> vault_setup_open: false;
     in-out property <string> vault_setup_path: "";
     in property <string> vault_paste_status: "";
-    in property <string> version: "1.7.0";
+    in property <string> version: "1.8.0";
+
+    // Product UI zoom (75/100/125%) — logo menu in LxShellHeader
+    in-out property <int> ui_zoom_percent: 100;
+    callback ui_zoom_changed(int);
 
     callback snap_clicked();
     callback save_clicked();
@@ -352,6 +356,8 @@ export component EquilibriumUi inherits Window {
         LxShellHeader {
             plugin-name: "EQUILIBRIUM";
             version: root.version;
+            ui-zoom-percent <=> root.ui_zoom_percent;
+            ui-zoom-changed(p) => { root.ui_zoom_changed(p); }
 
             HorizontalLayout {
                 spacing: 4px;
