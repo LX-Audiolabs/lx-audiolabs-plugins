@@ -5,7 +5,6 @@
 .DS_Store
 *.swp
 *.swo
-/graphify-out
 .aider*
 # Local scratch (soft-fail notes, personal checklists)
 /TODO.md
