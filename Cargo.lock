@@ -2733,6 +2733,7 @@ dependencies = [
 [[package]]
 name = "lx-slint-baseview"
 version = "0.1.0"
+source = "git+https://github.com/lxndrbe/lx-slint-baseview?branch=main#83759622d1137f23f0634ecf44d367bc0617a5c2"
 dependencies = [
  "baseview",
  "copypasta",
