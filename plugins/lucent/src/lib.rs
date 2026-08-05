@@ -25,13 +25,13 @@ pub(crate) type RelayFeed = (u8, String, [f32; SPECTRUM_BINS]);
 /// keystroke text immediately via `write_consumer_name`).
 pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShared) {
     let now_ms = lx_analysis::shm::now_ms();
-    let mut slot = shared.shm_slot.load(Ordering::Acquire);
+    let mut slot = shared.shm.slot.load(Ordering::Acquire);
     if slot < 0
         && let Some(hub) = relay_hub()
         && let Some(claimed) = hub.claim_consumer_slot(now_ms)
     {
         slot = claimed as i32;
-        shared.shm_slot.store(slot, Ordering::Release);
+        shared.shm.slot.store(slot, Ordering::Release);
     }
     if slot < 0 {
         return;
@@ -62,13 +62,13 @@ pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShare
 /// the next 33 ms tick / audio block.
 pub(crate) fn editor_publish_consumer_name(shared: &LucentShared, raw: &str) {
     let now_ms = lx_analysis::shm::now_ms();
-    let mut slot = shared.shm_slot.load(Ordering::Acquire);
+    let mut slot = shared.shm.slot.load(Ordering::Acquire);
     if slot < 0
         && let Some(hub) = relay_hub()
         && let Some(claimed) = hub.claim_consumer_slot(now_ms)
     {
         slot = claimed as i32;
-        shared.shm_slot.store(slot, Ordering::Release);
+        shared.shm.slot.store(slot, Ordering::Release);
     }
     if slot < 0 {
         return;
@@ -979,13 +979,13 @@ impl LucentDspState {
         if self.claimed_lucent_slot.is_some() {
             return;
         }
-        let adopted = params.shared.shm_slot.load(Ordering::Acquire);
+        let adopted = params.shared.shm.slot.load(Ordering::Acquire);
         if adopted >= 0 {
             self.claimed_lucent_slot = Some(adopted as u8);
         } else if let Some(hub) = relay_hub() {
             self.claimed_lucent_slot = hub.claim_consumer_slot(now_ms);
         }
-        params.shared.shm_slot.store(
+        params.shared.shm.slot.store(
             self.claimed_lucent_slot.map(|s| s as i32).unwrap_or(-1),
             Ordering::Release,
         );
@@ -1030,7 +1030,7 @@ impl LucentDspState {
         std::thread::spawn(move || {
             while alive.load(Ordering::Acquire) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
-                let slot = shared.shm_slot.load(Ordering::Acquire);
+                let slot = shared.shm.slot.load(Ordering::Acquire);
                 if slot < 0 {
                     continue;
                 }
@@ -1124,7 +1124,7 @@ impl PluginLogic for Lucent {
         let now_ms = lx_analysis::shm::now_ms();
         params
             .shared
-            .sample_rate
+            .spectrum.sample_rate
             .store(sr as f32, Ordering::Release);
 
         state.ensure_consumer_slot(params, now_ms);

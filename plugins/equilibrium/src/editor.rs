@@ -354,8 +354,8 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                             }
                             return;
                         }
-                        snap_shared.snap_active.store(true, Ordering::Release);
-                        snap_shared.snap_phase.store(1, Ordering::Release);
+                        snap_shared.snap.active.store(true, Ordering::Release);
+                        snap_shared.snap.phase.store(1, Ordering::Release);
                         if let Some(ui) = snap_ui.upgrade() {
                             ui.set_snap_label(SharedString::from("ANALYZE..."));
                         }
@@ -531,8 +531,8 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                                 .store(pink.tolerances[b], Ordering::Release);
                         }
                         reset_shared.selected_preset_index.store(0, Ordering::Release);
-                        reset_shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
-                        reset_shared.reset_analysis.store(true, Ordering::Release);
+                        reset_shared.auto_loud.gain_offset.store(0.0, Ordering::Release);
+                        reset_shared.snap.reset_analysis.store(true, Ordering::Release);
                         let _ = (&reset_params, &reset_vs);
                         tracing::info!("RESET clicked");
                     });
@@ -542,7 +542,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 {
                     let s = shared.clone();
                     ui.on_reset_peaks(move || {
-                        s.reset_peak.store(true, Ordering::Release);
+                        s.peaks.reset_peak.store(true, Ordering::Release);
                     });
                 }
 
@@ -554,10 +554,10 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                         if PluginContextReadF32::get_param(&st, P::PreMasterActive) > 0.5 {
                             return;
                         }
-                        if s.auto_loud_measuring.load(Ordering::Acquire) {
+                        if s.auto_loud.measuring.load(Ordering::Acquire) {
                             return;
                         }
-                        s.auto_loud_trigger.store(true, Ordering::Release);
+                        s.auto_loud.trigger.store(true, Ordering::Release);
                     });
                 }
 
@@ -579,7 +579,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 {
                     let s = shared.clone();
                     ui.on_reset_analysis_clicked(move || {
-                        s.reset_analysis.store(true, Ordering::Release);
+                        s.snap.reset_analysis.store(true, Ordering::Release);
                         s.listen_samples.store(0.0, Ordering::Release);
                         for b in 0..5 {
                             s.listen_levels[b].store(-90.0, Ordering::Release);
@@ -851,12 +851,12 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     }
                 }
 
-                let peak_l = shared.output_peak_l.load(Ordering::Acquire);
-                let peak_r = shared.output_peak_r.load(Ordering::Acquire);
-                let hold_l = shared.peak_hold_l.load(Ordering::Acquire);
-                let hold_r = shared.peak_hold_r.load(Ordering::Acquire);
-                let corr = shared.phase_correlation.load(Ordering::Acquire);
-                let balance = shared.balance.load(Ordering::Acquire);
+                let peak_l = shared.peaks.output_peak_l.load(Ordering::Acquire);
+                let peak_r = shared.peaks.output_peak_r.load(Ordering::Acquire);
+                let hold_l = shared.peaks.peak_hold_l.load(Ordering::Acquire);
+                let hold_r = shared.peaks.peak_hold_r.load(Ordering::Acquire);
+                let corr = shared.peaks.phase_correlation.load(Ordering::Acquire);
+                let balance = shared.peaks.balance.load(Ordering::Acquire);
 
                 let ml = db_to_meter(peak_l);
                 let mr = db_to_meter(peak_r);
@@ -892,7 +892,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 }
 
                 // Auto loud: apply gain offset when measure ends
-                let measuring = shared.auto_loud_measuring.load(Ordering::Acquire);
+                let measuring = shared.auto_loud.measuring.load(Ordering::Acquire);
                 if changed_bool(&mut cache.auto_loud, measuring) {
                     ui.set_auto_loud_measuring(measuring);
                     ui.set_auto_loud_label(SharedString::from(if measuring {
@@ -903,9 +903,9 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 }
                 // Falling edge handled by checking offset when not measuring
                 if !measuring {
-                    let offset = shared.auto_loud_gain_offset.load(Ordering::Acquire);
+                    let offset = shared.auto_loud.gain_offset.load(Ordering::Acquire);
                     if offset.abs() > 0.05 {
-                        shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
+                        shared.auto_loud.gain_offset.store(0.0, Ordering::Release);
                         let cur = p.output_gain.raw_target() as f32;
                         let new_db = (cur + offset).clamp(-12.0, 12.0);
                         let norm = ((new_db + 12.0) / 24.0) as f64;
@@ -914,7 +914,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 }
 
                 // SNAP label + write file on complete
-                let snap_now = shared.snap_active.load(Ordering::Acquire);
+                let snap_now = shared.snap.active.load(Ordering::Acquire);
                 let vault_path = vault_state
                     .try_lock()
                     .ok()
@@ -932,19 +932,19 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 } else if cache.snap_was_active {
                     if let Some(vp) = vault_path.as_ref().filter(|v| !v.is_empty()) {
                         let stereo = shared
-                            .snap_stereo_snap
+                            .snap.stereo
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
                             .unwrap_or_else(|| vec![-90.0; 1024]);
                         let mono = shared
-                            .snap_mono_snap
+                            .snap.mono
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
                             .unwrap_or_else(|| vec![-90.0; 1024]);
                         let delta = shared
-                            .snap_delta_snap
+                            .snap.delta
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
@@ -989,8 +989,8 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
 fn gonio_path(shared: &lx_analysis::EquilibriumShared, w: f32, h: f32) -> String {
     use lx_analysis::SCOPE_BUFFER_LEN;
     let (samples, write_pos) = {
-        let pos = shared.scope_write_pos.load(Ordering::Relaxed);
-        let samples = match shared.scope_samples.try_lock() {
+        let pos = shared.scope.write_pos.load(Ordering::Relaxed);
+        let samples = match shared.scope.samples.try_lock() {
             Ok(v) => v.clone(),
             Err(_) => return String::new(),
         };

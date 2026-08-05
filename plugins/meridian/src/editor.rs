@@ -344,7 +344,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
 
                 // SMOOTH default ON (display-only; not a host param).
                 shared
-                    .spectrum_smooth
+                    .spectrum.smooth
                     .store(true, Ordering::Release);
                 ui.set_spectrum_smooth(true);
 
@@ -460,8 +460,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                         }
                         return;
                     }
-                    snap_shared.snap_active.store(true, Ordering::Release);
-                    snap_shared.snap_phase.store(1, Ordering::Release);
+                    snap_shared.snap.active.store(true, Ordering::Release);
+                    snap_shared.snap.phase.store(1, Ordering::Release);
                     if let Some(ui) = snap_ui.upgrade() {
                         ui.set_snap_label(SharedString::from("ANALYZE..."));
                     }
@@ -472,7 +472,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let smooth_shared = shared.clone();
                 ui.on_spectrum_smooth_changed(move |on: bool| {
                     smooth_shared
-                        .spectrum_smooth
+                        .spectrum.smooth
                         .store(on, Ordering::Release);
                 });
 
@@ -480,7 +480,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let reset_shared = shared.clone();
                 ui.on_reset_peaks(move || {
                     reset_shared
-                        .reset_peak
+                        .peaks.reset_peak
                         .store(true, Ordering::Release);
                 });
 
@@ -650,11 +650,11 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 // AUTO LOUD — arm DSP meters (process applies trigger → measure ~5s)
                 let shared_loud = shared.clone();
                 ui.on_auto_loud_clicked(move || {
-                    if shared_loud.auto_loud_measuring.load(Ordering::Acquire) {
+                    if shared_loud.auto_loud.measuring.load(Ordering::Acquire) {
                         return; // already measuring
                     }
                     shared_loud
-                        .auto_loud_trigger
+                        .auto_loud.trigger
                         .store(true, Ordering::Release);
                 });
 
@@ -746,7 +746,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 );
 
                 let shared = &shared_for_sync;
-                let sr = shared.sample_rate.load(Ordering::Relaxed).max(1.0);
+                let sr = shared.spectrum.sample_rate.load(Ordering::Relaxed).max(1.0);
 
                 // --- EQ curve (cached like vizia EqCurveKey) ---
                 let key = eq_curve_key(&params_for_curve, sr);
@@ -757,13 +757,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
 
                 // --- meters ---
-                let peak_l_db = shared.output_peak_l.load(Ordering::Relaxed);
-                let peak_r_db = shared.output_peak_r.load(Ordering::Relaxed);
-                let hold_l_db = shared.peak_hold_l.load(Ordering::Relaxed);
-                let hold_r_db = shared.peak_hold_r.load(Ordering::Relaxed);
+                let peak_l_db = shared.peaks.output_peak_l.load(Ordering::Relaxed);
+                let peak_r_db = shared.peaks.output_peak_r.load(Ordering::Relaxed);
+                let hold_l_db = shared.peaks.peak_hold_l.load(Ordering::Relaxed);
+                let hold_r_db = shared.peaks.peak_hold_r.load(Ordering::Relaxed);
                 let gr_db = shared.gain_reduction.load(Ordering::Relaxed).max(0.0);
-                let corr = shared.phase_correlation.load(Ordering::Relaxed);
-                let balance = shared.balance.load(Ordering::Relaxed);
+                let corr = shared.peaks.phase_correlation.load(Ordering::Relaxed);
+                let balance = shared.peaks.balance.load(Ordering::Relaxed);
 
                 let ml = db_to_meter(peak_l_db);
                 let mr = db_to_meter(peak_r_db);
@@ -834,13 +834,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 )));
 
                 // --- Auto Loud status + apply LUFS offset when measure ends ---
-                let measuring = shared.auto_loud_measuring.load(Ordering::Acquire);
+                let measuring = shared.auto_loud.measuring.load(Ordering::Acquire);
                 if changed_bool(&mut cache.auto_loud, measuring) {
                     ui.set_auto_loud_measuring(measuring);
                 }
                 if cache.was_measuring && !measuring {
-                    let offset = shared.auto_loud_gain_offset.load(Ordering::Acquire);
-                    shared.auto_loud_gain_offset.store(0.0, Ordering::Release);
+                    let offset = shared.auto_loud.gain_offset.load(Ordering::Acquire);
+                    shared.auto_loud.gain_offset.store(0.0, Ordering::Release);
                     if offset.abs() > 0.01 {
                         let cur_db = state.params().output_gain.raw_target() as f32;
                         let new_db = (cur_db + offset).clamp(-12.0, 12.0);
@@ -851,7 +851,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 cache.was_measuring = measuring;
 
                 // --- SNAP: label blink + write SNAPSHOT-*.md on complete ---
-                let snap_now = shared.snap_active.load(Ordering::Acquire);
+                let snap_now = shared.snap.active.load(Ordering::Acquire);
                 let vault_path = vault_state_sync
                     .try_lock()
                     .ok()
@@ -869,19 +869,19 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     // Falling edge: write snapshot file (vizia tick parity).
                     if let Some(vp) = vault_path.as_ref().filter(|v| !v.is_empty()) {
                         let stereo = shared
-                            .snap_stereo_snap
+                            .snap.stereo
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
                             .unwrap_or_else(|| vec![-90.0; 1024]);
                         let mono = shared
-                            .snap_mono_snap
+                            .snap.mono
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
                             .unwrap_or_else(|| vec![-90.0; 1024]);
                         let delta = shared
-                            .snap_delta_snap
+                            .snap.delta
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
@@ -918,7 +918,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
 
                 // --- spectrum & goniometer at tick rate only (~30 Hz, vizia parity) ---
                 // path-h must match LxSpectrum path-h / FFT card height (165).
-                ui.set_spectrum_smooth(shared.spectrum_smooth.load(Ordering::Relaxed));
+                ui.set_spectrum_smooth(shared.spectrum.smooth.load(Ordering::Relaxed));
                 let (cmds, fill_top) = spectrum_path(shared, 620.0, 165.0);
                 ui.set_spectrum_path(slint::SharedString::from(cmds));
                 // Rebuild the fill brush only when the peak moves ≥2 % of height.
@@ -1033,17 +1033,17 @@ fn spectrum_path(shared: &lx_analysis::MeridianShared, w: f32, h: f32) -> (Strin
     const MAX_DB: f32 = -18.0;
 
     let bins = shared
-        .spectrum_avg
+        .spectrum.avg
         .try_lock()
         .map(|b| b.clone())
-        .or_else(|_| shared.spectrum_bins.try_lock().map(|b| b.clone()))
+        .or_else(|_| shared.spectrum.bins.try_lock().map(|b| b.clone()))
         .unwrap_or_default();
     let n = bins.len().min(SPECTRUM_BINS);
     if n < 2 {
         return (String::new(), 1.0);
     }
 
-    let sr = shared.sample_rate.load(Ordering::Relaxed).max(1.0);
+    let sr = shared.spectrum.sample_rate.load(Ordering::Relaxed).max(1.0);
     let fft_size = (n * 2) as f32;
     let log_f = |f: f32| -> f32 {
         ((f.max(20.0).ln() - 20.0f32.ln()) / (20000.0f32.ln() - 20.0f32.ln())).clamp(0.0, 1.0)
@@ -1055,7 +1055,7 @@ fn spectrum_path(shared: &lx_analysis::MeridianShared, w: f32, h: f32) -> (Strin
 
     // Collect log-x samples. SMOOTH on = 1/3-octave fractional-band average
     // (Lucent parity); off = raw log-spaced bins (skip sub-20 Hz bins).
-    let pts: Vec<(f32, f32)> = if shared.spectrum_smooth.load(Ordering::Relaxed) {
+    let pts: Vec<(f32, f32)> = if shared.spectrum.smooth.load(Ordering::Relaxed) {
         let sm = smooth_spectrum_third_octave(&bins[..n], sr);
         let denom = sm.len().saturating_sub(1).max(1) as f32;
         sm.iter()
@@ -1164,8 +1164,8 @@ fn gr_envelope_path(history: &[f32], current: f32, w: f32, h: f32) -> String {
 fn gonio_path(shared: &lx_analysis::MeridianShared, w: f32, h: f32) -> String {
     use lx_analysis::SCOPE_BUFFER_LEN;
     let (samples, write_pos) = {
-        let pos = shared.scope_write_pos.load(Ordering::Relaxed);
-        let samples = match shared.scope_samples.try_lock() {
+        let pos = shared.scope.write_pos.load(Ordering::Relaxed);
+        let samples = match shared.scope.samples.try_lock() {
             Ok(v) => v.clone(),
             Err(_) => return String::new(),
         };

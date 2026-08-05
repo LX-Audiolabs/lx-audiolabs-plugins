@@ -106,16 +106,16 @@ pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
         return;
     };
 
-    let mut slot = params.shm.shm_slot.load(Ordering::Acquire);
-    let mut generation = params.shm.shm_generation.load(Ordering::Acquire);
+    let mut slot = params.shm.slot.load(Ordering::Acquire);
+    let mut generation = params.shm.generation.load(Ordering::Acquire);
     if slot < 0 {
         let Some((s, g)) = hub.claim_slot(now_ms) else {
             return;
         };
         slot = s as i32;
         generation = g;
-        params.shm.shm_slot.store(slot, Ordering::Release);
-        params.shm.shm_generation.store(generation, Ordering::Release);
+        params.shm.slot.store(slot, Ordering::Release);
+        params.shm.generation.store(generation, Ordering::Release);
     }
 
     let (raw, sel) = read_persisted(params);
@@ -208,10 +208,10 @@ impl LucentRelayDspState {
     fn claim_slot(&mut self) {
         use std::sync::atomic::Ordering;
         if self.claimed_slot.is_none() {
-            let adopted = self.shm_state.shm_slot.load(Ordering::Acquire);
+            let adopted = self.shm_state.slot.load(Ordering::Acquire);
             if adopted >= 0 {
                 self.claimed_slot = Some(adopted as u8);
-                self.claimed_generation = self.shm_state.shm_generation.load(Ordering::Acquire);
+                self.claimed_generation = self.shm_state.generation.load(Ordering::Acquire);
                 self.fallback_label = format!("Relay {}", adopted as u8 + 1);
             } else if let Some(hub) = relay_hub()
                 && let Some((slot, generation)) = hub.claim_slot(lx_analysis::shm::now_ms())
@@ -221,11 +221,11 @@ impl LucentRelayDspState {
                 self.fallback_label = format!("Relay {}", slot + 1);
             }
         }
-        self.shm_state.shm_slot.store(
+        self.shm_state.slot.store(
             self.claimed_slot.map(|s| s as i32).unwrap_or(-1),
             Ordering::Release,
         );
-        self.shm_state.shm_generation.store(
+        self.shm_state.generation.store(
             self.claimed_generation,
             Ordering::Release,
         );
@@ -243,11 +243,11 @@ impl LucentRelayDspState {
         std::thread::spawn(move || {
             while alive.load(Ordering::Acquire) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
-                let slot = ss.shm_slot.load(Ordering::Acquire);
+                let slot = ss.slot.load(Ordering::Acquire);
                 if slot < 0 {
                     continue;
                 }
-                let generation = ss.shm_generation.load(Ordering::Acquire);
+                let generation = ss.generation.load(Ordering::Acquire);
                 if let Some(hub) = relay_hub() {
                     let now = lx_analysis::shm::now_ms();
                     let (raw, sel) = live.read().map(|g| g.clone()).unwrap_or_default();

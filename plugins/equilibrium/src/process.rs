@@ -84,14 +84,14 @@ fn param_update(state: &mut EquilibriumDspState, params: &EquilibriumParams) -> 
     }
 
     // Reset peak
-    if params.shared.reset_peak.swap(false, Ordering::Release) {
+    if params.shared.peaks.reset_peak.swap(false, Ordering::Release) {
         state.peak_hold_value = MINUS_INF_DB;
         state.peak_hold_l_value = MINUS_INF_DB;
         state.peak_hold_r_value = MINUS_INF_DB;
     }
 
     // Reset analysis
-    if params.shared.reset_analysis.swap(false, Ordering::Release) {
+    if params.shared.snap.reset_analysis.swap(false, Ordering::Release) {
         for b in 0..BAND_COUNT {
             state.listen_band_power_sum[b] = 0.0;
             state.listen_lo_ema[b] = f64::INFINITY;
@@ -151,7 +151,7 @@ fn param_update(state: &mut EquilibriumDspState, params: &EquilibriumParams) -> 
 
     let bypass = params.bypass_active.value();
 
-    let snap_phase = params.shared.snap_phase.load(Ordering::Acquire);
+    let snap_phase = params.shared.snap.phase.load(Ordering::Acquire);
     let mono = match snap_phase {
         2 => true,
         _ => params.mono_active.value(),
@@ -163,7 +163,7 @@ fn param_update(state: &mut EquilibriumDspState, params: &EquilibriumParams) -> 
     let listen = params.listen_active.value();
     let auto_gain = params.auto_gain_active.value();
 
-    let is_measuring = params.shared.auto_loud_measuring.load(Ordering::Acquire);
+    let is_measuring = params.shared.auto_loud.measuring.load(Ordering::Acquire);
 
     ProcessControl {
         sample_rate,
@@ -454,21 +454,21 @@ fn process_block(
                     };
                     let snapshot = state.snap_fft.read_snapshot(mode);
                     if let Ok(mut buf) = match mode {
-                        SnapMode::Stereo => params.shared.snap_stereo_snap.try_lock(),
-                        SnapMode::Mono => params.shared.snap_mono_snap.try_lock(),
-                        SnapMode::Delta => params.shared.snap_delta_snap.try_lock(),
+                        SnapMode::Stereo => params.shared.snap.stereo.try_lock(),
+                        SnapMode::Mono => params.shared.snap.mono.try_lock(),
+                        SnapMode::Delta => params.shared.snap.delta.try_lock(),
                     } {
                         buf.copy_from_slice(&snapshot);
                     }
                     let next_phase = if snap_phase < 3 { snap_phase + 1 } else { 0 };
                     if next_phase == 0 {
-                        params.shared.snap_active.store(false, Ordering::Release);
+                        params.shared.snap.active.store(false, Ordering::Release);
                     } else {
                         state.snap_fft.reset_snapshots();
                     }
                     params
                         .shared
-                        .snap_phase
+                        .snap.phase
                         .store(next_phase, Ordering::Release);
                     snap_phase = next_phase;
                 }
@@ -581,7 +581,7 @@ fn publish(
     } else {
         0.0
     };
-    params.shared.balance.store(balance, Ordering::Release);
+    params.shared.peaks.balance.store(balance, Ordering::Release);
 
     // Band power → dB
     for b in 0..BAND_COUNT {
@@ -680,7 +680,7 @@ fn publish(
     };
     params
         .shared
-        .phase_correlation
+        .peaks.phase_correlation
         .store(correlation.clamp(-1.0, 1.0), Ordering::Release);
 
     // Auto gain
@@ -698,14 +698,14 @@ fn publish(
     }
 
     // AUTO LOUD
-    if params.shared.auto_loud_trigger.load(Ordering::Acquire) {
+    if params.shared.auto_loud.trigger.load(Ordering::Acquire) {
         params
             .shared
-            .auto_loud_trigger
+            .auto_loud.trigger
             .store(false, Ordering::Release);
         params
             .shared
-            .auto_loud_measuring
+            .auto_loud.measuring
             .store(true, Ordering::Release);
         state.auto_loud_in.reset();
         state.auto_loud_out.reset();
@@ -722,11 +722,11 @@ fn publish(
             let offset_clamped = lufs_offset.clamp(-24.0, peak_limit);
             params
                 .shared
-                .auto_loud_gain_offset
+                .auto_loud.gain_offset
                 .store(offset_clamped, Ordering::Release);
             params
                 .shared
-                .auto_loud_measuring
+                .auto_loud.measuring
                 .store(false, Ordering::Release);
         }
     }
@@ -811,25 +811,25 @@ fn publish(
         let block_peak_db = gain_to_db(peak);
         params
             .shared
-            .output_peak
+            .peaks.output_peak
             .store(block_peak_db, Ordering::Release);
         if block_peak_db > state.peak_hold_value {
             state.peak_hold_value = block_peak_db;
         }
         params
             .shared
-            .peak_hold
+            .peaks.peak_hold
             .store(state.peak_hold_value, Ordering::Release);
 
         let peak_l_db = gain_to_db(peak_l);
         let peak_r_db = gain_to_db(peak_r);
         params
             .shared
-            .output_peak_l
+            .peaks.output_peak_l
             .store(peak_l_db, Ordering::Release);
         params
             .shared
-            .output_peak_r
+            .peaks.output_peak_r
             .store(peak_r_db, Ordering::Release);
         if peak_l_db > state.peak_hold_l_value {
             state.peak_hold_l_value = peak_l_db;
@@ -839,18 +839,18 @@ fn publish(
         }
         params
             .shared
-            .peak_hold_l
+            .peaks.peak_hold_l
             .store(state.peak_hold_l_value, Ordering::Release);
         params
             .shared
-            .peak_hold_r
+            .peaks.peak_hold_r
             .store(state.peak_hold_r_value, Ordering::Release);
     }
 
     // Goniometer scope buffer
     {
-        let start_pos = params.shared.scope_write_pos.load(Ordering::Acquire);
-        if let Ok(mut scope) = params.shared.scope_samples.try_lock() {
+        let start_pos = params.shared.scope.write_pos.load(Ordering::Acquire);
+        if let Ok(mut scope) = params.shared.scope.samples.try_lock() {
             let buf_len = SCOPE_BUFFER_LEN;
             let n = out0.len().min(out1.len());
             let block_peak = (0..n)
@@ -875,7 +875,7 @@ fn publish(
             }
             params
                 .shared
-                .scope_write_pos
+                .scope.write_pos
                 .store((start_pos + n) % buf_len, Ordering::Release);
         }
     }

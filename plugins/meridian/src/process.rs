@@ -81,15 +81,15 @@ let bypass = params.bypass_active.value();
 // Reset analysis
 if params
     .shared
-    .reset_analysis
+    .snap.reset_analysis
     .swap(false, Ordering::Acquire)
 {
     state.fft_input.fill(0.0);
     state.fft_write_pos = 0;
-    if let Ok(mut avg) = params.shared.spectrum_avg.try_lock() {
+    if let Ok(mut avg) = params.shared.spectrum.avg.try_lock() {
         avg.fill(-90.0);
     }
-    if let Ok(mut bins) = params.shared.spectrum_bins.try_lock() {
+    if let Ok(mut bins) = params.shared.spectrum.bins.try_lock() {
         bins.fill(-90.0);
     }
     state.hpf_l.reset();
@@ -128,7 +128,7 @@ if params
     state.xo_highmid_high_r.reset();
 }
 
-let sample_rate = params.shared.sample_rate.load(Ordering::Acquire);
+let sample_rate = params.shared.spectrum.sample_rate.load(Ordering::Acquire);
 state.compressor.set_sample_rate(sample_rate);
 
 // Dirty-flag coefficient update
@@ -319,7 +319,7 @@ if excite_freq != state.cached_excite_freq || coef_dirty {
 }
 
 // Reset peak
-if params.shared.reset_peak.swap(false, Ordering::Release) {
+if params.shared.peaks.reset_peak.swap(false, Ordering::Release) {
     state.peak_hold_value = -90.0;
     state.peak_hold_l_value = -90.0;
     state.peak_hold_r_value = -90.0;
@@ -347,7 +347,7 @@ let width = params.stereo_width.value() / 100.0;
 let pan = params.pan.value();
 let out_gain = db_to_gain(params.output_gain.value());
 
-let snap_phase = params.shared.snap_phase.load(Ordering::Acquire);
+let snap_phase = params.shared.snap.phase.load(Ordering::Acquire);
 let mono = match snap_phase {
     2 => true,
     3 => false,
@@ -360,7 +360,7 @@ let delta = match snap_phase {
 
     let is_measuring = params
         .shared
-        .auto_loud_measuring
+        .auto_loud.measuring
         .load(Ordering::Acquire);
 
     ProcessControl {
@@ -715,7 +715,7 @@ let corr = if denom > 1e-6 {
 };
 params
     .shared
-    .phase_correlation
+    .peaks.phase_correlation
     .store(corr, Ordering::Release);
 
 // Peak meters
@@ -724,30 +724,30 @@ let peak_l_db = gain_to_db(max_out_peak_l);
 let peak_r_db = gain_to_db(max_out_peak_r);
 params
     .shared
-    .output_peak
+    .peaks.output_peak
     .store(peak_db, Ordering::Release);
 params
     .shared
-    .output_peak_l
+    .peaks.output_peak_l
     .store(peak_l_db, Ordering::Release);
 params
     .shared
-    .output_peak_r
+    .peaks.output_peak_r
     .store(peak_r_db, Ordering::Release);
 state.peak_hold_value = state.peak_hold_value.max(peak_db);
 state.peak_hold_l_value = state.peak_hold_l_value.max(peak_l_db);
 state.peak_hold_r_value = state.peak_hold_r_value.max(peak_r_db);
 params
     .shared
-    .peak_hold
+    .peaks.peak_hold
     .store(state.peak_hold_value, Ordering::Release);
 params
     .shared
-    .peak_hold_l
+    .peaks.peak_hold_l
     .store(state.peak_hold_l_value, Ordering::Release);
 params
     .shared
-    .peak_hold_r
+    .peaks.peak_hold_r
     .store(state.peak_hold_r_value, Ordering::Release);
 
 // Balance
@@ -759,7 +759,7 @@ let balance = if sum_lr > 1e-6 {
 } else {
     0.0
 };
-params.shared.balance.store(balance, Ordering::Release);
+params.shared.peaks.balance.store(balance, Ordering::Release);
 
 // FFT Spectrum
 {
@@ -785,7 +785,7 @@ params.shared.balance.store(balance, Ordering::Release);
     }
 
     // Compute and write spectrum after each buffer
-    if let Ok(mut spectrum_frame) = params.shared.spectrum_bins.try_lock() {
+    if let Ok(mut spectrum_frame) = params.shared.spectrum.bins.try_lock() {
         lx_analysis::compute_spectrum_bins(
             &state.fft_output_cache,
             &mut spectrum_frame,
@@ -795,8 +795,8 @@ params.shared.balance.store(balance, Ordering::Release);
     }
 
     // Update spectrum_avg (EMA) from spectrum_bins
-    if let Ok(mut avg) = params.shared.spectrum_avg.try_lock()
-        && let Ok(bins) = params.shared.spectrum_bins.try_lock()
+    if let Ok(mut avg) = params.shared.spectrum.avg.try_lock()
+        && let Ok(bins) = params.shared.spectrum.bins.try_lock()
     {
         let n_bins = SPECTRUM_BINS;
         // Energy-gating: only update EMA if signal above -80 dB
@@ -849,9 +849,9 @@ if snap_phase > 0 {
                 };
                 let snapshot = state.snap_fft.read_snapshot(mode);
                 if let Ok(mut buf) = match mode {
-                    SnapMode::Stereo => params.shared.snap_stereo_snap.try_lock(),
-                    SnapMode::Mono => params.shared.snap_mono_snap.try_lock(),
-                    SnapMode::Delta => params.shared.snap_delta_snap.try_lock(),
+                    SnapMode::Stereo => params.shared.snap.stereo.try_lock(),
+                    SnapMode::Mono => params.shared.snap.mono.try_lock(),
+                    SnapMode::Delta => params.shared.snap.delta.try_lock(),
                 } {
                     buf.copy_from_slice(&snapshot);
                 }
@@ -859,14 +859,14 @@ if snap_phase > 0 {
                 if next_phase == 0 {
                     params
                         .shared
-                        .snap_active
+                        .snap.active
                         .store(false, Ordering::Release);
                 } else {
                     state.snap_fft.reset_snapshots();
                 }
                 params
                     .shared
-                    .snap_phase
+                    .snap.phase
                     .store(next_phase, Ordering::Release);
                 snap_phase = next_phase;
             }
@@ -875,14 +875,14 @@ if snap_phase > 0 {
 }
 
 // AUTO LOUD
-if params.shared.auto_loud_trigger.load(Ordering::Acquire) {
+if params.shared.auto_loud.trigger.load(Ordering::Acquire) {
     params
         .shared
-        .auto_loud_trigger
+        .auto_loud.trigger
         .store(false, Ordering::Release);
     params
         .shared
-        .auto_loud_measuring
+        .auto_loud.measuring
         .store(true, Ordering::Release);
     state.auto_loud_in.reset();
     state.auto_loud_pre_sat.reset();
@@ -905,19 +905,19 @@ if is_measuring {
         let offset_clamped = lufs_offset.clamp(-24.0, peak_limit);
         params
             .shared
-            .auto_loud_gain_offset
+            .auto_loud.gain_offset
             .store(offset_clamped, Ordering::Release);
         params
             .shared
-            .auto_loud_measuring
+            .auto_loud.measuring
             .store(false, Ordering::Release);
     }
 }
 
 // Goniometer scope buffer
 {
-    let start_pos = params.shared.scope_write_pos.load(Ordering::Acquire);
-    if let Ok(mut scope) = params.shared.scope_samples.try_lock() {
+    let start_pos = params.shared.scope.write_pos.load(Ordering::Acquire);
+    if let Ok(mut scope) = params.shared.scope.samples.try_lock() {
         let buf_len = SCOPE_BUFFER_LEN;
         let n = num_samples.min(buf_len);
         let block_peak = (0..n)
@@ -942,7 +942,7 @@ if is_measuring {
         }
         params
             .shared
-            .scope_write_pos
+            .scope.write_pos
             .store((start_pos + n) % buf_len, Ordering::Release);
     }
 }

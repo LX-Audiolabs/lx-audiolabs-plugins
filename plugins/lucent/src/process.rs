@@ -28,7 +28,7 @@ pub(crate) fn run(
     state.publish_consumer_name(params, now_ms);
 
     // Reset peak holds on request
-    if params.shared.reset_peak.swap(false, Ordering::Release) {
+    if params.shared.peaks.reset_peak.swap(false, Ordering::Release) {
         state.peak_hold_value = -100.0;
         state.peak_hold_l_value = -100.0;
         state.peak_hold_r_value = -100.0;
@@ -140,10 +140,10 @@ pub(crate) fn run(
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.iter_mut().for_each(|m| *m = -90.0);
                         }
-                        if let Ok(mut bins) = params.shared.spectrum_bins.try_lock() {
+                        if let Ok(mut bins) = params.shared.spectrum.bins.try_lock() {
                             bins.copy_from_slice(&frame);
                         }
-                        if let Ok(mut avg) = params.shared.spectrum_avg.try_lock() {
+                        if let Ok(mut avg) = params.shared.spectrum.avg.try_lock() {
                             // Energy-gating: only update EMA if signal above -80 dB
                             let frame_energy =
                                 frame.iter().map(|x| x * x).sum::<f32>() / n_bins as f32;
@@ -227,10 +227,10 @@ pub(crate) fn run(
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.copy_from_slice(&state.masking_analyzer.masking_map);
                         }
-                        if let Ok(mut bins) = params.shared.spectrum_bins.try_lock() {
+                        if let Ok(mut bins) = params.shared.spectrum.bins.try_lock() {
                             bins.copy_from_slice(&frame);
                         }
-                        if let Ok(mut avg) = params.shared.spectrum_avg.try_lock() {
+                        if let Ok(mut avg) = params.shared.spectrum.avg.try_lock() {
                             let frame_energy =
                                 frame.iter().map(|x| x * x).sum::<f32>() / n_bins as f32;
                             let energy_db = 10.0 * frame_energy.log10().max(-40.0);
@@ -245,10 +245,10 @@ pub(crate) fn run(
                         }
                     }
                     _ => {
-                        if let Ok(mut bins) = params.shared.spectrum_bins.try_lock() {
+                        if let Ok(mut bins) = params.shared.spectrum.bins.try_lock() {
                             bins.iter_mut().for_each(|b| *b = -90.0);
                         }
-                        if let Ok(mut avg) = params.shared.spectrum_avg.try_lock() {
+                        if let Ok(mut avg) = params.shared.spectrum.avg.try_lock() {
                             avg.iter_mut().for_each(|b| *b = -90.0);
                         }
                         let mask = params
@@ -324,15 +324,15 @@ pub(crate) fn run(
     let peak_mono_db = peak_l_db.max(peak_r_db);
     params
         .shared
-        .output_peak_l
+        .peaks.output_peak_l
         .store(peak_l_db, Ordering::Release);
     params
         .shared
-        .output_peak_r
+        .peaks.output_peak_r
         .store(peak_r_db, Ordering::Release);
     params
         .shared
-        .output_peak
+        .peaks.output_peak
         .store(peak_mono_db, Ordering::Release);
     if peak_l_db > state.peak_hold_l_value {
         state.peak_hold_l_value = peak_l_db;
@@ -345,15 +345,15 @@ pub(crate) fn run(
     }
     params
         .shared
-        .peak_hold_l
+        .peaks.peak_hold_l
         .store(state.peak_hold_l_value, Ordering::Release);
     params
         .shared
-        .peak_hold_r
+        .peaks.peak_hold_r
         .store(state.peak_hold_r_value, Ordering::Release);
     params
         .shared
-        .peak_hold
+        .peaks.peak_hold
         .store(state.peak_hold_value, Ordering::Release);
 
     // Stereo balance + correlation
@@ -366,7 +366,7 @@ pub(crate) fn run(
         } else {
             0.0
         };
-        params.shared.balance.store(balance, Ordering::Release);
+        params.shared.peaks.balance.store(balance, Ordering::Release);
 
         let corr = if sum_l2 > 1e-9 && sum_r2 > 1e-9 {
             sum_lr / (sum_l2.sqrt() * sum_r2.sqrt())
@@ -375,7 +375,7 @@ pub(crate) fn run(
         };
         params
             .shared
-            .phase_correlation
+            .peaks.phase_correlation
             .store(corr.clamp(-1.0, 1.0), Ordering::Release);
     }
 
@@ -385,8 +385,8 @@ pub(crate) fn run(
     // fills the same visual range as theirs instead of showing a tiny
     // raw-amplitude dot cluster at typical (well below full-scale) mix levels.
     {
-        let start_pos = params.shared.scope_write_pos.load(Ordering::Acquire);
-        if let Ok(mut scope) = params.shared.scope_samples.try_lock() {
+        let start_pos = params.shared.scope.write_pos.load(Ordering::Acquire);
+        if let Ok(mut scope) = params.shared.scope.samples.try_lock() {
             let buf_len = scope_len;
             let block_peak = (0..n)
                 .map(|i| lbuf[i].abs().max(rbuf[i].abs()))
@@ -410,7 +410,7 @@ pub(crate) fn run(
             }
             params
                 .shared
-                .scope_write_pos
+                .scope.write_pos
                 .store((start_pos + n) % buf_len, Ordering::Release);
         }
     }

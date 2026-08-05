@@ -7,7 +7,7 @@
 //!
 //! Display chain (dev parity 2026-07):
 //! - Spectrum range SPAN-like −78…−18 dB, log-frequency axis (20 Hz…20 kHz)
-//! - SMOOTH toggle → LucentShared.spectrum_smooth (1/3-oct display smooth)
+//! - SMOOTH toggle → LucentShared.spectrum.smooth (1/3-oct display smooth)
 //! - SNAP → session max-hold resonance/masking markdown (no FFT phases)
 
 use std::collections::HashMap;
@@ -253,8 +253,8 @@ fn res_marker_cmds(bin: usize, sample_rate: f32) -> String {
 fn gonio_path(shared: &LucentShared, w: f32, h: f32, out: &mut String) {
     out.clear();
     let (samples, write_pos) = {
-        let pos = shared.scope_write_pos.load(Ordering::Relaxed);
-        let samples = match shared.scope_samples.try_lock() {
+        let pos = shared.scope.write_pos.load(Ordering::Relaxed);
+        let samples = match shared.scope.samples.try_lock() {
             Ok(v) => v.clone(),
             Err(_) => return,
         };
@@ -685,7 +685,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 }
                 let name0 = params.name.read().map(|s| s.clone()).unwrap_or_default();
                 ui.set_display_name(SharedString::from(name0.as_str()));
-                ui.set_spectrum_smooth(shared.spectrum_smooth.load(Ordering::Relaxed));
+                ui.set_spectrum_smooth(shared.spectrum.smooth.load(Ordering::Relaxed));
                 if let Some(ref vp) = init_vp {
                     ui.set_vault_path(SharedString::from(vp.as_str()));
                 }
@@ -728,17 +728,17 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
 
                 let shared_smooth = shared.clone();
                 ui.on_spectrum_smooth_changed(move |on: bool| {
-                    shared_smooth.spectrum_smooth.store(on, Ordering::Relaxed);
+                    shared_smooth.spectrum.smooth.store(on, Ordering::Relaxed);
                 });
 
                 // RESET: peak holds re-arm in process(); clear the display
                 // atomics immediately too (dev parity).
                 let shared_reset = shared.clone();
                 ui.on_reset_peaks(move || {
-                    shared_reset.reset_peak.store(true, Ordering::Release);
-                    shared_reset.peak_hold.store(-100.0, Ordering::Release);
-                    shared_reset.peak_hold_l.store(-100.0, Ordering::Release);
-                    shared_reset.peak_hold_r.store(-100.0, Ordering::Release);
+                    shared_reset.peaks.reset_peak.store(true, Ordering::Release);
+                    shared_reset.peaks.peak_hold.store(-100.0, Ordering::Release);
+                    shared_reset.peaks.peak_hold_l.store(-100.0, Ordering::Release);
+                    shared_reset.peaks.peak_hold_r.store(-100.0, Ordering::Release);
                 });
 
                 // Relay toggle bar — flips the slot-stable toggle and pushes
@@ -854,7 +854,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 if changed_f32(&mut cache.sens_text_q, plain_q) {
                     ui.set_sensitivity_text(SharedString::from(format!("{plain:.0}%")));
                 }
-                let smooth = shared_sync.spectrum_smooth.load(Ordering::Relaxed);
+                let smooth = shared_sync.spectrum.smooth.load(Ordering::Relaxed);
                 if changed_bool(&mut cache.smooth, smooth) {
                     ui.set_spectrum_smooth(smooth);
                 }
@@ -864,7 +864,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 // Process `publish_relays` still feeds DSP; UI must not wait on FFT.
                 if mode != 0 {
                     let now_ms = lx_analysis::shm::now_ms();
-                    let slot = shared_sync.shm_slot.load(Ordering::Acquire);
+                    let slot = shared_sync.shm.slot.load(Ordering::Acquire);
                     let raw = params_sync
                         .name_bg
                         .try_read()
@@ -929,10 +929,10 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 }
 
                 // --- spectrum + overlays ---
-                let sr = shared_sync.sample_rate.load(Ordering::Relaxed).max(1.0);
+                let sr = shared_sync.spectrum.sample_rate.load(Ordering::Relaxed).max(1.0);
                 {
                     let bins = shared_sync
-                        .spectrum_avg
+                        .spectrum.avg
                         .try_lock()
                         .ok()
                         .map(|g| g.clone())
@@ -1130,8 +1130,8 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
 
                 // --- meters / correlation / balance ---
                 let peak = shared_sync.input_peak.load(Ordering::Relaxed);
-                let pl = shared_sync.output_peak_l.load(Ordering::Relaxed);
-                let pr = shared_sync.output_peak_r.load(Ordering::Relaxed);
+                let pl = shared_sync.peaks.output_peak_l.load(Ordering::Relaxed);
+                let pr = shared_sync.peaks.output_peak_r.load(Ordering::Relaxed);
                 let pl = if pl <= -90.0 { peak } else { pl };
                 let pr = if pr <= -90.0 { peak } else { pr };
                 let ml = peak_norm(pl);
@@ -1142,8 +1142,8 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 if changed_f32(&mut cache.meter_r, mr) {
                     ui.set_meter_r(mr);
                 }
-                let hold_l_db = shared_sync.peak_hold_l.load(Ordering::Relaxed);
-                let hold_r_db = shared_sync.peak_hold_r.load(Ordering::Relaxed);
+                let hold_l_db = shared_sync.peaks.peak_hold_l.load(Ordering::Relaxed);
+                let hold_r_db = shared_sync.peaks.peak_hold_r.load(Ordering::Relaxed);
                 let hl = peak_norm(hold_l_db);
                 let hr = peak_norm(hold_r_db);
                 if changed_f32(&mut cache.hold_l, hl) {
@@ -1160,11 +1160,11 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 if changed_f32(&mut cache.hold_r_q, hold_r_q) {
                     ui.set_peak_r_text(SharedString::from(fmt_db(hold_r_db)));
                 }
-                let balance = shared_sync.balance.load(Ordering::Relaxed);
+                let balance = shared_sync.peaks.balance.load(Ordering::Relaxed);
                 if changed_f32(&mut cache.balance, balance) {
                     ui.set_balance(balance);
                 }
-                let corr = shared_sync.phase_correlation.load(Ordering::Relaxed);
+                let corr = shared_sync.peaks.phase_correlation.load(Ordering::Relaxed);
                 if changed_f32(&mut cache.corr, corr) {
                     ui.set_correlation(corr);
                     ui.set_corr_text(SharedString::from(format!("correlation: {corr:.2}")));

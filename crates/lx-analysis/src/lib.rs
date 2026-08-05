@@ -2,7 +2,8 @@ pub mod dev_log;
 pub mod shared_state;
 pub mod snap_fft;
 pub use shared_state::{
-    AetherShared, AurumShared, EquilibriumShared, LucentShared, MeridianShared, ShmClaimShared,
+    AetherShared, AurumShared, AutoLoud, EquilibriumShared, LucentShared, MeridianShared,
+    PeakMeters, ScopeRing, ShmClaimShared, SnapPipeline, SpectrumView,
 };
 pub use snap_fft::{SnapFFT, SnapMode};
 

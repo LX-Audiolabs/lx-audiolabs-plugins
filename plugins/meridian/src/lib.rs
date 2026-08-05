@@ -793,7 +793,7 @@ impl PluginLogic for Meridian {
 
         params
             .shared
-            .sample_rate
+            .spectrum.sample_rate
             .store(sr, std::sync::atomic::Ordering::Release);
     }
 
