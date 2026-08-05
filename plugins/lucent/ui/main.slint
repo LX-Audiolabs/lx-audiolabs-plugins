@@ -15,13 +15,16 @@ export struct ResMarker { cmds: string, a: float }
 /// Compact shell (no footer / no OUT GAIN): 940 × 500 — right bar is
 /// Peak → correlation → goniometer only (Meridian order, tight pack).
 export component LucentUi inherits Window {
+    // Bundled font (lx.slint) — fixed metrics on every OS.
+    default-font-family: Lx.font-family;
+
     init => { Palette.color-scheme = ColorScheme.dark; }
 
     title: "Lucent";
     background: Lx.window;
     // 50px under vault 990 so main pit width matches spectrum path better.
     preferred-width: 940px;
-    // Not Lx.window-h (660): Lucent has no footer; tight right-bar stack.
+    // Not Lx.window-h (670): Lucent has no footer; tight right-bar stack.
     preferred-height: 500px;
     min-width: 940px;
     min-height: 500px;

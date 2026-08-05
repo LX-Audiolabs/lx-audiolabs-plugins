@@ -656,7 +656,6 @@ impl PluginLogic for Meridian {
 
     fn reset(state: &mut MeridianDspState, params: &MeridianParams, config: &AudioConfig) {
         let sr = config.sample_rate as f32;
-        let sr = sr as f32;
 
         state.compressor.set_sample_rate(sr);
 

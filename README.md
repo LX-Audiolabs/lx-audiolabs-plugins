@@ -6,7 +6,7 @@ Slint UI workspace for LX Audiolabs plugins (CLAP / VST3 / LV2 via truce).
 
 ```
 crates/                 # libraries
-  lx-slint-build/       # @truce widgets + font (build helper; unused by plugins today)
+  lx-slint-build/       # build helper: @truce widgets + bundled JetBrains Mono (all plugin build.rs)
   lx-slint-editor/      # truce::Editor on slint-baseview
   lx-ui-slint/          # design system (Lx* components)
   lx-dsp/ lx-analysis/ lx-vault/ lx-shm/

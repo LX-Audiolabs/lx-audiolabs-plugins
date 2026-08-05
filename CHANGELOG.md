@@ -8,6 +8,52 @@ unchanged), **major** = breaking.
 
 ---
 
+## 2026-08-04 — Bundled UI font (Linux footer clip fix)
+
+### Alle Plugins (shared)
+
+- **Bundled UI fonts** (OFL via `truce-font`): **Noto Sans** (Regular + Bold)
+  als Default, **JetBrains Mono** (Regular + Bold) alternativ registriert.
+  Bisher kein Font mitgeliefert → Slint nahm den OS-Default (Segoe UI /
+  DejaVu Sans …) und Textmetriken drifteten pro Plattform. Auf Linux
+  überlief der 110-px-Footer (`LxShellFooter`) bei Meridian/Equilibrium
+  um ein paar px → Value-Texte unten abgeschnitten. Jetzt identische
+  Metriken auf jedem OS.
+- Verdrahtung: `lx-slint-build` materialisiert alle vier TTFs nach
+  `OUT_DIR`, `lx-ui-slint/ui/lx.slint` importiert die Faces, jedes Plugin
+  setzt `default-font-family: Lx.font-family` am Root-Window. Umschalter
+  ist eine Konstante im Theme (`lx-theme.slint`): `"Noto Sans"` ↔
+  `"JetBrains Mono"`. Bold bleibt in-family (kein Systemfont-Fallback).
+
+### Version bumps
+
+| Plugin        | From   | To     | Kind  | Notes                                |
+|---------------|--------|--------|-------|--------------------------------------|
+| Meridian      | 1.11.0 | 1.11.1 | patch | Linux: Footer-Clip durch Font-Metrik |
+| Equilibrium   | 1.8.0  | 1.8.1  | patch | Linux: Footer-Clip durch Font-Metrik |
+| Aether        | 1.4.0  | 1.4.1  | patch | Bundled font (Konsistenz)            |
+| Lucent        | 1.2.0  | 1.2.1  | patch | Bundled font (Konsistenz)            |
+| Lucent Relay  | 1.1.1  | 1.1.2  | patch | Bundled font (Konsistenz)            |
+| Aurum         | 0.4.1  | 0.4.2  | patch | Bundled font (Konsistenz)            |
+
+---
+
+## 2026-08-04 — Aurum 0.4.1: Clipper Defaults 0 dB + SHAPE/COLOR Layout
+
+- **Clipper Ceil M / Ceil S:** Range jetzt −6…**0 dB**, Default **0 dB** (vorher
+  −1 dB → Eingangssignal clippte sofort). RESET-Button setzt ebenfalls 0 dB;
+  Rechtsklick-Reset der Ceil-Knobs = 0 dB, Soft-Knobs = 0 %.
+- **SHAPE kompakter:** M/S-Toggle bottom-aligned in der Knobzeile, Wave-Pits
+  80 → 68 px; M/S-EQ-Reihen gequetscht (Spacing 8→4 px, Bänder 10→6 px) →
+  kein Scrollbalken mehr im SHAPE-Tab.
+- **SWEETEN LPF:** Range 18–35 kHz → **18–20 kHz** (FFT zeigt nur bis 20 kHz —
+  voller Knobweg jetzt sichtbar wirksam), Default 20 kHz, Anzeige in kHz.
+  Rechtsklick-Reset: HPF = 10 Hz (unten), LPF = 20 kHz (oben).
+- **Footer DELIVERY:** LUFS/dBTP/LRA/PLR mit fester Breite (64 px, wie IN LVL)
+  → Anzeige springt nicht mehr bei ein- vs. zweistelligen Werten.
+
+---
+
 ## 2026-08-04 — Aurum: Rename `aurum-slint` → `aurum` + UI-Fixes
 
 ### Aurum 0.4.0 (noch garkeine BETA)

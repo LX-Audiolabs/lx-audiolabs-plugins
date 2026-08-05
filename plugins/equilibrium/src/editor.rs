@@ -19,7 +19,7 @@ use crate::EquilibriumParamsParamId as P;
 slint::include_modules!();
 
 const WINDOW_W: u32 = 990;
-const WINDOW_H: u32 = 660;
+const WINDOW_H: u32 = 670;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const TICK_INTERVAL: Duration = Duration::from_millis(33);
 

@@ -217,6 +217,9 @@ component EqBandSection inherits LxSection {
 }
 
 export component EquilibriumUi inherits Window {
+    // Bundled font (lx.slint) — fixed metrics on every OS.
+    default-font-family: Lx.font-family;
+
     // --- floats (normalized) + text ---
     in-out property <float> low_gain: 0.5; in property <string> low_gain_text: "";
     callback low_gain_changed(float);
@@ -345,7 +348,7 @@ export component EquilibriumUi inherits Window {
     //   │ LEFT 180 │ MAIN: 5 band LxSections           │ RIGHT 155     │
     //   │ TARGET   │ (bar + Gain/Width/Pan + SOLO)     │ = Meridian    │
     //   ├──────────┴───────────────────────────────────┴───────────────┤
-    //   │ FOOTER 110px — ANALYZE | PRE-MASTER | MONO FLOOR             │
+    //   │ FOOTER 124px (Lx.footer-h) — ANALYZE | PRE-MASTER | MONO FLOOR│
     //   └──────────────────────────────────────────────────────────────┘
     // ═══════════════════════════════════════════════════════════════════════
 
@@ -720,7 +723,7 @@ export component EquilibriumUi inherits Window {
             }
         }
 
-        // ── FOOTER 110px (Lx.footer-h, same as Meridian) ──
+        // ── FOOTER (Lx.footer-h 124px, same as Meridian) ──
         // ANALYZE | PRE-MASTER | MONO FLOOR
         LxShellFooter {
             LxSection {

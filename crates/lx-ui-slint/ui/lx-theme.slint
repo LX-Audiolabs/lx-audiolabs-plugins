@@ -105,6 +105,13 @@ export global Lx {
     out property <length> font-md: 11px;
     out property <length> font-lg: 14px;
 
+    // Bundled UI font family (all faces registered via lx.slint imports).
+    // Single switch point: "Selawik" | "JetBrains Mono" | "Noto Sans".
+    // Selawik = Microsoft's OFL Segoe UI metric clone (typo line 1.07em) —
+    // matches the old Windows look and fits Lx.footer-h (124 px).
+    // JetBrains Mono (1.32em) and Noto Sans (1.36em) overflow dense footers.
+    out property <string> font-family: "Selawik";
+
     // ── Control sizes ──────────────────────────────────────────────────────
     // Shared chrome language for ALL plugins. Which buttons appear is per-plugin;
     // when a control exists, it uses these tokens — do not invent local heights.
@@ -118,15 +125,15 @@ export global Lx {
     out property <length> button-h-lg: 30px;
     out property <length> header-h: 50px;       // frozen header zone
     out property <length> header-h-sm: 40px;    // compact window (legacy)
-    out property <length> footer-h: 110px;      // frozen footer zone
+    out property <length> footer-h: 124px;      // frozen footer zone (110 design + 14 slack for bundled-font metrics)
     out property <length> stereo-meter-h: 180px;
     out property <length> left-bar-w: 180px;    // vault / presets sidebar
     out property <length> right-bar-w: 155px;   // frozen output sidebar
     out property <length> sidebar-w: 155px;     // alias → right bar
     out property <length> gonio-h: 139px;
-    // Frozen window (vault): 990 × 660
+    // Frozen window (vault): 990 × 670 (was 660; +10 for footer font slack)
     out property <length> window-w: 990px;
-    out property <length> window-h: 660px;
+    out property <length> window-h: 670px;
 
     // Knobs — compact LX sizes (42px matches original Meridian).
     out property <length> knob-d: 42px;         // default knob diameter

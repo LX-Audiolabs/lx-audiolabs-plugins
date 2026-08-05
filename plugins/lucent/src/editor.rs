@@ -438,6 +438,7 @@ fn snap_filename(vault_path: &str) -> String {
     format!("SNAPSHOT-{:03}.md", max_n + 1)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn snap_markdown(
     instance_name: &str,
     res_own: &[(usize, f32)],

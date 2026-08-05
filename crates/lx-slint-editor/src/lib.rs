@@ -131,7 +131,7 @@ where
     /// closure can clone it and wire the logo zoom menu.
     ///
     /// ```ignore
-    /// let zoom = UiZoom::new(990, 660);
+    /// let zoom = UiZoom::new(990, 670);
     /// let z = zoom.clone();
     /// LxSlintEditor::new_with_zoom(params, zoom, move |state| {
     ///     let ui = MyUi::new().unwrap();
@@ -283,7 +283,7 @@ where
         };
 
         let window = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let opened = SlintWindow::open_parented_with_policy(
+            SlintWindow::open_parented_with_policy(
                 &parent_window,
                 options,
                 ctx.clone(),
@@ -293,8 +293,7 @@ where
                 },
                 policy,
                 request_resize,
-            );
-            opened
+            )
         }));
 
         match window {

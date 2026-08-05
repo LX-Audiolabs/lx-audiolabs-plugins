@@ -6,6 +6,9 @@ import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.s
 
 // Aether window: 730 × 395 (slightly wider than original 720 — section titles need room).
 export component AetherUi inherits Window {
+    // Bundled font (lx.slint) — fixed metrics on every OS.
+    default-font-family: Lx.font-family;
+
     // ── EQ band types (0=OFF, 1=LSC, 2=PK, 3=HSC) ──
     in-out property <int> eq1_type: 1;
     in-out property <int> eq2_type: 2;

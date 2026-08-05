@@ -81,11 +81,11 @@ fn resolve_and_reconcile(
     if !selected.is_empty() && resolved != selected {
         // persisted target went stale — write the resolution back
         let mut changed = false;
-        if let Ok(mut t) = params.target.write() {
-            if *t != resolved {
-                *t = resolved.clone();
-                changed = true;
-            }
+        if let Ok(mut t) = params.target.write()
+            && *t != resolved
+        {
+            *t = resolved.clone();
+            changed = true;
         }
         if changed {
             sync_live(params);
@@ -99,7 +99,7 @@ pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
     use std::sync::atomic::Ordering;
     thread_local! {
         static CONSUMERS_SCRATCH: std::cell::RefCell<Vec<String>> =
-            std::cell::RefCell::new(Vec::new());
+            const { std::cell::RefCell::new(Vec::new()) };
     }
     let now_ms = lx_analysis::shm::now_ms();
     let Some(hub) = relay_hub() else {

@@ -27,7 +27,7 @@ pub(crate) const BAND_COUNT: usize = 5;
 #[allow(dead_code)]
 const WINDOW_W: u32 = 990;
 #[allow(dead_code)]
-const WINDOW_H: u32 = 660;
+const WINDOW_H: u32 = 670;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

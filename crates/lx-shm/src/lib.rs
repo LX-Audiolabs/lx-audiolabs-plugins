@@ -1017,10 +1017,10 @@ impl RelayHub {
     pub fn consumer_exists(&self, name: &str, now_ms: u64) -> bool {
         let mut buf = [0u8; MAX_NAME_LEN];
         for idx in 0..MAX_CONSUMERS {
-            if let Some(n) = self.read_consumer_slot(idx, now_ms, &mut buf) {
-                if &buf[..n] == name.as_bytes() {
-                    return true;
-                }
+            if let Some(n) = self.read_consumer_slot(idx, now_ms, &mut buf)
+                && &buf[..n] == name.as_bytes()
+            {
+                return true;
             }
         }
         false

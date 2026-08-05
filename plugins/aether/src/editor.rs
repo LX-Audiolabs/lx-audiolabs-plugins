@@ -414,7 +414,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                             s.automate(tp, discrete_norm(td.max(0) as usize, 4));
                         }
                         s.automate(P::Blend, 1.0);
-                        s.automate(P::CfAngle, ((60.0 - 30.0) / 45.0) as f64);
+                        s.automate(P::CfAngle, (60.0 - 30.0) / 45.0);
                         s.automate(P::CfAmount, 0.0);
                         s.automate(P::CfRealism, 0.0);
                         s.automate(P::Gain, 0.5);
@@ -456,16 +456,16 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                                 }
                                 ui.set_preset_names(names_model(&vs.names));
                                 save_last_preset(&vs.vault_path, &profile);
-                                if let Some(ref vault) = vs.vault_path.clone() {
-                                    if !vault.is_empty() {
-                                        let scan_gen = vs.pending.bump_generation();
-                                        vs.scanning_for = Some(vault.clone());
-                                        spawn_vault_scan(
-                                            vault.clone(),
-                                            vs.pending.clone(),
-                                            scan_gen,
-                                        );
-                                    }
+                                if let Some(ref vault) = vs.vault_path.clone()
+                                    && !vault.is_empty()
+                                {
+                                    let scan_gen = vs.pending.bump_generation();
+                                    vs.scanning_for = Some(vault.clone());
+                                    spawn_vault_scan(
+                                        vault.clone(),
+                                        vs.pending.clone(),
+                                        scan_gen,
+                                    );
                                 }
                             }
                             ui.set_preset_name(SharedString::from(name.as_str()));
@@ -577,23 +577,23 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 }
 
                 // Drain background vault scan (non-blocking).
-                if let Ok(mut vs) = vault_state_sync.try_lock() {
-                    if vs.pending.ready.swap(false, Ordering::Acquire) {
-                        let current_gen = vs.pending.generation.load(Ordering::Acquire);
-                        let scanned = {
-                            let guard = vs.pending.presets.try_lock().ok();
-                            guard.and_then(|g| match &*g {
-                                Some((scan_gen, scanned)) if *scan_gen == current_gen => {
-                                    Some(scanned.clone())
-                                }
-                                _ => None,
-                            })
-                        };
-                        if let Some(scanned) = scanned {
-                            vs.cache = scanned;
-                            vs.names = merge_preset_names(&vs.cache);
-                            ui.set_preset_names(names_model(&vs.names));
-                        }
+                if let Ok(mut vs) = vault_state_sync.try_lock()
+                    && vs.pending.ready.swap(false, Ordering::Acquire)
+                {
+                    let current_gen = vs.pending.generation.load(Ordering::Acquire);
+                    let scanned = {
+                        let guard = vs.pending.presets.try_lock().ok();
+                        guard.and_then(|g| match &*g {
+                            Some((scan_gen, scanned)) if *scan_gen == current_gen => {
+                                Some(scanned.clone())
+                            }
+                            _ => None,
+                        })
+                    };
+                    if let Some(scanned) = scanned {
+                        vs.cache = scanned;
+                        vs.names = merge_preset_names(&vs.cache);
+                        ui.set_preset_names(names_model(&vs.names));
                     }
                 }
 

@@ -578,6 +578,7 @@ pub fn snap_filename(vault_path: &str) -> String {
     format!("SNAPSHOT-{:03}.md", max_n + 1)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn snap_markdown(
     stereo: &[f32],
     mono: &[f32],
@@ -683,14 +684,16 @@ mod tests {
 
     #[test]
     fn markdown_roundtrip_core_fields() {
-        let mut p = MeridianProfile::default();
-        p.hpf_freq = 40.0;
-        p.lpf_freq = 12000.0;
-        p.bass_gain = 1.5;
-        p.mid_gain = -0.5;
-        p.output_gain = 2.0;
-        p.cut_slope = 1;
-        p.inflate_clip = true;
+        let p = MeridianProfile {
+            hpf_freq: 40.0,
+            lpf_freq: 12000.0,
+            bass_gain: 1.5,
+            mid_gain: -0.5,
+            output_gain: 2.0,
+            cut_slope: 1,
+            inflate_clip: true,
+            ..Default::default()
+        };
         let md = export_meridian_markdown(&p);
         let back = parse_meridian_markdown(&md).expect("parse");
         assert!((back.hpf_freq - 40.0).abs() < 0.01);

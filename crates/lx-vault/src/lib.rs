@@ -98,15 +98,15 @@ fn parse_pan_str(s: &str) -> f32 {
     if s.eq_ignore_ascii_case("c") || s.eq_ignore_ascii_case("center") {
         return 0.0;
     }
-    if let Some(rest) = s.strip_prefix(|c: char| c == 'L' || c == 'l') {
-        if let Ok(n) = rest.trim().trim_end_matches('%').trim().parse::<f32>() {
-            return -(n / 100.0).clamp(-1.0, 1.0);
-        }
+    if let Some(rest) = s.strip_prefix(|c: char| c == 'L' || c == 'l')
+        && let Ok(n) = rest.trim().trim_end_matches('%').trim().parse::<f32>()
+    {
+        return -(n / 100.0).clamp(-1.0, 1.0);
     }
-    if let Some(rest) = s.strip_prefix(|c: char| c == 'R' || c == 'r') {
-        if let Ok(n) = rest.trim().trim_end_matches('%').trim().parse::<f32>() {
-            return (n / 100.0).clamp(-1.0, 1.0);
-        }
+    if let Some(rest) = s.strip_prefix(|c: char| c == 'R' || c == 'r')
+        && let Ok(n) = rest.trim().trim_end_matches('%').trim().parse::<f32>()
+    {
+        return (n / 100.0).clamp(-1.0, 1.0);
     }
     0.0
 }
@@ -264,10 +264,10 @@ pub fn parse_preset_from_markdown(content: &str) -> Option<Profile> {
                         bands[b] = db;
                         has_bands[b] = true;
                     }
-                    if parts.len() >= 5 {
-                        if let Ok(tol) = parts[4].parse::<f32>() {
-                            tolerances[b] = tol;
-                        }
+                    if parts.len() >= 5
+                        && let Ok(tol) = parts[4].parse::<f32>()
+                    {
+                        tolerances[b] = tol;
                     }
                 }
             }
@@ -277,12 +277,10 @@ pub fn parse_preset_from_markdown(content: &str) -> Option<Profile> {
             && trimmed.chars().any(|c| c.is_ascii_digit())
             && !trimmed.starts_with('|')
             && !trimmed.contains('#')
+            && let Some(hz_str) = trimmed.split_whitespace().next()
+            && let Ok(hz) = hz_str.parse::<f32>()
         {
-            if let Some(hz_str) = trimmed.split_whitespace().next() {
-                if let Ok(hz) = hz_str.parse::<f32>() {
-                    mono_floor_hz = hz;
-                }
-            }
+            mono_floor_hz = hz;
         }
     }
 
@@ -337,10 +335,10 @@ pub fn get_plugin_dir(plugin_name: &str) -> std::path::PathBuf {
 
 pub fn load_config(plugin_name: &str) -> PluginConfig {
     let path = get_plugin_dir(plugin_name).join("config.json");
-    if let Ok(content) = std::fs::read_to_string(path) {
-        if let Ok(config) = serde_json::from_str::<PluginConfig>(&content) {
-            return config;
-        }
+    if let Ok(content) = std::fs::read_to_string(path)
+        && let Ok(config) = serde_json::from_str::<PluginConfig>(&content)
+    {
+        return config;
     }
     PluginConfig::default()
 }
@@ -376,13 +374,11 @@ pub fn list_custom_presets(
                     && path.extension().is_some_and(|ext| ext == "md")
                     && !stem.starts_with("SNAPSHOT-")
                     && seen_paths.insert(path.clone())
+                    && let Ok(content) = std::fs::read_to_string(&path)
+                    && let Some(mut profile) = parse_preset_from_markdown(&content)
                 {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Some(mut profile) = parse_preset_from_markdown(&content) {
-                            profile.name = stem.clone();
-                            presets.push((stem, path, profile));
-                        }
-                    }
+                    profile.name = stem.clone();
+                    presets.push((stem, path, profile));
                 }
             }
         }
@@ -390,11 +386,11 @@ pub fn list_custom_presets(
 
     scan_dir(&local_dir);
 
-    if let Some(vp) = vault_path {
-        if !vp.is_empty() {
-            let vault_dir = std::path::Path::new(vp);
-            scan_dir(vault_dir);
-        }
+    if let Some(vp) = vault_path
+        && !vp.is_empty()
+    {
+        let vault_dir = std::path::Path::new(vp);
+        scan_dir(vault_dir);
     }
 
     presets

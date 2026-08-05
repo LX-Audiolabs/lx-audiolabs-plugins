@@ -7,6 +7,9 @@ import {
 import { LxVaultSetupOverlay } from "../../../crates/lx-ui-slint/ui/lx-dialogs.slint";
 
 export component MeridianUi inherits Window {
+    // Bundled font (lx.slint) — fixed metrics on every OS.
+    default-font-family: Lx.font-family;
+
     // --- float params (normalized) + formatted text ---
     in-out property <float> hpf_freq: 0.5; in property <string> hpf_freq_text: ""; in property <float> hpf_freq_default: 0.5;
     callback hpf_freq_changed(float);
@@ -161,7 +164,7 @@ export component MeridianUi inherits Window {
     //   │ LEFT 180 │ MAIN (fill)                       │ RIGHT 155     │
     //   │          │                                   │               │
     //   ├──────────┴───────────────────────────────────┴───────────────┤
-    //   │ FOOTER 110px                                                 │
+    //   │ FOOTER 124px (Lx.footer-h)                                   │
     //   └──────────────────────────────────────────────────────────────┘
     // ═══════════════════════════════════════════════════════════════════════
 

@@ -24,9 +24,9 @@ fn names_model(names: &[String]) -> ModelRc<SharedString> {
     ModelRc::new(VecModel::from(v))
 }
 
-// Frozen vault size (ui-layout-spec): 990 × 660
+// Frozen vault size (ui-layout-spec / Lx.window-*): 990 × 670
 const WINDOW_W: u32 = 990;
-const WINDOW_H: u32 = 660;
+const WINDOW_H: u32 = 670;
 
 /// Match vizia Meridian `TICK_INTERVAL` — telemetry / host→UI poll ~30 Hz.
 const TICK_INTERVAL: Duration = Duration::from_millis(33);
@@ -519,12 +519,12 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                             ui.set_preset_names(names_model(&vs.names));
                             ui.set_preset_name(SharedString::from(name.as_str()));
                             tracing::info!("SAVE preset to {}", fp.display());
-                            if let Some(ref vault) = vs.vault_path.clone() {
-                                if !vault.is_empty() {
-                                    let scan_gen = vs.pending.bump_generation();
-                                    vs.scanning_for = Some(vault.clone());
-                                    spawn_vault_scan(vault.clone(), vs.pending.clone(), scan_gen);
-                                }
+                            if let Some(ref vault) = vs.vault_path.clone()
+                                && !vault.is_empty()
+                            {
+                                let scan_gen = vs.pending.bump_generation();
+                                vs.scanning_for = Some(vault.clone());
+                                spawn_vault_scan(vault.clone(), vs.pending.clone(), scan_gen);
                             }
                         }
                         name
@@ -675,23 +675,23 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
 
                 // Drain background vault scan (non-blocking).
-                if let Ok(mut vs) = vault_state_sync.try_lock() {
-                    if vs.pending.ready.swap(false, Ordering::Acquire) {
-                        let current_gen = vs.pending.generation.load(Ordering::Acquire);
-                        let scanned = {
-                            let guard = vs.pending.presets.try_lock().ok();
-                            guard.and_then(|g| match &*g {
-                                Some((scan_gen, scanned)) if *scan_gen == current_gen => {
-                                    Some(scanned.clone())
-                                }
-                                _ => None,
-                            })
-                        };
-                        if let Some(scanned) = scanned {
-                            vs.cache = scanned;
-                            vs.names = merge_preset_names(&vs.cache);
-                            ui.set_preset_names(names_model(&vs.names));
-                        }
+                if let Ok(mut vs) = vault_state_sync.try_lock()
+                    && vs.pending.ready.swap(false, Ordering::Acquire)
+                {
+                    let current_gen = vs.pending.generation.load(Ordering::Acquire);
+                    let scanned = {
+                        let guard = vs.pending.presets.try_lock().ok();
+                        guard.and_then(|g| match &*g {
+                            Some((scan_gen, scanned)) if *scan_gen == current_gen => {
+                                Some(scanned.clone())
+                            }
+                            _ => None,
+                        })
+                    };
+                    if let Some(scanned) = scanned {
+                        vs.cache = scanned;
+                        vs.names = merge_preset_names(&vs.cache);
+                        ui.set_preset_names(names_model(&vs.names));
                     }
                 }
 
@@ -887,8 +887,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                             .map(|v| v.clone())
                             .unwrap_or_else(|| vec![-90.0; 1024]);
                         let mut band_levels = [0.0f32; 5];
-                        for b in 0..5 {
-                            band_levels[b] = shared.band_levels[b].load(Ordering::Acquire);
+                        for (dst, src) in band_levels.iter_mut().zip(shared.band_levels.iter()) {
+                            *dst = src.load(Ordering::Acquire);
                         }
                         let md = snap_markdown(
                             &stereo,
@@ -1064,7 +1064,7 @@ fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> (String, 
             .collect()
     } else {
         let mut pts: Vec<(f32, f32)> = Vec::with_capacity(n);
-        for i in 0..n {
+        for (i, &bin) in bins.iter().enumerate().take(n) {
             let freq = i as f32 * sr / fft_size;
             if freq < 20.0 {
                 continue;
@@ -1073,7 +1073,7 @@ fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> (String, 
                 break;
             }
             let x = log_f(freq) * w;
-            let y = db_to_y(bins[i].clamp(MIN_DB, MAX_DB));
+            let y = db_to_y(bin.clamp(MIN_DB, MAX_DB));
             pts.push((x, y));
         }
         pts

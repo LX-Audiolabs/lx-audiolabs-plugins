@@ -993,16 +993,16 @@ impl LucentDspState {
 
     pub(crate) fn publish_consumer_name(&mut self, params: &LucentParams, now_ms: u64) {
         let mut name_changed = false;
-        if let Ok(name) = params.name.try_read() {
-            if *name != self.cached_name {
-                self.cached_name.clear();
-                self.cached_name.push_str(&name);
-                if let Ok(mut bg) = params.name_bg.try_write() {
-                    bg.clear();
-                    bg.push_str(&name);
-                }
-                name_changed = true;
+        if let Ok(name) = params.name.try_read()
+            && *name != self.cached_name
+        {
+            self.cached_name.clear();
+            self.cached_name.push_str(&name);
+            if let Ok(mut bg) = params.name_bg.try_write() {
+                bg.clear();
+                bg.push_str(&name);
             }
+            name_changed = true;
         }
         let slot_changed = self.display_name_slot != self.claimed_lucent_slot;
         if name_changed || slot_changed {

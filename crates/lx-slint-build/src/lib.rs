@@ -30,11 +30,19 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Filename inside `OUT_DIR/fonts/` that the bundled `JetBrains Mono`
-/// is written to. Plugin `.slint` files import the font by this
-/// exact name (`import "JetBrainsMono-Regular.ttf";`), so the
-/// constant is the contract.
-const FONT_FILENAME: &str = "JetBrainsMono-Regular.ttf";
+/// Filenames inside `OUT_DIR/fonts/` that the bundled font faces are
+/// written to. Plugin `.slint` files import the fonts by these exact
+/// names (`import "JetBrainsMono-Regular.ttf";`), so the constants are
+/// the contract. Regular + Bold per family so `font-weight: 700` stays
+/// in-family (no system-font fallback → no per-OS metric drift).
+const FONT_SOURCES: &[(&str, &[u8])] = &[
+    ("JetBrainsMono-Regular.ttf", truce_font::JETBRAINS_MONO),
+    ("JetBrainsMono-Bold.ttf", truce_font::JETBRAINS_MONO_BOLD),
+    ("NotoSans-Regular.ttf", truce_font::NOTO_SANS),
+    ("NotoSans-Bold.ttf", truce_font::NOTO_SANS_BOLD),
+    ("Selawik-Regular.ttf", truce_font::SELAWIK),
+    ("Selawik-Bold.ttf", truce_font::SELAWIK_BOLD),
+];
 
 /// `@truce` library import name. Plugin `.slint` files write
 /// `import { Knob } from "@truce";`; this is the half slint-build
@@ -56,12 +64,6 @@ const WIDGET_SOURCES: &[(&str, &str)] = &[
     ("toggle.slint", include_str!("../ui/toggle.slint")),
     ("xy_pad.slint", include_str!("../ui/xy_pad.slint")),
 ];
-
-/// `JetBrains` Mono Regular bytes, sourced from the `truce-font`
-/// crate so the TTF + OFL license live in exactly one place across
-/// the workspace. The built-in editor, the egui / iced backends, and
-/// this slint build helper all materialise the same bytes.
-const FONT_BYTES: &[u8] = truce_font::JETBRAINS_MONO;
 
 // --- Public API -----------------------------------------------------------
 
@@ -163,7 +165,9 @@ fn materialize_widgets(out_dir: &Path) -> Result<PathBuf, CompileError> {
 fn materialize_font(out_dir: &Path) -> Result<PathBuf, CompileError> {
     let font_dir = out_dir.join("truce-slint-build/fonts");
     fs::create_dir_all(&font_dir)?;
-    write_if_changed(&font_dir.join(FONT_FILENAME), FONT_BYTES)?;
+    for (name, bytes) in FONT_SOURCES {
+        write_if_changed(&font_dir.join(name), bytes)?;
+    }
     Ok(font_dir)
 }
 
