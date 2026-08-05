@@ -11,7 +11,7 @@
 // The Harman EQ is a plain per-channel-identical linear EQ (no M/S, no L/R diff),
 // so it commutes with the crossfeed — order is conceptual, not sonic.
 
-use lx_analysis::SharedState;
+use lx_analysis::AetherShared;
 use lx_dsp::{Biquad, state_migration};
 use std::sync::Arc;
 use truce::prelude::*;
@@ -213,7 +213,7 @@ pub struct AetherParams {
     pub bypass: BoolParam,
 
     #[skip]
-    pub shared: Arc<SharedState>,
+    pub shared: Arc<AetherShared>,
 }
 
 impl AetherParams {

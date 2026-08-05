@@ -7,7 +7,7 @@
 //!
 //! Display chain (dev parity 2026-07):
 //! - Spectrum range SPAN-like −78…−18 dB, log-frequency axis (20 Hz…20 kHz)
-//! - SMOOTH toggle → SharedState.spectrum_smooth (1/3-oct display smooth)
+//! - SMOOTH toggle → LucentShared.spectrum_smooth (1/3-oct display smooth)
 //! - SNAP → session max-hold resonance/masking markdown (no FFT phases)
 
 use std::collections::HashMap;
@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use lx_analysis::{relay_hub, SPECTRUM_BINS, SharedState};
+use lx_analysis::{relay_hub, LucentShared, SPECTRUM_BINS};
 use lx_slint_editor::{apply_ui_zoom, LxSlintEditor, PluginContext, UiZoom};
 use slint::{ModelRc, SharedString, VecModel};
 use truce_core::cast::{discrete_index, discrete_norm};
@@ -250,7 +250,7 @@ fn res_marker_cmds(bin: usize, sample_rate: f32) -> String {
 
 /// Goniometer path (M/S rotation) — Meridian port, visual auto-gain happens
 /// in `process()` (`scope_vis_envelope`).
-fn gonio_path(shared: &SharedState, w: f32, h: f32, out: &mut String) {
+fn gonio_path(shared: &LucentShared, w: f32, h: f32, out: &mut String) {
     out.clear();
     let (samples, write_pos) = {
         let pos = shared.scope_write_pos.load(Ordering::Relaxed);

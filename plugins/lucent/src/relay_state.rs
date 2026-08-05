@@ -1,6 +1,6 @@
 //! Port of dev lucent `ui/relay_state.rs` (Vizia) — editor-side relay list:
 //! per-slot EMA smoothing (α = 1/6) and slot-stable active toggles feeding
-//! `SharedState::relay_active_mask`.
+//! `LucentShared::relay_active_mask`.
 
 use crate::RelaySlot;
 use lx_analysis::SPECTRUM_BINS;
@@ -63,7 +63,7 @@ impl RelayState {
         self.relays = new_relays;
     }
 
-    /// Bitmask for `SharedState::relay_active_mask` (bit `i` = slot `i` on).
+    /// Bitmask for `LucentShared::relay_active_mask` (bit `i` = slot `i` on).
     pub fn active_mask(&self) -> u32 {
         let mut mask = 0u32;
         for r in &self.relays {

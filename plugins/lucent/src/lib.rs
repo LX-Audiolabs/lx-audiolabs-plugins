@@ -8,7 +8,7 @@ use truce::prelude::*;
 use truce_core::{editor::Editor, state::StateLoadError};
 
 use lx_analysis::{
-    relay_hub, relay_slot_active, spectrum_physical_db, SharedState, MAX_NAME_LEN, MAX_SLOTS,
+    relay_hub, relay_slot_active, spectrum_physical_db, LucentShared, MAX_NAME_LEN, MAX_SLOTS,
     SPECTRUM_BINS, SPECTRUM_TILT_RAW_GATE_DB,
 };
 
@@ -23,7 +23,7 @@ pub(crate) type RelayFeed = (u8, String, [f32; SPECTRUM_BINS]);
 /// Never treat a failed try_lock as empty name — that would flash "Hub N" in
 /// Relay target lists while the user is typing (Vizia always publishes the
 /// keystroke text immediately via `write_consumer_name`).
-pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &SharedState) {
+pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShared) {
     let now_ms = lx_analysis::shm::now_ms();
     let mut slot = shared.shm_slot.load(Ordering::Acquire);
     if slot < 0
@@ -60,7 +60,7 @@ pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &SharedState
 /// Immediate SHM consumer rename (Vizia Textbox `on_edit` parity). Call from
 /// the editor name callback so Relay target lists update without waiting for
 /// the next 33 ms tick / audio block.
-pub(crate) fn editor_publish_consumer_name(shared: &SharedState, raw: &str) {
+pub(crate) fn editor_publish_consumer_name(shared: &LucentShared, raw: &str) {
     let now_ms = lx_analysis::shm::now_ms();
     let mut slot = shared.shm_slot.load(Ordering::Acquire);
     if slot < 0
@@ -911,7 +911,7 @@ pub struct LucentParams {
     #[skip]
     pub name_bg: Arc<RwLock<String>>,
     #[skip]
-    pub shared: Arc<SharedState>,
+    pub shared: Arc<LucentShared>,
 }
 
 impl LucentParams {

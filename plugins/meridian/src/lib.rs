@@ -15,7 +15,7 @@ use truce::prelude::*;
 use truce_core::editor::Editor;
 use truce_core::state::StateLoadError;
 
-use lx_analysis::{SPECTRUM_BINS, SharedState, SnapFFT};
+use lx_analysis::{SPECTRUM_BINS, MeridianShared, SnapFFT};
 use lx_dsp::{AutoLoudMeter, Biquad, Compressor, LR2Crossover, TiltEq};
 
 mod editor;
@@ -424,7 +424,7 @@ pub struct MeridianParams {
     pub bypass_active: BoolParam,
 
     #[skip]
-    pub shared: Arc<SharedState>,
+    pub shared: Arc<MeridianShared>,
 }
 
 impl MeridianParams {

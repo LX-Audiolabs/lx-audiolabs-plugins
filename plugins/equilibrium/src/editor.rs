@@ -986,7 +986,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
     .into()
 }
 
-fn gonio_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
+fn gonio_path(shared: &lx_analysis::EquilibriumShared, w: f32, h: f32) -> String {
     use lx_analysis::SCOPE_BUFFER_LEN;
     let (samples, write_pos) = {
         let pos = shared.scope_write_pos.load(Ordering::Relaxed);

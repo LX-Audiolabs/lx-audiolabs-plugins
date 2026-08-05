@@ -16,7 +16,7 @@ use truce::prelude::*;
 use truce_core::editor::Editor;
 use truce_core::state::StateLoadError;
 
-use lx_analysis::{SharedState, SnapFFT};
+use lx_analysis::{EquilibriumShared, SnapFFT};
 use lx_dsp::{AutoLoudMeter, Biquad, LR2Crossover};
 
 mod editor;
@@ -242,7 +242,7 @@ pub struct EquilibriumParams {
     pub pre_master_target_db: FloatParam,
 
     #[skip]
-    pub shared: Arc<SharedState>,
+    pub shared: Arc<EquilibriumShared>,
 }
 
 impl EquilibriumParams {

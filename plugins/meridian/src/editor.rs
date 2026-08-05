@@ -1027,7 +1027,7 @@ fn smooth_spectrum_third_octave(spectrum: &[f32], sample_rate: f32) -> Vec<f32> 
     out
 }
 
-fn spectrum_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> (String, f32) {
+fn spectrum_path(shared: &lx_analysis::MeridianShared, w: f32, h: f32) -> (String, f32) {
     use lx_analysis::SPECTRUM_BINS;
     const MIN_DB: f32 = -70.0;
     const MAX_DB: f32 = -18.0;
@@ -1161,7 +1161,7 @@ fn gr_envelope_path(history: &[f32], current: f32, w: f32, h: f32) -> String {
 
 // --- goniometer path (M/S rotation — vault frozen spec) -------------------
 
-fn gonio_path(shared: &lx_analysis::SharedState, w: f32, h: f32) -> String {
+fn gonio_path(shared: &lx_analysis::MeridianShared, w: f32, h: f32) -> String {
     use lx_analysis::SCOPE_BUFFER_LEN;
     let (samples, write_pos) = {
         let pos = shared.scope_write_pos.load(Ordering::Relaxed);

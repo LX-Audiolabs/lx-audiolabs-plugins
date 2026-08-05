@@ -6,7 +6,7 @@ use truce::prelude::*;
 use truce_core::editor::Editor;
 
 use lx_analysis::{
-    RelayHub, SPECTRUM_BINS, SharedState, relay_hub, resolve_from_consumers, resolve_relay_target,
+    RelayHub, SPECTRUM_BINS, ShmClaimShared, relay_hub, resolve_from_consumers, resolve_relay_target,
 };
 
 mod editor;
@@ -51,7 +51,7 @@ pub struct LucentRelayParams {
     /// SHM publisher slot + generation — shared with the editor so claim/touch
     /// work before `reset()` runs (transport stopped).
     #[skip]
-    pub shm: Arc<SharedState>,
+    pub shm: Arc<ShmClaimShared>,
 }
 
 pub(crate) fn read_persisted(params: &LucentRelayParams) -> (String, String) {
@@ -137,7 +137,7 @@ pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
 pub struct LucentRelay;
 
 pub struct LucentRelayDspState {
-    pub(crate) shm_state: Arc<SharedState>,
+    pub(crate) shm_state: Arc<ShmClaimShared>,
     pub(crate) fft_fwd: Arc<dyn RealToComplex<f32>>,
     pub(crate) fft_input: Vec<f32>,
     pub(crate) fft_write_pos: usize,
@@ -181,7 +181,7 @@ impl Default for LucentRelayDspState {
             .collect();
         let (fft_fwd, fft_output) = Self::build_fft();
         Self {
-            shm_state: Arc::new(SharedState::default()),
+            shm_state: Arc::new(ShmClaimShared::default()),
             fft_fwd,
             fft_input: vec![0.0; FFT_SIZE],
             fft_write_pos: 0,
