@@ -8,6 +8,9 @@
 .aider*
 # Local scratch (soft-fail notes, personal checklists)
 /TODO.md
-# agal PM layer (local). Optional: version adapted skill packs only.
+# agal orientation layer (local generate). Optional: version adapted skill packs only.
+/agal/*
+!/agal/skills/
+# legacy output dir name (pre-0.5.4)
 /audiolabs/*
 !/audiolabs/skills/

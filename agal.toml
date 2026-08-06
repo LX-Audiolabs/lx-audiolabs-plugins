@@ -1,6 +1,6 @@
 # LX Audiolabs — config for agal (agentic-audiolab).
 
-output_dir = "audiolabs"
+output_dir = "agal"
 
 ui_crates = ["lx-ui-slint"]
 ipc_hubs = ["lx-shm", "lx-analysis"]

@@ -4,11 +4,11 @@ Product / team rules for this workspace. **Orientation graph + skills** are owne
 
 ## Orientation (agal)
 
-Read **`audiolabs/AGAL.md`** first for map, health, skills index, and hot path.  
-Structural detail: `audiolabs/audiolabs.agent.md`.  
+Read **`agal/AGAL.md`** first for map, health, skills index, and hot path.  
+Structural detail: `agal/agal.agent.md`.  
 Regenerate: `agal .` · skills: `agal skills sync` · doctor: `agal doctor`.
 
-Do **not** dump `audiolabs/` into context. Load one note / one skill on demand.
+Do **not** dump `agal/` into context. Load one note / one skill on demand.
 
 ## github commits & push
 
@@ -18,7 +18,7 @@ GitHub auth: `github.user=lxndrbe`
 ## UI direction (one-liner)
 
 Slint 1.17.1 + **lx-slint-editor** (femtovg/OpenGL default); plugins on lx-slint-editor.  
-Detail when needed: `agal skills sync --only ui/slint` → `audiolabs/skills/04-ui/slint.md`.
+Detail when needed: `agal skills sync --only ui/slint` → `agal/skills/04-ui/slint.md`.
 
 ## Build
 
