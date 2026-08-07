@@ -5,7 +5,8 @@
 .DS_Store
 *.swp
 *.swo
-.aider*
+.agents\*
+.vscode\*
 # Local scratch (soft-fail notes, personal checklists)
 /TODO.md
 # agal orientation layer (local generate). Optional: version adapted skill packs only.
@@ -14,3 +15,9 @@
 # legacy output dir name (pre-0.5.4)
 /audiolabs/*
 !/audiolabs/skills/
+
+# Tool artifacts — not plugin code.
+skills-lock.json
+.playwright-mcp/
+rustc-ice-*.txt
+wgpu-changelog-*.md
