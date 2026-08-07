@@ -21,3 +21,4 @@ skills-lock.json
 .playwright-mcp/
 rustc-ice-*.txt
 wgpu-changelog-*.md
+pollster-releases.md
