@@ -7,7 +7,9 @@
 
 use std::sync::atomic::Ordering;
 use aura::prelude::*;
-use lx_analysis::{relay_hub, SPECTRUM_BINS};
+use aura_dsp::analysis::*;
+use aura_shm::*;
+use aura_shm::SPECTRUM_BINS;
 use aura_dsp::fx::FtzDazGuard;
 
 use crate::{
@@ -22,7 +24,7 @@ pub(crate) fn run(
 ) -> ProcessStatus {
     let _ftz = FtzDazGuard::new();
     let fft_size = state.fft_input.len();
-    let now_ms = lx_analysis::shm::now_ms();
+    let now_ms = now_ms();
 
     state.ensure_consumer_slot(params, now_ms);
     state.publish_consumer_name(params, now_ms);
@@ -66,7 +68,7 @@ pub(crate) fn run(
 
     // Analysis
     let sample_rate = state.sample_rate;
-    let scope_len = lx_analysis::SCOPE_BUFFER_LEN;
+    let scope_len = SCOPE_BUFFER_LEN;
 
     let mut max_out_l = 0.0f32;
     let mut max_out_r = 0.0f32;
@@ -111,7 +113,7 @@ pub(crate) fn run(
             {
                 let n_bins = SPECTRUM_BINS;
                 let mut frame = [0.0f32; SPECTRUM_BINS];
-                lx_analysis::compute_spectrum_bins(
+                compute_spectrum_bins(
                     &state.fft_output,
                     &mut frame,
                     fft_size,

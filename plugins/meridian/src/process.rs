@@ -9,7 +9,7 @@ use std::f32::consts::FRAC_PI_4;
 use std::sync::atomic::Ordering;
 use aura::prelude::*;
 
-use lx_analysis::{SCOPE_BUFFER_LEN, SPECTRUM_BINS, SnapMode};
+use aura_dsp::analysis::{compute_spectrum_bins, SCOPE_BUFFER_LEN, SPECTRUM_BINS, SnapMode};
 use aura_dsp::fx::{DBTP_CEILING, FtzDazGuard};
 
 use crate::{
@@ -766,7 +766,7 @@ params.shared.peaks.balance.store(balance, Ordering::Release);
 
     // Compute and write spectrum after each buffer
     if let Ok(mut spectrum_frame) = params.shared.spectrum.bins.try_lock() {
-        lx_analysis::compute_spectrum_bins(
+        compute_spectrum_bins(
             &state.fft_output_cache,
             &mut spectrum_frame,
             fft_size,

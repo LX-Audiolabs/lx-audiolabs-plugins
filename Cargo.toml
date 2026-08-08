@@ -1,7 +1,5 @@
 [workspace]
 members = [
-    "crates/lx-slint-editor",
-    "crates/lx-analysis",
     "crates/lx-ui-slint",
     # AURA cutover: all plugins migrated.
     "plugins/meridian",
@@ -25,8 +23,6 @@ aura-test       = { path = "../AURA/crates/aura-test" }
 # DSP/analysis live in AURA; product crates re-export for stable `lx_*` paths.
 aura-dsp        = { path = "../AURA/crates/aura-dsp", default-features = false }
 aura-shm        = { path = "../AURA/crates/aura-shm" }
-
-lx-slint-editor = { path = "crates/lx-slint-editor" }
 
 baseview = "0.3"
 # Pin must match AURA / aura-baseview

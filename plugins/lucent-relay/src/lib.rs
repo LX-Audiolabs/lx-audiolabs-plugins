@@ -4,9 +4,8 @@ use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
 use std::sync::{Arc, RwLock};
 use aura::prelude::*;
 
-use lx_analysis::{
-    RelayHub, SPECTRUM_BINS, ShmClaimShared, relay_hub, resolve_from_consumers, resolve_relay_target,
-};
+use aura_dsp::analysis::{SPECTRUM_BINS, ShmClaimShared};
+use aura_shm::{now_ms, relay_hub, resolve_from_consumers, resolve_relay_target, RelayHub};
 
 mod editor;
 mod process;
@@ -101,7 +100,7 @@ pub(crate) fn editor_publish_heartbeat(params: &LucentRelayParams) {
         static CONSUMERS_SCRATCH: std::cell::RefCell<Vec<String>> =
             const { std::cell::RefCell::new(Vec::new()) };
     }
-    let now_ms = lx_analysis::shm::now_ms();
+    let now_ms = now_ms();
     let Some(hub) = relay_hub() else {
         return;
     };
@@ -214,7 +213,7 @@ impl LucentRelayDspState {
                 self.claimed_generation = self.shm_state.generation.load(Ordering::Acquire);
                 self.fallback_label = format!("Relay {}", adopted as u8 + 1);
             } else if let Some(hub) = relay_hub()
-                && let Some((slot, generation)) = hub.claim_slot(lx_analysis::shm::now_ms())
+                && let Some((slot, generation)) = hub.claim_slot(now_ms())
             {
                 self.claimed_slot = Some(slot);
                 self.claimed_generation = generation;
@@ -249,7 +248,7 @@ impl LucentRelayDspState {
                 }
                 let generation = ss.generation.load(Ordering::Acquire);
                 if let Some(hub) = relay_hub() {
-                    let now = lx_analysis::shm::now_ms();
+                    let now = now_ms();
                     let (raw, sel) = live.read().map(|g| g.clone()).unwrap_or_default();
                     if let Some(target) = resolve_relay_target(hub, &sel, now) {
                         let label = if raw.is_empty() {

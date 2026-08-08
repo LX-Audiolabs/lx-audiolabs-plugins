@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use aura::{FloatParam, IntParam};
-use lx_slint_editor::LxPluginContext;
+use aura_dsp::analysis::vault::{get_plugin_dir, preset_plugin_name};
+use aura_editor::typed::LxPluginContext;
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -119,7 +120,7 @@ fn parse_slope(s: &str) -> i32 {
 // ─── Parse / export ──────────────────────────────────────────────────────────
 
 pub fn parse_meridian_markdown(content: &str) -> Option<MeridianProfile> {
-    match lx_analysis::preset_plugin_name(content).as_deref() {
+    match preset_plugin_name(content).as_deref() {
         Some("meridian") => {}
         _ => return None,
     }
@@ -508,7 +509,7 @@ pub fn scan_meridian_presets(dir: &Path) -> Vec<PresetEntry> {
 pub fn list_meridian_presets(vault_path: Option<&str>) -> Vec<PresetEntry> {
     let mut presets = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    let local = lx_analysis::get_plugin_dir("Meridian").join("presets");
+    let local = get_plugin_dir("Meridian").join("presets");
     let _ = std::fs::create_dir_all(&local);
     for entry in scan_meridian_presets(&local) {
         if seen.insert(entry.0.clone()) {
@@ -533,7 +534,7 @@ pub fn find_profile(
     if let Some((_, _, p)) = cache.iter().find(|(n, _, _)| n == name) {
         return Some(p.clone());
     }
-    let local = lx_analysis::get_plugin_dir("Meridian").join("presets");
+    let local = get_plugin_dir("Meridian").join("presets");
     let candidate = local.join(format!("{name}.md"));
     if candidate.is_file()
         && let Ok(c) = std::fs::read_to_string(&candidate)
@@ -550,7 +551,7 @@ pub fn find_profile(
 pub fn preset_save_dir(vault_path: &Option<String>) -> PathBuf {
     match vault_path {
         Some(vp) if !vp.is_empty() => PathBuf::from(vp),
-        _ => lx_analysis::get_plugin_dir("Meridian").join("presets"),
+        _ => get_plugin_dir("Meridian").join("presets"),
     }
 }
 

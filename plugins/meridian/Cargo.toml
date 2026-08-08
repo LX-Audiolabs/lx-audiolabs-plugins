@@ -23,8 +23,7 @@ slint = { workspace = true }
 
 aura-dsp = { workspace = true }
 
-lx-slint-editor = { path = "../../crates/lx-slint-editor" }
-lx-analysis = { path = "../../crates/lx-analysis" }
+paste = "1"
 realfft = "3"
 tracing = "0.1"
 

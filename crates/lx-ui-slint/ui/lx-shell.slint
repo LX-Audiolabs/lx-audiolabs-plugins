@@ -273,7 +273,7 @@ export component LxShellHeader inherits Rectangle {
     in property <string> version: "";
     in property <string> status-text: "";
 
-    // Product UI zoom (fixed steps). Wired by plugins to lx-slint-editor::UiZoom.
+    // Product UI zoom (fixed steps). Wired by plugins to aura-editor::ui_zoom::UiZoom.
     in-out property <int> ui-zoom-percent: 100;
     in property <bool> enable-ui-zoom: true;
     callback ui-zoom-changed(int);

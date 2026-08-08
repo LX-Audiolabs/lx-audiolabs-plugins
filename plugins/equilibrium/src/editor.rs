@@ -1,4 +1,4 @@
-//! Equilibrium Slint editor — lx-slint-editor, Vizia feature parity (vault/SNAP/telemetry).
+//! Equilibrium Slint editor — aura-editor, Vizia feature parity (vault/SNAP/telemetry).
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -6,9 +6,11 @@ use std::time::{Duration, Instant};
 
 use aura::prelude::*;
 use aura::FloatParam;
-use lx_slint_editor::{
-    apply_ui_zoom, LxPluginContext, LxSlintEditor, PluginContextReadF32, UiZoom,
-};
+use aura_dsp::analysis::*;
+use aura_dsp::analysis::product_shared::EquilibriumShared;
+use aura_editor::typed::*;
+use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
+use paste::paste;
 use slint::{ModelRc, SharedString, VecModel};
 
 use crate::presets::{
@@ -194,7 +196,7 @@ struct VaultUiState {
 macro_rules! bind_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
             }
@@ -205,7 +207,7 @@ macro_rules! bind_floats {
 macro_rules! bind_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v: bool| {
                     s.automate($p, if v { 1.0 } else { 0.0 });
@@ -218,7 +220,7 @@ macro_rules! bind_bools {
 macro_rules! sync_floats_dirty {
     ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let v = PluginContextReadF32::get_param($state, $p);
                 if changed_f32(&mut $cache.floats[$idx], v) {
                     $ui.[<set_ $name>](v);
@@ -231,7 +233,7 @@ macro_rules! sync_floats_dirty {
 macro_rules! sync_bools_dirty {
     ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let v = PluginContextReadF32::get_param($state, $p) > 0.5;
                 if changed_bool(&mut $cache.bools[$idx], v) {
                     $ui.[<set_ $name>](v);
@@ -245,7 +247,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
     let sync_cache = Mutex::new(SyncCache::new());
 
-    let init_cfg = lx_analysis::load_config("Equilibrium");
+    let init_cfg = aura_dsp::analysis::vault::load_config("Equilibrium");
     let init_vp = init_cfg.vault_path.clone();
     let init_presets = load_presets(init_vp.as_deref());
     // Seed Pink Noise targets if nothing selected yet.
@@ -415,9 +417,9 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                         let new_vp = if path.is_empty() { None } else { Some(path) };
                         if let Ok(mut vs) = vs_path.lock() {
                             vs.vault_path = new_vp.clone();
-                            let mut cfg = lx_analysis::load_config("Equilibrium");
+                            let mut cfg = aura_dsp::analysis::vault::load_config("Equilibrium");
                             cfg.vault_path = new_vp.clone();
-                            let _ = lx_analysis::save_config("Equilibrium", &cfg);
+                            let _ = aura_dsp::analysis::vault::save_config("Equilibrium", &cfg);
                             vs.presets = load_presets(new_vp.as_deref());
                             if let Some(ui) = ui_path.upgrade() {
                                 ui.set_preset_names(names_model(&preset_names(&vs.presets)));
@@ -436,7 +438,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     let paste_ui = ui.as_weak();
                     ui.on_vault_paste_requested(move || {
                         let Some(ui) = paste_ui.upgrade() else { return };
-                        match lx_slint_editor::clipboard_get_retry() {
+                        match aura_editor::platform::clipboard_get_retry() {
                             Some(s) => {
                                 ui.set_vault_setup_path(SharedString::from(s));
                                 ui.set_vault_paste_status(SharedString::new());
@@ -988,8 +990,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
     .into()
 }
 
-fn gonio_path(shared: &lx_analysis::EquilibriumShared, w: f32, h: f32) -> String {
-    use lx_analysis::SCOPE_BUFFER_LEN;
+fn gonio_path(shared: &EquilibriumShared, w: f32, h: f32) -> String {
     let (samples, write_pos) = {
         let pos = shared.scope.write_pos.load(Ordering::Relaxed);
         let samples = match shared.scope.samples.try_lock() {

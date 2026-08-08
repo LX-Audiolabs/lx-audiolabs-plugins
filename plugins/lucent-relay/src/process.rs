@@ -3,8 +3,9 @@
 //! ponytail: same-crate module split only — no behavior change.
 
 use aura::prelude::*;
-use lx_analysis::compute_spectrum_bins;
+use aura_dsp::analysis::*;
 use aura_dsp::fx::FtzDazGuard;
+use aura_shm::*;
 
 use crate::{
     read_persisted, sync_live, FFT_SIZE, LucentRelayDspState, LucentRelayParams,
@@ -17,7 +18,7 @@ pub(crate) fn run(
 ) -> ProcessStatus {
     let _ftz = FtzDazGuard::new();
 
-    let now_ms = lx_analysis::shm::now_ms();
+    let now_ms = now_ms();
     if state.claimed_slot.is_none() {
         state.claim_slot();
     }

@@ -19,11 +19,10 @@ lv2  = ["aura/lv2"]
 [dependencies]
 aura = { workspace = true }
 aura-editor = { workspace = true, features = ["backend-femtovg"] }
+aura-dsp = { workspace = true }
+aura-shm = { workspace = true }
 slint        = { workspace = true }
 
-lx-slint-editor = { path = "../../crates/lx-slint-editor" }
-aura-dsp = { workspace = true }
-lx-analysis = { path = "../../crates/lx-analysis" }
 realfft     = "3"
 tracing     = "0.1"
 

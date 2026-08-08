@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use lx_slint_editor::LxPluginContext;
+use aura_editor::typed::*;
 use serde::{Deserialize, Serialize};
 
 use crate::EquilibriumParams;
@@ -151,7 +151,7 @@ fn parse_frontmatter_list(content: &str, key: &str) -> Vec<String> {
 
 /// Parse a preset/profile from Markdown — requires plugin: equilibrium frontmatter and all 5 bands
 pub fn parse_preset_from_markdown(content: &str) -> Option<Profile> {
-    let frontmatter = lx_analysis::parse_frontmatter(content);
+    let frontmatter = aura_dsp::analysis::vault::parse_frontmatter(content);
 
     match frontmatter.get("plugin").map(|s| s.as_str()) {
         Some("equilibrium") => {}
@@ -289,7 +289,7 @@ pub fn list_custom_presets(
     let mut presets = Vec::new();
     let mut seen_paths = std::collections::HashSet::new();
 
-    let local_dir = lx_analysis::get_plugin_dir(plugin_name).join("presets");
+    let local_dir = aura_dsp::analysis::vault::get_plugin_dir(plugin_name).join("presets");
     let _ = std::fs::create_dir_all(&local_dir);
 
     let mut scan_dir = |dir: &Path| {
@@ -444,7 +444,7 @@ pub fn profile_for_save(
 pub fn preset_save_dir(vault_path: &Option<String>) -> PathBuf {
     match vault_path {
         Some(vp) if !vp.is_empty() => PathBuf::from(vp),
-        _ => lx_analysis::get_plugin_dir("Equilibrium").join("presets"),
+        _ => aura_dsp::analysis::vault::get_plugin_dir("Equilibrium").join("presets"),
     }
 }
 

@@ -5,10 +5,13 @@ use std::time::{Duration, Instant};
 use aura::prelude::*;
 use aura::FloatParam;
 use slint::{ModelRc, SharedString, VecModel};
-use lx_slint_editor::{
-    apply_ui_zoom, discrete_index, discrete_norm, LxPluginContext, LxSlintEditor,
-    PluginContextReadF32, UiZoom,
-};
+use aura_editor::platform::clipboard_get_retry;
+use aura_editor::typed::*;
+use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
+use aura_dsp::analysis::SPECTRUM_BINS;
+use aura_dsp::analysis::product_shared::MeridianShared;
+use aura_dsp::analysis::vault::{load_config, save_config};
+use paste::paste;
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -191,7 +194,7 @@ fn float_default_norm(p: &FloatParam) -> f32 {
 macro_rules! bind_floats {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
             }
@@ -203,7 +206,7 @@ macro_rules! bind_floats {
 macro_rules! set_float_defaults {
     ($ui:expr, $params:expr, $($name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 $ui.[<set_ $name _default>](float_default_norm(&$params.$name));
             }
         )*
@@ -222,7 +225,7 @@ macro_rules! reset_floats {
 macro_rules! bind_ints {
     ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let s = $state.clone();
                 let count = $count as usize;
                 $ui.[<on_ $name _changed>](move |v: f32| {
@@ -236,7 +239,7 @@ macro_rules! bind_ints {
 macro_rules! bind_bools {
     ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let s = $state.clone();
                 $ui.[<on_ $name _changed>](move |v: bool| {
                     s.automate($p, if v { 1.0 } else { 0.0 });
@@ -250,7 +253,7 @@ macro_rules! bind_bools {
 macro_rules! sync_floats_dirty {
     ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let v = PluginContextReadF32::get_param($state, $p);
                 if changed_f32(&mut $cache.floats[$idx], v) {
                     $ui.[<set_ $name>](v);
@@ -264,7 +267,7 @@ macro_rules! sync_floats_dirty {
 macro_rules! sync_ints_dirty {
     ($ui:expr, $state:expr, $cache:expr, $count:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let idx = discrete_index(PluginContextReadF32::get_param($state, $p) as f64, $count) as f32;
                 if changed_f32(&mut $cache.ints[$idx], idx) {
                     $ui.[<set_ $name>](idx);
@@ -277,7 +280,7 @@ macro_rules! sync_ints_dirty {
 macro_rules! sync_bools_dirty {
     ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
         $(
-            lx_slint_editor::paste! {
+            paste! {
                 let v = PluginContextReadF32::get_param($state, $p) > 0.5;
                 if changed_bool(&mut $cache.bools[$idx], v) {
                     $ui.[<set_ $name>](v);
@@ -303,7 +306,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
     let sync_cache = Mutex::new(SyncCache::new());
 
     // Shared between build callbacks and per-frame sync (scan drain, SNAP write).
-    let init_cfg = lx_analysis::load_config("Meridian");
+    let init_cfg = load_config("Meridian");
     let init_vp = init_cfg.vault_path.clone();
     let vault_pending = Arc::new(PendingPresets::new());
     {
@@ -541,9 +544,9 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     let new_vp = if path.is_empty() { None } else { Some(path) };
                     if let Ok(mut vs) = vs_path.lock() {
                         vs.vault_path = new_vp.clone();
-                        let mut cfg = lx_analysis::load_config("Meridian");
+                        let mut cfg = load_config("Meridian");
                         cfg.vault_path = new_vp.clone();
-                        let _ = lx_analysis::save_config("Meridian", &cfg);
+                        let _ = save_config("Meridian", &cfg);
                         let scan_gen = vs.pending.bump_generation();
                         let scan_arg = new_vp.clone().unwrap_or_default();
                         vs.scanning_for = new_vp.clone();
@@ -564,7 +567,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 let paste_ui = ui.as_weak();
                 ui.on_vault_paste_requested(move || {
                     let Some(ui) = paste_ui.upgrade() else { return };
-                    match lx_slint_editor::clipboard_get_retry() {
+                    match clipboard_get_retry() {
                         Some(s) => {
                             ui.set_vault_setup_path(SharedString::from(s));
                             ui.set_vault_paste_status(SharedString::new());
@@ -964,7 +967,6 @@ fn db_to_gr(db: f32) -> f32 {
 /// 1/3-octave fractional-band smoothing (Lucent `lx-ui` canvas parity).
 /// Returns 241 log-spaced dB points from 20 Hz to 20 kHz.
 fn smooth_spectrum_third_octave(spectrum: &[f32], sample_rate: f32) -> Vec<f32> {
-    use lx_analysis::SPECTRUM_BINS;
     if spectrum.is_empty() {
         return Vec::new();
     }
@@ -1029,8 +1031,8 @@ fn smooth_spectrum_third_octave(spectrum: &[f32], sample_rate: f32) -> Vec<f32> 
     out
 }
 
-fn spectrum_path(shared: &lx_analysis::MeridianShared, w: f32, h: f32) -> (String, f32) {
-    use lx_analysis::SPECTRUM_BINS;
+fn spectrum_path(shared: &MeridianShared, w: f32, h: f32) -> (String, f32) {
+    use aura_dsp::analysis::SPECTRUM_BINS;
     const MIN_DB: f32 = -70.0;
     const MAX_DB: f32 = -18.0;
 
@@ -1163,8 +1165,8 @@ fn gr_envelope_path(history: &[f32], current: f32, w: f32, h: f32) -> String {
 
 // --- goniometer path (M/S rotation — vault frozen spec) -------------------
 
-fn gonio_path(shared: &lx_analysis::MeridianShared, w: f32, h: f32) -> String {
-    use lx_analysis::SCOPE_BUFFER_LEN;
+fn gonio_path(shared: &MeridianShared, w: f32, h: f32) -> String {
+    use aura_dsp::analysis::SCOPE_BUFFER_LEN;
     let (samples, write_pos) = {
         let pos = shared.scope.write_pos.load(Ordering::Relaxed);
         let samples = match shared.scope.samples.try_lock() {

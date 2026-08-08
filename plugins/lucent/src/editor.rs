@@ -1,4 +1,4 @@
-//! Lucent — lx-slint-editor. Analyzer layout + Vizia feature parity:
+//! Lucent — aura-editor. Analyzer layout + Vizia feature parity:
 //! SMOOTH/SNAP/relay curves + toggle bar, resonance markers, masking bars,
 //! goniometer / LED meters / correlation, vault setup overlay.
 //!
@@ -15,11 +15,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use lx_analysis::{relay_hub, LucentShared, SPECTRUM_BINS};
-use lx_slint_editor::{
-    apply_ui_zoom, discrete_index, discrete_norm, LxPluginContext, LxSlintEditor,
-    PluginContextReadF32, UiZoom,
-};
+use aura_dsp::analysis::*;
+use aura_dsp::analysis::product_shared::LucentShared;
+use aura_dsp::analysis::vault::{load_config, save_config};
+use aura_editor::platform::clipboard_get_retry;
+use aura_editor::typed::*;
+use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
+use aura_shm::*;
+use aura_shm::SPECTRUM_BINS;
 use slint::{ModelRc, SharedString, VecModel};
 use aura::prelude::*;
 
@@ -266,7 +269,7 @@ fn gonio_path(shared: &LucentShared, w: f32, h: f32, out: &mut String) {
         return;
     }
 
-    let points_to_take = 512usize.min(lx_analysis::SCOPE_BUFFER_LEN);
+    let points_to_take = 512usize.min(SCOPE_BUFFER_LEN);
     let cx = w * 0.5;
     let cy = h * 0.5;
     let scale = cx.min(cy) * 0.9;
@@ -659,7 +662,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
     let instance_key = Arc::as_ptr(&params) as usize;
     let snap_request = Arc::new(AtomicBool::new(false));
 
-    let init_vp = lx_analysis::load_config("Lucent").vault_path;
+    let init_vp = load_config("Lucent").vault_path;
     let sync_cache = Arc::new(Mutex::new(SyncCache::new(init_vp.clone())));
 
     let ui_zoom = UiZoom::new(WINDOW_W, WINDOW_H);
@@ -754,7 +757,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                         r.active = !r.active;
                         // DRIVEN bit: distinguish "all off" from "no preference".
                         shared_t.relay_active_mask.store(
-                            c.relay_state.active_mask() | lx_analysis::RELAY_MASK_DRIVEN,
+                            c.relay_state.active_mask() | RELAY_MASK_DRIVEN,
                             Ordering::Release,
                         );
                     }
@@ -786,16 +789,16 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     if let Ok(mut c) = cache_v.lock() {
                         c.vault_path = new_vp.clone();
                     }
-                    let mut cfg = lx_analysis::load_config("Lucent");
+                    let mut cfg = load_config("Lucent");
                     cfg.vault_path = new_vp;
-                    let _ = lx_analysis::save_config("Lucent", &cfg);
+                    let _ = save_config("Lucent", &cfg);
                 });
 
                 // Vault Setup PASTE: write draft path only (vault_setup_path).
                 let paste_ui = ui.as_weak();
                 ui.on_vault_paste_requested(move || {
                     let Some(ui) = paste_ui.upgrade() else { return };
-                    match lx_slint_editor::clipboard_get_retry() {
+                    match clipboard_get_retry() {
                         Some(s) => {
                             ui.set_vault_setup_path(SharedString::from(s));
                             ui.set_vault_paste_status(SharedString::new());
@@ -865,7 +868,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 // Vizia: editor reads hub live every tick (not process registry).
                 // Process `publish_relays` still feeds DSP; UI must not wait on FFT.
                 if mode != 0 {
-                    let now_ms = lx_analysis::shm::now_ms();
+                    let now_ms = now_ms();
                     let slot = shared_sync.shm.slot.load(Ordering::Acquire);
                     let raw = params_sync
                         .name_bg
@@ -874,7 +877,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                         .or_else(|_| params_sync.name.try_read().map(|n| n.clone()))
                         .unwrap_or_default();
                     let my_name = if slot >= 0 {
-                        lx_analysis::shm::display_name(&raw, slot as u8)
+                        display_name(&raw, slot as u8)
                     } else {
                         raw
                     };
@@ -893,7 +896,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     cache.relay_state.sync(&slots);
                     // DRIVEN | slot-bits: all-off is not the same as mask==0.
                     shared_sync.relay_active_mask.store(
-                        cache.relay_state.active_mask() | lx_analysis::RELAY_MASK_DRIVEN,
+                        cache.relay_state.active_mask() | RELAY_MASK_DRIVEN,
                         Ordering::Release,
                     );
                 } else {

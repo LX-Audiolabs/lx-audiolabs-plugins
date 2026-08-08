@@ -17,7 +17,7 @@ GitHub auth: `github.user=lxndrbe`
 
 ## UI direction (one-liner)
 
-Slint 1.17.1 + **lx-slint-editor** (femtovg/OpenGL default); plugins on lx-slint-editor.  
+Slint 1.17.1 + **aura-editor** (femtovg/OpenGL default); plugins on aura-editor.  
 Detail when needed: `agal skills sync --only ui/slint` → `agal/skills/04-ui/slint.md`.
 
 ## Build

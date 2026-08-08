@@ -21,9 +21,7 @@ aura = { workspace = true }
 aura-editor = { workspace = true, features = ["backend-femtovg"] }
 slint = { workspace = true }
 
-lx-slint-editor = { path = "../../crates/lx-slint-editor" }
 aura-dsp = { workspace = true }
-lx-analysis = { path = "../../crates/lx-analysis" }
 serde           = { version = "1", features = ["derive"] }
 serde_json      = "1"
 tracing         = "0.1"

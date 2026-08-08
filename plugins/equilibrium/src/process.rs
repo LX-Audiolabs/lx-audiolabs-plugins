@@ -9,7 +9,7 @@ use std::f32::consts::FRAC_PI_4;
 use std::sync::atomic::Ordering;
 use aura::prelude::*;
 
-use lx_analysis::{SnapMode, SCOPE_BUFFER_LEN};
+use aura_dsp::analysis::*;
 use aura_dsp::fx::{FtzDazGuard, DBTP_CEILING};
 
 use crate::{

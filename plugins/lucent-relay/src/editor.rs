@@ -1,11 +1,12 @@
-//! Lucent Relay — lx-slint-editor (name, target, connection status).
+//! Lucent Relay — aura-editor (name, target, connection status).
 
 use std::sync::{Arc, Mutex};
 
-use lx_analysis::relay_hub;
-use lx_slint_editor::{LxPluginContext, LxSlintEditor, UiZoom};
-use slint::{ModelRc, SharedString, VecModel};
 use aura::prelude::*;
+use aura_editor::typed::*;
+use aura_editor::ui_zoom::UiZoom;
+use aura_shm::*;
+use slint::{ModelRc, SharedString, VecModel};
 
 use crate::{editor_publish_heartbeat, sync_live, LucentRelayParams};
 
@@ -66,7 +67,7 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                 let idx = idx.max(0) as usize;
                 // 0 = broadcast (empty target); 1.. = consumer from last options
                 // Options are rebuilt in sync; store by index into current hub list.
-                let now_ms = lx_analysis::shm::now_ms();
+                let now_ms = now_ms();
                 let lucents = relay_hub()
                     .map(|hub| hub.read_consumers(now_ms))
                     .unwrap_or_default();
@@ -89,7 +90,7 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
             move |ui: &LucentRelayUi, _state: &LxPluginContext<LucentRelayParams>| {
                 editor_publish_heartbeat(&params_sync);
 
-                let now_ms = lx_analysis::shm::now_ms();
+                let now_ms = now_ms();
                 let lucent_list = relay_hub()
                     .map(|hub| hub.read_consumers(now_ms))
                     .unwrap_or_default();
@@ -103,7 +104,7 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                 // Soft-reconcile stale target (Vizia process path). Hard-clear
                 // caused connect flicker when Lucent renames Hub N → custom name:
                 // sole consumer auto-retargets; multi → broadcast; match stays.
-                use lx_analysis::resolve_from_consumers;
+                use aura_shm::resolve_from_consumers;
                 let resolved =
                     resolve_from_consumers(&current, &lucent_list).unwrap_or_default();
                 if resolved != current {

@@ -6,10 +6,10 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use aura::prelude::*;
 
-use lx_analysis::{
-    relay_hub, relay_slot_active, spectrum_physical_db, LucentShared, MAX_NAME_LEN, MAX_SLOTS,
-    SPECTRUM_BINS, SPECTRUM_TILT_RAW_GATE_DB,
-};
+use aura_dsp::analysis::*;
+use aura_dsp::analysis::product_shared::LucentShared;
+use aura_shm::*;
+use aura_shm::SPECTRUM_BINS;
 
 /// Live SHM relay feed on the audio path: fixed bins, reused name String.
 pub(crate) type RelayFeed = (u8, String, [f32; SPECTRUM_BINS]);
@@ -23,7 +23,7 @@ pub(crate) type RelayFeed = (u8, String, [f32; SPECTRUM_BINS]);
 /// Relay target lists while the user is typing (Vizia always publishes the
 /// keystroke text immediately via `write_consumer_name`).
 pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShared) {
-    let now_ms = lx_analysis::shm::now_ms();
+    let now_ms = now_ms();
     let mut slot = shared.shm.slot.load(Ordering::Acquire);
     if slot < 0
         && let Some(hub) = relay_hub()
@@ -50,7 +50,7 @@ pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShare
                 .or_else(|_| params.name.read().map(|n| n.clone()))
                 .unwrap_or_default()
         });
-    let my_name = lx_analysis::shm::display_name(&raw, slot as u8);
+    let my_name = display_name(&raw, slot as u8);
     if let Some(hub) = relay_hub() {
         hub.write_consumer_name(slot as u8, &my_name, now_ms);
     }
@@ -60,7 +60,7 @@ pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShare
 /// the editor name callback so Relay target lists update without waiting for
 /// the next 33 ms tick / audio block.
 pub(crate) fn editor_publish_consumer_name(shared: &LucentShared, raw: &str) {
-    let now_ms = lx_analysis::shm::now_ms();
+    let now_ms = now_ms();
     let mut slot = shared.shm.slot.load(Ordering::Acquire);
     if slot < 0
         && let Some(hub) = relay_hub()
@@ -72,7 +72,7 @@ pub(crate) fn editor_publish_consumer_name(shared: &LucentShared, raw: &str) {
     if slot < 0 {
         return;
     }
-    let my_name = lx_analysis::shm::display_name(raw, slot as u8);
+    let my_name = display_name(raw, slot as u8);
     if let Some(hub) = relay_hub() {
         hub.write_consumer_name(slot as u8, &my_name, now_ms);
     }
@@ -1010,7 +1010,7 @@ impl LucentDspState {
             self.display_name_slot = self.claimed_lucent_slot;
             self.cached_display_name = self
                 .claimed_lucent_slot
-                .map(|slot| lx_analysis::shm::display_name(&self.cached_name, slot))
+                .map(|slot| display_name(&self.cached_name, slot))
                 .unwrap_or_else(|| self.cached_name.clone());
         }
         if let Some(slot) = self.claimed_lucent_slot
@@ -1037,8 +1037,8 @@ impl LucentDspState {
                 }
                 if let Some(hub) = relay_hub() {
                     let raw = name_bg.read().ok().map(|n| n.clone()).unwrap_or_default();
-                    let name = lx_analysis::shm::display_name(&raw, slot as u8);
-                    hub.write_consumer_name(slot as u8, &name, lx_analysis::shm::now_ms());
+                    let name = display_name(&raw, slot as u8);
+                    hub.write_consumer_name(slot as u8, &name, now_ms());
                 }
             }
         });
@@ -1137,7 +1137,7 @@ impl PluginLogic for Lucent {
     fn reset(state: &mut LucentDspState, params: &LucentParams, config: &AudioConfig) {
         let sr = config.sample_rate;
         state.sample_rate = sr as f32;
-        let now_ms = lx_analysis::shm::now_ms();
+        let now_ms = now_ms();
         params
             .shared
             .spectrum.sample_rate
@@ -1200,7 +1200,7 @@ aura::export_lv2!(Lucent);
 #[cfg(test)]
 mod masking_tests {
     use super::MaskingAnalyzer;
-    use lx_analysis::{spectrum_physical_db, spectrum_tilt_db, SPECTRUM_BINS};
+    use aura_dsp::analysis::{spectrum_physical_db, spectrum_tilt_db, SPECTRUM_BINS};
 
     fn tilted_silent_spectrum(sample_rate: f32) -> Vec<f32> {
         let fft_size = (SPECTRUM_BINS * 2) as f32;
