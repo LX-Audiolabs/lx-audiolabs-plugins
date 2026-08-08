@@ -2,8 +2,7 @@
 
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
 use std::sync::{Arc, RwLock};
-use truce::prelude::*;
-use truce_core::editor::Editor;
+use aura::prelude::*;
 
 use lx_analysis::{
     RelayHub, SPECTRUM_BINS, ShmClaimShared, relay_hub, resolve_from_consumers, resolve_relay_target,
@@ -19,7 +18,7 @@ pub(crate) const FFT_SIZE: usize = 2048;
 const RESOLVE_INTERVAL_MS: u64 = 250;
 
 // ─── Parameters ──────────────────────────────────────────────────────────────
-// Truce requires at least one Param field. `process()` always copies input to
+// AURA requires at least one Param field. `process()` always copies input to
 // output regardless of bypass state (pure pass-through analyzer), so a visible
 // Bypass control is a no-op from the user's perspective - hidden per user request.
 // ponytail: _flush_sentinel FloatParam works around truce flush edge-case
@@ -29,9 +28,10 @@ const RESOLVE_INTERVAL_MS: u64 = 250;
 
 #[derive(Params)]
 pub struct LucentRelayParams {
-    #[param(name = "Bypass", default = 0, flags = "bypass|hidden")]
+    #[param(id = 1, name = "Bypass", default = 0, flags = "bypass|hidden")]
     pub bypass: BoolParam,
     #[param(
+        id = 2,
         name = "_flush_sentinel",
         default = 0.0,
         range = "linear(0.0, 1.0)",
@@ -43,8 +43,8 @@ pub struct LucentRelayParams {
     #[persist]
     pub target: RwLock<String>,
     /// Live (name, target) mirror for the liveness thread — same Arc the
-    /// editor and audio thread share via Truce's `Arc<LucentRelayParams>`.
-    /// Updated from `process()` / `state_changed()` / editor edits so
+    /// editor and audio thread share via AURA's `Arc<LucentRelayParams>`.
+    /// Updated from `process()` / editor edits so
     /// `touch()` keeps working when transport is stopped.
     #[skip]
     pub live: Arc<RwLock<(String, String)>>,
@@ -322,11 +322,32 @@ impl PluginLogic for LucentRelay {
     type Params = LucentRelayParams;
     type DspState = LucentRelayDspState;
 
+    fn info() -> PluginInfo {
+        let mut info = PluginInfo::new(
+            "Lucent Relay",
+            "LX Audiolabs",
+            env!("CARGO_PKG_VERSION"),
+            "lucentrelay",
+        );
+        // Stable ship IDs — must match pre-AURA truce Lucent Relay (Bitwig keys
+        // sessions on clap id; com.lx-audiolabs.* breaks existing projects).
+        info.clap_id = "be.lxndr.lucentrelay";
+        info.vst3_id = "be.lxndr.lucentrelay";
+        info.lv2_uri = "https://lx-audiolabs.com/lv2/lucentrelay";
+        info.category = PluginCategory::Analyzer;
+        info
+    }
+
     fn bus_layouts() -> Vec<BusLayout> {
         vec![BusLayout::stereo()]
     }
 
-    fn init(params: &Self::Params, _cx: &InitContext) -> Self::DspState {
+    fn init(params: &Self::Params, _sample_rate: f64) -> Self::DspState {
+        // Custom init (truce parity): adopt the shared SHM slot, cache the
+        // persisted name/target, claim a publisher slot and spawn the liveness
+        // thread. AURA calls `reset` on activate right after `init` (same as
+        // truce), which sets sample_rate and re-claims/re-spawns —
+        // `spawn_liveness_thread` kills the old thread via its liveness flag.
         let mut state = LucentRelayDspState::default();
         state.shm_state = params.shm.clone();
         state.instance_key = params as *const _ as usize;
@@ -349,31 +370,23 @@ impl PluginLogic for LucentRelay {
     fn process(
         state: &mut LucentRelayDspState,
         params: &LucentRelayParams,
-        buffer: &mut AudioBuffer,
-        _events: &EventList,
+        buffer: &mut AudioBuffer<'_, f32>,
         _ctx: &mut ProcessContext,
     ) -> ProcessStatus {
         process::run(state, params, buffer)
     }
 
-    fn snapshot_into(_state: &LucentRelayDspState, _buf: &mut Vec<u8>) -> bool {
-        false
-    }
-    fn load_state(_state: &mut LucentRelayDspState, _data: &[u8]) -> Result<(), StateLoadError> {
-        Ok(())
-    }
+    // AURA has no `state_changed` hook. Its work (re-sync cached_name /
+    // cached_target from the persisted fields, force a target re-resolve,
+    // sync_live) is preserved lazily at the top of `process::run`: each block
+    // re-reads the persisted fields, updates the caches on change, forces the
+    // resolve on a target change, and calls `sync_live` — so a host state load
+    // is picked up on the first block after load. While transport is stopped
+    // the editor tick (`editor_publish_heartbeat`) reads the persisted fields
+    // directly, so heartbeats stay correct there too.
 
-    fn state_changed(state: &mut LucentRelayDspState, params: &LucentRelayParams) {
-        let (name, target) = read_persisted(params);
-        state.cached_name = name;
-        state.cached_target = target;
-        // Force a target re-resolve on the next block after a state load.
-        state.last_resolve_ms = None;
-        sync_live(params);
-    }
-
-    fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
-        editor::build_editor(params)
+    fn editor(params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {
+        Some(editor::build_editor(params))
     }
 }
 
@@ -390,29 +403,32 @@ impl Drop for LucentRelayDspState {
     }
 }
 
-truce::plugin! {
-    logic: LucentRelay,
-    params: LucentRelayParams,
-}
+#[cfg(feature = "clap")]
+aura::export!(LucentRelay);
+
+#[cfg(feature = "vst3")]
+aura::export_vst3!(LucentRelay);
+
+#[cfg(feature = "lv2")]
+aura::export_lv2!(LucentRelay);
 
 #[cfg(test)]
 mod tests {
-    use crate::Plugin;
-    use std::time::Duration;
+    use super::*;
 
     #[test]
     fn renders_pass_through() {
-        use truce_test::{InputSource, assertions, driver};
-        let result = driver!(Plugin)
-            .duration(Duration::from_millis(50))
-            .input(InputSource::Constant(0.5))
-            .run();
-        assertions::assert_no_nans(&result);
-        assertions::assert_nonzero(&result);
+        let frames = 2048;
+        let out = aura_test::process_with_input::<LucentRelay>(
+            &[vec![0.5; frames], vec![0.5; frames]],
+            frames,
+        );
+        aura_test::assert_no_nans(&out);
+        aura_test::assert_nonzero(&out);
     }
 
     #[test]
     fn state_round_trips() {
-        truce_test::assert_state_round_trip::<Plugin>();
+        aura_test::assert_state_round_trip::<LucentRelay>();
     }
 }

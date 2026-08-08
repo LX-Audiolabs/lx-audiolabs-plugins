@@ -3,9 +3,9 @@
 use std::sync::{Arc, Mutex};
 
 use lx_analysis::relay_hub;
-use lx_slint_editor::{LxSlintEditor, PluginContext, UiZoom};
+use lx_slint_editor::{LxPluginContext, LxSlintEditor, UiZoom};
 use slint::{ModelRc, SharedString, VecModel};
-use truce_core::editor::Editor;
+use aura::prelude::*;
 
 use crate::{editor_publish_heartbeat, sync_live, LucentRelayParams};
 
@@ -43,7 +43,7 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
         ui_zoom,
         {
             let params = params.clone();
-            move |_state: PluginContext<LucentRelayParams>| {
+            move |_state: LxPluginContext<LucentRelayParams>| {
             let ui = LucentRelayUi::new().expect("LucentRelayUi::new");
 
             ui.set_version(SharedString::from(VERSION));
@@ -86,7 +86,7 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
         },
         {
             let params_sync = params.clone();
-            move |ui: &LucentRelayUi, _state: &PluginContext<LucentRelayParams>| {
+            move |ui: &LucentRelayUi, _state: &LxPluginContext<LucentRelayParams>| {
                 editor_publish_heartbeat(&params_sync);
 
                 let now_ms = lx_analysis::shm::now_ms();

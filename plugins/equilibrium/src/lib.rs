@@ -14,7 +14,7 @@ use std::sync::Arc;
 use aura::prelude::*;
 
 use lx_analysis::{EquilibriumShared, SnapFFT};
-use lx_dsp::{AutoLoudMeter, Biquad, LR2Crossover};
+use aura_dsp::fx::{AutoLoudMeter, Biquad, LR2Crossover};
 
 mod editor;
 mod presets;

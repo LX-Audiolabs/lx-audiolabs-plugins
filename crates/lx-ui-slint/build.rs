@@ -1,3 +1,3 @@
 fn main() {
-    lx_slint_build::compile("ui/lx.slint").unwrap();
+    aura_build::compile("ui/lx.slint").unwrap();
 }

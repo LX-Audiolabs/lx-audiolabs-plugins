@@ -17,7 +17,7 @@ use crate::presets::{
     profile_from_params, snap_filename, snap_markdown, spawn_vault_scan, PendingPresets,
     PresetEntry,
 };
-use lx_dsp::{Biquad, TiltEq};
+use aura_dsp::fx::{Biquad, TiltEq};
 
 slint::include_modules!();
 

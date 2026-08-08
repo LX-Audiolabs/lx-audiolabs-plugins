@@ -3,7 +3,7 @@
 //! ponytail: same-crate module split only — no behavior change.
 
 use aura::prelude::*;
-use lx_dsp::FtzDazGuard;
+use aura_dsp::fx::FtzDazGuard;
 
 use crate::{AetherDspState, AetherParams, CF_DELAY_MAX, NUM_BANDS};
 

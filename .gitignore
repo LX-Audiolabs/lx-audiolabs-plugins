@@ -17,6 +17,7 @@
 !/audiolabs/skills/
 
 # Tool artifacts — not plugin code.
+*.log
 skills-lock.json
 .playwright-mcp/
 rustc-ice-*.txt

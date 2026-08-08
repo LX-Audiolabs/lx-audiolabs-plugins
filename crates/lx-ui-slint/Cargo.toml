@@ -9,4 +9,4 @@ publish = false
 slint = { workspace = true }
 
 [build-dependencies]
-lx-slint-build = { workspace = true }
+aura-build = { workspace = true }

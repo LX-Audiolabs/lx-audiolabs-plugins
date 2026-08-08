@@ -1,9 +1,11 @@
 {
-  // truce_slint_build injects these only at cargo build time (OUT_DIR).
-  // Slint LSP needs the same paths for @truce resolution.
+  // lx-slint-build injects fonts + @truce only at cargo build time (OUT_DIR).
+  // Slint LSP needs the same paths for import / @truce resolution in the editor.
   // Absolute paths — relative paths break in multi-root workspaces.
-  "slint.includePaths": [],
+  "slint.includePaths": [
+    "L:/LX-Audiolabs/truce-dev/crates/truce-font/fonts"
+  ],
   "slint.libraryPaths": {
-    "truce": "C:/Users/lxndr/Documents/LX-AudioLabs/truce-dev/crates/truce-slint/build/ui/widgets.slint"
+    "truce": "L:/LX-Audiolabs/lx-audiolabs-plugins/crates/lx-slint-build/ui/widgets.slint"
   }
 }

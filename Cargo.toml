@@ -1,18 +1,15 @@
 [workspace]
 members = [
-    "crates/lx-slint-build",
     "crates/lx-slint-editor",
     "crates/lx-analysis",
-    "crates/lx-dsp",
     "crates/lx-ui-slint",
-    "crates/lx-vault",
-    "crates/lx-shm",
-    # AURA cutover: meridian + aether + equilibrium smoke green; lucent* WIP.
+    # AURA cutover: all plugins migrated.
     "plugins/meridian",
     "plugins/aether",
     "plugins/equilibrium",
     "plugins/lucent",
     "plugins/lucent-relay",
+    "plugins/aurum",
 ]
 resolver = "3"
 
@@ -25,8 +22,10 @@ aura-build      = { path = "../AURA/crates/aura-build" }
 aura-editor     = { path = "../AURA/crates/aura-editor", default-features = false }
 aura-baseview   = { path = "../AURA/crates/aura-baseview", default-features = false }
 aura-test       = { path = "../AURA/crates/aura-test" }
+# DSP/analysis live in AURA; product crates re-export for stable `lx_*` paths.
+aura-dsp        = { path = "../AURA/crates/aura-dsp", default-features = false }
+aura-shm        = { path = "../AURA/crates/aura-shm" }
 
-lx-slint-build  = { path = "crates/lx-slint-build" }
 lx-slint-editor = { path = "crates/lx-slint-editor" }
 
 baseview = "0.3"

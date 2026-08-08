@@ -16,10 +16,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use lx_analysis::{relay_hub, LucentShared, SPECTRUM_BINS};
-use lx_slint_editor::{apply_ui_zoom, LxSlintEditor, PluginContext, UiZoom};
+use lx_slint_editor::{
+    apply_ui_zoom, discrete_index, discrete_norm, LxPluginContext, LxSlintEditor,
+    PluginContextReadF32, UiZoom,
+};
 use slint::{ModelRc, SharedString, VecModel};
-use truce_core::cast::{discrete_index, discrete_norm};
-use truce_core::editor::{Editor, PluginContextReadF32};
+use aura::prelude::*;
 
 use crate::relay_state::RelayState;
 use crate::{
@@ -671,7 +673,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
             let snap_request = snap_request.clone();
             let sync_cache = sync_cache.clone();
             let init_vp = init_vp.clone();
-            move |state: PluginContext<LucentParams>| {
+            move |state: LxPluginContext<LucentParams>| {
                 let ui = LucentUi::new().expect("LucentUi::new");
 
                 ui.set_version(SharedString::from(VERSION));
@@ -814,7 +816,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
             let params_sync = params.clone();
             let snap_req = snap_request.clone();
             let sync_cache = sync_cache.clone();
-            move |ui: &LucentUi, state: &PluginContext<LucentParams>| {
+            move |ui: &LucentUi, state: &LxPluginContext<LucentParams>| {
                 let Ok(mut cache) = sync_cache.lock() else {
                     return;
                 };
@@ -849,7 +851,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 if changed_f32(&mut cache.sens, sens) {
                     ui.set_sensitivity(sens);
                 }
-                let plain = state.params().sensitivity.raw_target() as f32;
+                let plain = state.sensitivity.raw_target() as f32;
                 let plain_q = (plain * 10.0).round() / 10.0;
                 if changed_f32(&mut cache.sens_text_q, plain_q) {
                     ui.set_sensitivity_text(SharedString::from(format!("{plain:.0}%")));

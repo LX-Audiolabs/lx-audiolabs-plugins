@@ -3,19 +3,9 @@ name = "lx-slint-editor"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
-description = "aura::Editor adapter with product UI zoom — LX Audiolabs"
+description = "Thin re-export of aura_editor typed layer — LX Audiolabs"
 publish = false
 
 [dependencies]
-aura-core = { workspace = true }
-aura-params = { workspace = true }
-aura-baseview = { workspace = true, features = ["backend-femtovg"] }
-raw-window-handle = "0.6"
-baseview = { workspace = true, features = ["opengl"] }
-slint = { workspace = true }
-log = "0.4"
-# Re-exported for plugin bind macros
+aura-editor = { workspace = true, features = ["backend-femtovg"] }
 paste = "1"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-fontique = { version = "0.10", default-features = true, features = ["fontconfig-dlopen"] }

@@ -6,9 +6,9 @@
 //! ponytail: same-crate module split — behavior matches lx-audiolabs-dev lucent.
 
 use std::sync::atomic::Ordering;
-use truce::prelude::*;
+use aura::prelude::*;
 use lx_analysis::{relay_hub, SPECTRUM_BINS};
-use lx_dsp::FtzDazGuard;
+use aura_dsp::fx::FtzDazGuard;
 
 use crate::{
     attribute_contributors_into, gain_to_db, power_sum_named_into, publish_masking, publish_relays,
@@ -18,7 +18,7 @@ use crate::{
 pub(crate) fn run(
     state: &mut LucentDspState,
     params: &LucentParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
 ) -> ProcessStatus {
     let _ftz = FtzDazGuard::new();
     let fft_size = state.fft_input.len();
@@ -36,36 +36,30 @@ pub(crate) fn run(
 
     let mode = params.analyze_mode.value();
 
-    // Pass-through: copy input → output when not pure in-place (empty input
-    // sentinel means host already shares the buffer — data is on output).
-    let n_ch = buffer.channels();
+    // Pass-through: copy input → output. AURA's buffer has no dual-mut
+    // io(), so inputs are copied to local Vecs before the output borrows.
+    let n_ch = buffer.num_inputs().min(buffer.num_outputs());
     let n = buffer.num_samples();
     if n_ch == 0 || n == 0 {
-        return ProcessStatus::Normal;
+        return ProcessStatus::Continue;
     }
     for ch in 0..n_ch {
         if buffer.input(ch).is_empty() {
             continue;
         }
-        let (inp, out) = buffer.io(ch);
-        out.copy_from_slice(inp);
+        let inp = buffer.input(ch).to_vec();
+        buffer.output(ch).copy_from_slice(&inp);
     }
 
-    // Snapshot L/R from output (always holds the pass-through result, and is
-    // also the right source under pure in-place). Avoids buffer.input() empty
-    // sentinel panics on in-place hosts / chunked process.
+    // Snapshot L/R from output (always holds the pass-through result).
     // ponytail: fixed stack cap — DAW blocks stay well under 8k.
     const MAX_BLOCK: usize = 8192;
     let n = n.min(MAX_BLOCK);
     let mut lbuf = [0.0f32; MAX_BLOCK];
     let mut rbuf = [0.0f32; MAX_BLOCK];
-    {
-        let s0 = buffer.in_out_mut(0);
-        lbuf[..n].copy_from_slice(&s0[..n]);
-    }
+    lbuf[..n].copy_from_slice(&buffer.output(0)[..n]);
     if n_ch > 1 {
-        let s1 = buffer.in_out_mut(1);
-        rbuf[..n].copy_from_slice(&s1[..n]);
+        rbuf[..n].copy_from_slice(&buffer.output(1)[..n]);
     } else {
         rbuf[..n].copy_from_slice(&lbuf[..n]);
     }
@@ -415,5 +409,5 @@ pub(crate) fn run(
         }
     }
 
-    ProcessStatus::Normal
+    ProcessStatus::Continue
 }

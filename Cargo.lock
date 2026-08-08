@@ -13,11 +13,11 @@ name = "aether"
 version = "1.4.1"
 dependencies = [
  "aura",
+ "aura-build",
+ "aura-dsp",
  "aura-editor",
  "aura-test",
  "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
  "lx-slint-editor",
  "serde",
  "serde_json",
@@ -309,7 +309,9 @@ dependencies = [
  "aura-clap",
  "aura-core",
  "aura-derive",
+ "aura-dsp",
  "aura-lv2",
+ "aura-midi",
  "aura-params",
  "aura-vst3",
 ]
@@ -345,6 +347,7 @@ dependencies = [
 name = "aura-core"
 version = "0.1.0"
 dependencies = [
+ "aura-midi",
  "aura-params",
 ]
 
@@ -359,13 +362,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aura-dsp"
+version = "0.1.0"
+dependencies = [
+ "atomic_float",
+ "ebur128",
+ "hisab",
+ "realfft",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "thiserror 2.0.19",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "aura-editor"
 version = "0.1.0"
 dependencies = [
  "aura-baseview",
  "aura-core",
+ "aura-params",
  "baseview",
  "log",
+ "paste",
  "raw-window-handle",
  "slint",
 ]
@@ -380,10 +401,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aura-midi"
+version = "0.1.0"
+
+[[package]]
 name = "aura-params"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.13.1",
+]
+
+[[package]]
+name = "aura-shm"
+version = "0.1.0"
+dependencies = [
+ "shared_memory",
 ]
 
 [[package]]
@@ -401,6 +433,24 @@ dependencies = [
  "aura-core",
  "aura-params",
  "vst3",
+]
+
+[[package]]
+name = "aurum"
+version = "0.4.2"
+dependencies = [
+ "aura",
+ "aura-build",
+ "aura-dsp",
+ "aura-editor",
+ "aura-test",
+ "lx-analysis",
+ "lx-slint-editor",
+ "realfft",
+ "serde",
+ "serde_json",
+ "slint",
+ "tracing",
 ]
 
 [[package]]
@@ -999,12 +1049,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 
 [[package]]
-name = "deranged"
-version = "0.5.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
-
-[[package]]
 name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1198,12 +1242,14 @@ name = "equilibrium"
 version = "1.8.1"
 dependencies = [
  "aura",
+ "aura-build",
+ "aura-dsp",
  "aura-editor",
  "aura-test",
  "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
  "lx-slint-editor",
+ "serde",
+ "serde_json",
  "slint",
  "tracing",
 ]
@@ -1669,6 +1715,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.29.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8babf46d4c1c9d92deac9f7be466f76dfc4482b6452fc5024b5e8daf6ffeb3ee"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1817,6 +1872,18 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hisab"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c0eb4099c6646aad6dc16023ea2bf492fa8ff8c42d142f1fdc531a3edf8a699"
+dependencies = [
+ "glam",
+ "serde",
+ "thiserror 2.0.19",
+ "tracing",
+]
 
 [[package]]
 name = "htmlparser"
@@ -2706,11 +2773,11 @@ name = "lucent"
 version = "1.2.1"
 dependencies = [
  "aura",
+ "aura-build",
+ "aura-dsp",
  "aura-editor",
  "aura-test",
  "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
  "lx-slint-editor",
  "realfft",
  "slint",
@@ -2722,11 +2789,11 @@ name = "lucent-relay"
 version = "1.1.2"
 dependencies = [
  "aura",
+ "aura-build",
+ "aura-dsp",
  "aura-editor",
  "aura-test",
  "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
  "lx-slint-editor",
  "realfft",
  "slint",
@@ -2743,66 +2810,24 @@ checksum = "9dd0f9e7de3649dcec348de51cbf611ab88688b97c0ce038f8c07b996b2a8e30"
 name = "lx-analysis"
 version = "0.1.0"
 dependencies = [
- "atomic_float",
- "lx-shm",
- "lx-vault",
- "realfft",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "lx-dsp"
-version = "0.1.1"
-dependencies = [
- "ebur128",
- "serde_json",
-]
-
-[[package]]
-name = "lx-shm"
-version = "0.1.0"
-dependencies = [
- "shared_memory",
-]
-
-[[package]]
-name = "lx-slint-build"
-version = "0.1.0"
-dependencies = [
- "aura-build",
+ "aura-dsp",
+ "aura-shm",
 ]
 
 [[package]]
 name = "lx-slint-editor"
 version = "0.1.0"
 dependencies = [
- "aura-baseview",
- "aura-core",
- "aura-params",
- "baseview",
- "fontique",
- "log",
+ "aura-editor",
  "paste",
- "raw-window-handle",
- "slint",
 ]
 
 [[package]]
 name = "lx-ui-slint"
 version = "0.1.0"
 dependencies = [
- "lx-slint-build",
+ "aura-build",
  "slint",
-]
-
-[[package]]
-name = "lx-vault"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2903,11 +2928,11 @@ name = "meridian"
 version = "1.11.1"
 dependencies = [
  "aura",
+ "aura-build",
+ "aura-dsp",
  "aura-editor",
  "aura-test",
  "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
  "lx-slint-editor",
  "realfft",
  "slint",
@@ -3088,12 +3113,6 @@ dependencies = [
  "bytemuck",
  "num-traits",
 ]
-
-[[package]]
-name = "num-conv"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
 
 [[package]]
 name = "num-derive"
@@ -3753,12 +3772,6 @@ dependencies = [
  "writeable",
  "zerovec",
 ]
-
-[[package]]
-name = "powerfmt"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "ppv-lite86"
@@ -4612,6 +4625,9 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "smithay-client-toolkit"
@@ -4786,12 +4802,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "symlink"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7973cce6668464ea31f176d85b13c7ab3bba2cb3b77a2ed26abd7801688010a"
-
-[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4942,36 +4952,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "time"
-version = "0.3.53"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18dfaaeddcb932337b5e7866ee7d0ce9b76d2fd092997146f187ec09b4558a50"
-dependencies = [
- "deranged",
- "num-conv",
- "powerfmt",
- "serde_core",
- "time-core",
- "time-macros",
-]
-
-[[package]]
-name = "time-core"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
-
-[[package]]
-name = "time-macros"
-version = "0.2.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c431b87111666e491a90baa837f914fb45cd5dc3c268591b0220ff5057f2085f"
-dependencies = [
- "num-conv",
- "time-core",
-]
-
-[[package]]
 name = "tiny-skia"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5085,19 +5065,6 @@ dependencies = [
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
-]
-
-[[package]]
-name = "tracing-appender"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "050686193eb999b4bb3bc2acfa891a13da00f79734704c4b8b4ef1a10b368a3c"
-dependencies = [
- "crossbeam-channel",
- "symlink",
- "thiserror 2.0.19",
- "time",
- "tracing-subscriber",
 ]
 
 [[package]]

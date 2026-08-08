@@ -21,14 +21,15 @@ aura = { workspace = true }
 aura-editor = { workspace = true, features = ["backend-femtovg"] }
 slint = { workspace = true }
 
+aura-dsp = { workspace = true }
+
 lx-slint-editor = { path = "../../crates/lx-slint-editor" }
-lx-dsp = { path = "../../crates/lx-dsp" }
 lx-analysis = { path = "../../crates/lx-analysis" }
 realfft = "3"
 tracing = "0.1"
 
 [build-dependencies]
-lx-slint-build = { workspace = true }
+aura-build = { workspace = true }
 
 [dev-dependencies]
 aura-test = { workspace = true }

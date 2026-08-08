@@ -396,7 +396,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                             "",
                         );
                         let fp = dir.join(format!("{safe}.md"));
-                        let md = lx_analysis::export_preset_to_markdown(&prof);
+                        let md = crate::presets::export_preset_to_markdown(&prof);
                         if std::fs::write(&fp, md).is_ok() {
                             vs.presets = load_presets(vs.vault_path.as_deref());
                             ui.set_preset_names(names_model(&preset_names(&vs.presets)));

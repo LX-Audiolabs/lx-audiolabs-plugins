@@ -4,8 +4,7 @@ use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
-use truce::prelude::*;
-use truce_core::{editor::Editor, state::StateLoadError};
+use aura::prelude::*;
 
 use lx_analysis::{
     relay_hub, relay_slot_active, spectrum_physical_db, LucentShared, MAX_NAME_LEN, MAX_SLOTS,
@@ -878,22 +877,24 @@ impl PeakTracker {
 #[derive(Params)]
 pub struct LucentParams {
     #[param(
+        id = 1,
         name = "Analyze Mode",
         default = 0,
         range = "discrete(0, 2)",
         group = "Lucent"
     )]
     pub analyze_mode: IntParam,
-    #[param(name = "Resonance", default = 1, group = "Lucent")]
+    #[param(id = 2, name = "Resonance", default = 1, group = "Lucent")]
     pub resonance_active: BoolParam,
-    #[param(name = "Masking", default = 1, group = "Lucent")]
+    #[param(id = 3, name = "Masking", default = 1, group = "Lucent")]
     pub masking_active: BoolParam,
-    #[param(name = "Bypass", default = 0, group = "Lucent")]
+    #[param(id = 4, name = "Bypass", default = 0, group = "Lucent")]
     pub bypass_active: BoolParam,
     /// How deep the resonance/masking detectors dig: 0% = shallow (only
     /// strong, sustained findings), 100% = deep (surfaces weaker, shorter
     /// ones too). 50% reproduces the previously hand-tuned thresholds.
     #[param(
+        id = 5,
         name = "Sensitivity",
         default = 50.0,
         range = "linear(0.0, 100.0)",
@@ -906,7 +907,7 @@ pub struct LucentParams {
     #[persist]
     pub name: RwLock<String>,
     /// Live name for the background SHM heartbeat thread — shared with the
-    /// editor via Truce's `Arc<LucentParams>` so renames apply when
+    /// editor via AURA's `Arc<LucentParams>` so renames apply when
     /// transport is stopped.
     #[skip]
     pub name_bg: Arc<RwLock<String>>,
@@ -1104,17 +1105,32 @@ impl PluginLogic for Lucent {
     type Params = LucentParams;
     type DspState = LucentDspState;
 
+    fn info() -> PluginInfo {
+        let mut info = PluginInfo::new(
+            "Lucent",
+            "LX Audiolabs",
+            env!("CARGO_PKG_VERSION"),
+            "lucent",
+        );
+        // Stable ship IDs — must match pre-AURA truce Lucent (hosts key
+        // sessions on clap id; com.lx-audiolabs.* breaks existing projects).
+        info.clap_id = "be.lxndr.lucent";
+        info.vst3_id = "be.lxndr.lucent";
+        info.lv2_uri = "https://lx-audiolabs.com/lv2/lucent";
+        info.category = PluginCategory::Analyzer;
+        info
+    }
+
     fn bus_layouts() -> Vec<BusLayout> {
         vec![BusLayout::stereo()]
     }
 
-    fn init(params: &Self::Params, _cx: &InitContext) -> Self::DspState {
+    fn init(params: &Self::Params, sample_rate: f64) -> Self::DspState {
         let mut state = LucentDspState::default();
         state.instance_key = params as *const _ as usize;
-        let now_ms = lx_analysis::shm::now_ms();
-        state.ensure_consumer_slot(params, now_ms);
-        state.publish_consumer_name(params, now_ms);
-        state.spawn_consumer_heartbeat(params);
+        // reset() covers the truce init's custom work (consumer slot claim,
+        // name publish, heartbeat spawn) and also seeds the sample rate.
+        Self::reset(&mut state, params, &AudioConfig::new(sample_rate, 4096));
         state
     }
 
@@ -1135,39 +1151,20 @@ impl PluginLogic for Lucent {
     fn process(
         state: &mut LucentDspState,
         params: &LucentParams,
-        buffer: &mut AudioBuffer,
-        _events: &EventList,
+        buffer: &mut AudioBuffer<'_, f32>,
         _ctx: &mut ProcessContext,
     ) -> ProcessStatus {
         process::run(state, params, buffer)
     }
 
-    fn snapshot_into(_state: &LucentDspState, _buf: &mut Vec<u8>) -> bool {
-        false
-    }
-    fn load_state(_state: &mut LucentDspState, _data: &[u8]) -> Result<(), StateLoadError> {
-        Ok(())
-    }
+    // No state_changed hook in AURA: the truce version re-synced the cached
+    // name mirrors after preset/session load. That is already covered by the
+    // lazy check in `publish_consumer_name` (compares `params.name` against
+    // `state.cached_name` every audio block and re-syncs cached_name /
+    // name_bg / cached_display_name on change), so nothing extra is needed.
 
-    fn state_changed(state: &mut LucentDspState, params: &LucentParams) {
-        // Preset recall / undo / session load — sync cached name from restored params.
-        if let Ok(n) = params.name.try_read() {
-            state.cached_name = n.clone();
-            if let Ok(mut bg) = params.name_bg.try_write() {
-                *bg = n.clone();
-            }
-            state.cached_display_name = state
-                .claimed_lucent_slot
-                .map(|slot| lx_analysis::shm::display_name(&state.cached_name, slot))
-                .unwrap_or_else(|| state.cached_name.clone());
-            // ponytail: state_changed may fire before reset, so relay_hub()
-            // might not be initialized yet. process() writes the name every
-            // audio block anyway, and the background heartbeat thread follows.
-        }
-    }
-
-    fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
-        editor::build_editor(params)
+    fn editor(params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {
+        Some(editor::build_editor(params))
     }
 }
 
@@ -1191,10 +1188,14 @@ impl Drop for LucentDspState {
     }
 }
 
-truce::plugin! {
-    logic: Lucent,
-    params: LucentParams,
-}
+#[cfg(feature = "clap")]
+aura::export!(Lucent);
+
+#[cfg(feature = "vst3")]
+aura::export_vst3!(Lucent);
+
+#[cfg(feature = "lv2")]
+aura::export_lv2!(Lucent);
 
 #[cfg(test)]
 mod masking_tests {
@@ -1266,22 +1267,19 @@ mod masking_tests {
 
 #[cfg(test)]
 mod tests {
-    use crate::Plugin;
-    use std::time::Duration;
+    use crate::Lucent;
 
     #[test]
     fn renders_pass_through() {
-        use truce_test::{InputSource, assertions, driver};
-        let result = driver!(Plugin)
-            .duration(Duration::from_millis(50))
-            .input(InputSource::Constant(0.5))
-            .run();
-        assertions::assert_no_nans(&result);
-        assertions::assert_nonzero(&result);
+        let frames = 2400; // ~50 ms at 48 kHz (old truce driver ran 50 ms)
+        let inputs = vec![vec![0.5f32; frames], vec![0.5f32; frames]];
+        let result = aura_test::process_with_input::<Lucent>(&inputs, frames);
+        aura_test::assert_no_nans(&result);
+        aura_test::assert_nonzero(&result);
     }
 
     #[test]
     fn state_round_trips() {
-        truce_test::assert_state_round_trip::<Plugin>();
+        aura_test::assert_state_round_trip::<Lucent>();
     }
 }

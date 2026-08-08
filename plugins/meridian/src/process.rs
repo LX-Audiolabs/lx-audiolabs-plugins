@@ -10,7 +10,7 @@ use std::sync::atomic::Ordering;
 use aura::prelude::*;
 
 use lx_analysis::{SCOPE_BUFFER_LEN, SPECTRUM_BINS, SnapMode};
-use lx_dsp::{DBTP_CEILING, FtzDazGuard};
+use aura_dsp::fx::{DBTP_CEILING, FtzDazGuard};
 
 use crate::{
     db_to_gain, gain_to_db, inflate_shape, soft_clip, tube_warm, MeridianDspState,

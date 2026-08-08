@@ -3,16 +3,11 @@ name = "lx-analysis"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
+description = "Product analysis façade: aura_dsp::analysis + shm/vault + plugin *Shared"
 
 [features]
-dev-logging = ["tracing", "tracing-subscriber", "tracing-appender"]
+dev-logging = ["aura-dsp/dev-logging"]
 
 [dependencies]
-atomic_float = "0.1"
-tracing = { version = "0.1", optional = true }
-tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
-tracing-appender = { version = "0.2", optional = true }
-lx-vault = { path = "../lx-vault" }
-lx-shm = { path = "../lx-shm" }
-realfft = "3"
-
+aura-dsp = { workspace = true }
+aura-shm = { workspace = true }

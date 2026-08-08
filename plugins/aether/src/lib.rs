@@ -12,7 +12,7 @@
 // so it commutes with the crossfeed — order is conceptual, not sonic.
 
 use lx_analysis::AetherShared;
-use lx_dsp::Biquad;
+use aura_dsp::fx::Biquad;
 use std::sync::Arc;
 use aura::prelude::*;
 
