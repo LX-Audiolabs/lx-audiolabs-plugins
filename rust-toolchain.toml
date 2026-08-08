@@ -1,2 +1,9 @@
+# Pinned: stable 1.97.1 miscompiles build scripts on this machine (STATUS_BREAKPOINT /
+# STATUS_ILLEGAL_INSTRUCTION). 1.96.0 builds the workspace clean — but the same crash
+# resurfaced on 1.96.0 after dep rebuilds (rustc ICE decoding ConstKind in build-script
+# codegen, cf. aether-eq-check.log). Resolution: full target/ clean + toolchain reinstall.
+# If it ever returns: CARGO_PROFILE_DEV_BUILD_OVERRIDE_OPT_LEVEL=2
+# (for lib/test codegen crashes: CARGO_PROFILE_DEV_OPT_LEVEL=2 CARGO_PROFILE_TEST_OPT_LEVEL=2).
+# Revisit on the next stable (1.98+). Mirrors AURA/rust-toolchain.toml.
 [toolchain]
 channel = "1.96.0"
