@@ -8,21 +8,32 @@ unchanged), **major** = breaking.
 
 ---
 
-## 2026-08-08 — Meridian AURA pilot (host smoke green)
+## 2026-08-08 — AURA product cutover (host smoke)
 
-### Meridian (branch `cutover/meridian-aura`)
+Branch: **`cutover/meridian-aura`**. Framework path deps → sibling `AURA` repo.
+Shared stack: `PluginLogic` / derive params / CLAP export / `lx-slint-editor` on
+aura-baseview. Product DSP/UI stay in `lx-dsp`, `lx-analysis`, `lx-ui-slint`.
 
-- **First product plugin on AURA** (path deps to sibling `AURA` repo). Framework:
-  `PluginLogic` / derive params / CLAP export / `lx-slint-editor` on aura-baseview.
-  Product DSP/UI stay: `lx-dsp`, `lx-analysis`, `lx-ui-slint`.
-- **Host smoke green:** Bitwig + REAPER load and run; clap-validator 32 pass / 0 fail
-  (`-j 1`). CLAP id remains **`be.lxndr.meridian`** (session-stable).
-- Tooling notes for rebuilds: rustc **1.96.0** pin; release without LTO until
-  workspace link fix; install only user CLAP path (no dual Program Files copy).
+### Status
+
+| Plugin | AURA code | First host smoke | CLAP id (stable) |
+|--------|-----------|------------------|------------------|
+| **Meridian** | done | **green** (Bitwig + REAPER) | `be.lxndr.meridian` |
+| **Aether** | done | **green** (first smoke) | `be.lxndr.aether` |
+| **Equilibrium** | done | **green** (first smoke) | `be.lxndr.equilibrium` |
+| **Lucent** | in progress | — | `be.lxndr.lucent` (keep) |
+| **Lucent Relay** | in progress | — | `be.lxndr.*` (keep) |
+
+### Tooling notes
+
+- rustc **1.96.0** pin (`rust-toolchain.toml`); 1.97 ICE/lld on this machine
+- clap-validator: prefer `-j 1` on Windows (parallel ACCESS_VIOLATION flakes)
+- Install: **one** CLAP path only (`%LOCALAPPDATA%\Programs\Common\CLAP\…`)
+- Release: `CARGO_PROFILE_RELEASE_LTO=false` until workspace LTO link fix
 
 ### Version
 
-No SemVer bump yet — cutover branch pilot, not a catalog release tag.
+No SemVer bump / catalog tag yet — cutover branch, not a release train.
 
 ---
 
