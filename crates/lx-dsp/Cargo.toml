@@ -1,9 +1,0 @@
-[package]
-name = "lx-dsp"
-version = "0.1.1"
-edition = "2024"
-license = "GPL-3.0-or-later"
-description = "Thin re-export of aura_dsp::fx (product path stable)"
-
-[dependencies]
-aura-dsp = { workspace = true }
