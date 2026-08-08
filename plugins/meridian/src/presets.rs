@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
-use lx_slint_editor::PluginContext;
-use truce_params::{FloatParam, IntParam};
+use aura::{FloatParam, IntParam};
+use lx_slint_editor::LxPluginContext;
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -420,7 +420,7 @@ pub fn profile_from_params(params: &MeridianParams, name: &str) -> MeridianProfi
 
 /// Apply via host automate; normalize through each param range (log freqs).
 pub fn apply_profile(
-    ctx: &PluginContext<MeridianParams>,
+    ctx: &LxPluginContext<MeridianParams>,
     params: &MeridianParams,
     profile: &MeridianProfile,
 ) {

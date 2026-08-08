@@ -7,36 +7,31 @@ members = [
     "crates/lx-ui-slint",
     "crates/lx-vault",
     "crates/lx-shm",
-    "plugins/aether",
+    # Pilot: Meridian only on cutover/meridian-aura. Other plugins stay on main/truce.
     "plugins/meridian",
-    "plugins/lucent-relay",
-    "plugins/lucent",
-    "plugins/aurum",
-    "plugins/equilibrium",
 ]
 resolver = "3"
 
 [workspace.dependencies]
-truce           = { path = "../truce-dev/crates/truce", default-features = false }
-truce-core      = { path = "../truce-dev/crates/truce-core" }
-truce-params    = { path = "../truce-dev/crates/truce-params" }
-truce-clap      = { path = "../truce-dev/crates/truce-clap" }
-truce-vst3      = { path = "../truce-dev/crates/truce-vst3" }
-truce-lv2       = { path = "../truce-dev/crates/truce-lv2" }
-truce-loader    = { path = "../truce-dev/crates/truce-loader" }
-truce-test      = { path = "../truce-dev/crates/truce-test" }
+# AURA framework (path until crates.io publish)
+aura            = { path = "../AURA/crates/aura", default-features = false }
+aura-params     = { path = "../AURA/crates/aura-params" }
+aura-core       = { path = "../AURA/crates/aura-core" }
+aura-build      = { path = "../AURA/crates/aura-build" }
+aura-editor     = { path = "../AURA/crates/aura-editor", default-features = false }
+aura-baseview   = { path = "../AURA/crates/aura-baseview", default-features = false }
+aura-test       = { path = "../AURA/crates/aura-test" }
+
 lx-slint-build  = { path = "crates/lx-slint-build" }
 lx-slint-editor = { path = "crates/lx-slint-editor" }
-# Public: https://github.com/lxndrbe/lx-slint-baseview (baseview 0.3, slint 1.17.1)
-# Local override: uncomment [patch] block at bottom of this file.
-lx-slint-baseview = { git = "https://github.com/lxndrbe/lx-slint-baseview", branch = "main", default-features = false }
+
 baseview = "0.3"
-clap-sys        = "0.5"
-# Pin must match lx-slint-baseview / lx-slint-editor
+# Pin must match AURA / aura-baseview
 slint           = { version = "=1.17.1", default-features = false, features = [
     "compat-1-2",
     "renderer-software",
     "std",
+    "raw-window-handle-06",
 ] }
 
 [profile.release]
@@ -44,14 +39,10 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
-# MUST be unwind: truce fence host crashes with catch_unwind.
+# MUST be unwind: AURA host fence uses catch_unwind.
 panic = "unwind"
 
 [profile.dbg]
 inherits = "release"
 strip = false
 debug = "full"
-
-# Uncomment for local lx-slint-baseview work (sibling checkout):
-# [patch."https://github.com/lxndrbe/lx-slint-baseview"]
-# lx-slint-baseview = { path = "../lx-slint-baseview" }

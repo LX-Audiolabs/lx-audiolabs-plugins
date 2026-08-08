@@ -7,7 +7,7 @@
 
 use std::f32::consts::FRAC_PI_4;
 use std::sync::atomic::Ordering;
-use truce::prelude::*;
+use aura::prelude::*;
 
 use lx_analysis::{SCOPE_BUFFER_LEN, SPECTRUM_BINS, SnapMode};
 use lx_dsp::{DBTP_CEILING, FtzDazGuard};
@@ -59,20 +59,20 @@ pub(crate) struct BlockMetrics {
 pub(crate) fn run(
     state: &mut MeridianDspState,
     params: &MeridianParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
 ) -> ProcessStatus {
     let _ftz = FtzDazGuard::new();
 
-    if buffer.num_input_channels() < 2 {
-        return ProcessStatus::Normal;
+    if buffer.num_inputs() < 2 || buffer.num_outputs() < 2 {
+        return ProcessStatus::Continue;
     }
 
     let mut ctrl = param_update(state, params);
     let Some(mut metrics) = process_block(state, params, buffer, &mut ctrl) else {
-        return ProcessStatus::Normal;
+        return ProcessStatus::Continue;
     };
     publish(state, params, buffer, &ctrl, &mut metrics);
-    ProcessStatus::Normal
+    ProcessStatus::Continue
 }
 
 fn param_update(state: &mut MeridianDspState, params: &MeridianParams) -> ProcessControl {
@@ -393,7 +393,7 @@ let delta = match snap_phase {
 fn process_block(
     state: &mut MeridianDspState,
     _params: &MeridianParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
     ctrl: &mut ProcessControl,
 ) -> Option<BlockMetrics> {
     let bypass = ctrl.bypass;
@@ -418,50 +418,38 @@ fn process_block(
     let mono = ctrl.mono;
     let delta = ctrl.delta;
     let is_measuring = ctrl.is_measuring;
-let mut max_out_peak = 0.0f32;
-let mut max_out_peak_l = 0.0f32;
-let mut max_out_peak_r = 0.0f32;
-let mut count_samples: usize = 0;
+    let mut max_out_peak = 0.0f32;
+    let mut max_out_peak_l = 0.0f32;
+    let mut max_out_peak_r = 0.0f32;
+    let mut count_samples: usize = 0;
 
-let mut block_band_power = [0.0f32; 5];
+    let mut block_band_power = [0.0f32; 5];
 
-if buffer.num_samples() == 0 {
-    return None;
-}
-let num_samples = buffer.num_samples();
+    if buffer.num_samples() == 0 {
+        return None;
+    }
+    let num_samples = buffer.num_samples();
 
-let mut gr_db = 0.0f32;
-let mut max_gr_db = 0.0f32;
+    let mut gr_db = 0.0f32;
+    let mut max_gr_db = 0.0f32;
 
-// Feed input LUFS
-if is_measuring {
-    state.auto_loud_in.feed(buffer.input(0), buffer.input(1));
-    state.pre_sat_buf_l.clear();
-    state.pre_sat_buf_r.clear();
-}
+    // Copy I/O — AURA buffer has separate input/output borrows (no dual-mut io()).
+    let in0: Vec<f32> = buffer.input(0).to_vec();
+    let in1: Vec<f32> = buffer.input(1).to_vec();
+    let mut out0 = vec![0.0f32; num_samples];
+    let mut out1 = vec![0.0f32; num_samples];
 
-// Raw pointer setup for output
-let (out0_ptr, out1_ptr): (*mut f32, *mut f32);
-{
-    let (_, out0) = buffer.io(0);
-    out0_ptr = out0.as_mut_ptr();
-}
-{
-    let out1_slice = buffer.output(1);
-    out1_ptr = out1_slice.as_mut_ptr();
-}
-#[allow(unsafe_code)]
-let (out0, out1): (&mut [f32], &mut [f32]) = unsafe {
-    (
-        std::slice::from_raw_parts_mut(out0_ptr, num_samples),
-        std::slice::from_raw_parts_mut(out1_ptr, num_samples),
-    )
-};
+    // Feed input LUFS
+    if is_measuring {
+        state.auto_loud_in.feed(&in0, &in1);
+        state.pre_sat_buf_l.clear();
+        state.pre_sat_buf_r.clear();
+    }
 
-for i in 0..num_samples {
-    count_samples += 1;
-    let in_l = buffer.input(0)[i];
-    let in_r = buffer.input(1)[i];
+    for i in 0..num_samples {
+        count_samples += 1;
+        let in_l = in0[i];
+        let in_r = in1[i];
 
     // HPF & LPF
     let mut x_l = state.lpf2_l.process(
@@ -636,13 +624,16 @@ for i in 0..num_samples {
     let corr_lr = meter_l * meter_r;
     let corr_l2 = meter_l * meter_l;
     let corr_r2 = meter_r * meter_r;
-    state.corr_avg_lr = (1.0 - state.correlation_decay_coef) * state.corr_avg_lr
-        + state.correlation_decay_coef * corr_lr;
-    state.corr_avg_l2 = (1.0 - state.correlation_decay_coef) * state.corr_avg_l2
-        + state.correlation_decay_coef * corr_l2;
-    state.corr_avg_r2 = (1.0 - state.correlation_decay_coef) * state.corr_avg_r2
-        + state.correlation_decay_coef * corr_r2;
-}
+        state.corr_avg_lr = (1.0 - state.correlation_decay_coef) * state.corr_avg_lr
+            + state.correlation_decay_coef * corr_lr;
+        state.corr_avg_l2 = (1.0 - state.correlation_decay_coef) * state.corr_avg_l2
+            + state.correlation_decay_coef * corr_l2;
+        state.corr_avg_r2 = (1.0 - state.correlation_decay_coef) * state.corr_avg_r2
+            + state.correlation_decay_coef * corr_r2;
+    }
+
+    buffer.output(0).copy_from_slice(&out0);
+    buffer.output(1).copy_from_slice(&out1);
 
     Some(BlockMetrics {
         max_out_peak,
@@ -657,7 +648,7 @@ for i in 0..num_samples {
 fn publish(
     state: &mut MeridianDspState,
     params: &MeridianParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
     ctrl: &ProcessControl,
     metrics: &mut BlockMetrics,
 ) {
@@ -672,23 +663,12 @@ fn publish(
     let num_samples = metrics.num_samples;
     let max_gr_db = metrics.max_gr_db;
 
-    // Re-bind output channels for spectrum / auto-loud / scope
-    let (out0_ptr, out1_ptr): (*mut f32, *mut f32);
-    {
-        let (_, out0) = buffer.io(0);
-        out0_ptr = out0.as_mut_ptr();
-    }
-    {
-        let out1_slice = buffer.output(1);
-        out1_ptr = out1_slice.as_mut_ptr();
-    }
-    #[allow(unsafe_code)]
-    let (out0, out1): (&mut [f32], &mut [f32]) = unsafe {
-        (
-            std::slice::from_raw_parts_mut(out0_ptr, num_samples),
-            std::slice::from_raw_parts_mut(out1_ptr, num_samples),
-        )
-    };
+    // Copy outs for analysis (can't hold two mut output borrows).
+    let out0: Vec<f32> = buffer.output(0).to_vec();
+    let out1: Vec<f32> = buffer.output(1).to_vec();
+    let in0: Vec<f32> = buffer.input(0).to_vec();
+    let in1: Vec<f32> = buffer.input(1).to_vec();
+
 // Gain reduction
 params
     .shared
@@ -829,7 +809,7 @@ if snap_phase > 0 {
             1 | 2 => (out0[i] + out1[i]) * 0.5,
             3 => {
                 let out_mono = (out0[i] + out1[i]) * 0.5;
-                let in_mono = (buffer.input(0)[i] + buffer.input(1)[i]) * 0.5;
+                let in_mono = (in0[i] + in1[i]) * 0.5;
                 out_mono - in_mono
             }
             _ => 0.0,
@@ -893,7 +873,7 @@ if is_measuring {
         state.auto_loud_pre_sat
             .feed(&state.pre_sat_buf_l, &state.pre_sat_buf_r);
     }
-    state.auto_loud_out.feed(out0, out1);
+    state.auto_loud_out.feed(&out0, &out1);
     let target_samples = (5.0 * sample_rate as f64) as u64;
     if state.auto_loud_out.sample_count() >= target_samples {
         let in_lufs = state.auto_loud_in.loudness_db();

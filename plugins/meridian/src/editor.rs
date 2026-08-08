@@ -2,11 +2,13 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use aura::prelude::*;
+use aura::FloatParam;
 use slint::{ModelRc, SharedString, VecModel};
-use truce_core::cast::{discrete_index, discrete_norm};
-use truce_core::editor::{Editor, PluginContextReadF32};
-use truce_params::FloatParam;
-use lx_slint_editor::{apply_ui_zoom, LxSlintEditor, PluginContext, UiZoom};
+use lx_slint_editor::{
+    apply_ui_zoom, discrete_index, discrete_norm, LxPluginContext, LxSlintEditor,
+    PluginContextReadF32, UiZoom,
+};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -330,7 +332,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
             let shared = shared.clone();
             let vault_state = vault_state.clone();
             let init_vp = init_vp.clone();
-            move |state: PluginContext<MeridianParams>| {
+            move |state: LxPluginContext<MeridianParams>| {
                 let ui = MeridianUi::new().unwrap();
 
                 ui.set_ui_zoom_percent(zoom_build.percent() as i32);
@@ -665,7 +667,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
             let shared_for_sync = shared.clone();
             let params_for_curve = params.clone();
             let vault_state_sync = vault_state.clone();
-            move |ui: &MeridianUi, state: &PluginContext<MeridianParams>| {
+            move |ui: &MeridianUi, state: &LxPluginContext<MeridianParams>| {
                 let Ok(mut cache) = sync_cache.lock() else {
                     return;
                 };
@@ -842,7 +844,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     let offset = shared.auto_loud.gain_offset.load(Ordering::Acquire);
                     shared.auto_loud.gain_offset.store(0.0, Ordering::Release);
                     if offset.abs() > 0.01 {
-                        let cur_db = state.params().output_gain.raw_target() as f32;
+                        let cur_db = state.output_gain.raw_target() as f32;
                         let new_db = (cur_db + offset).clamp(-12.0, 12.0);
                         let norm = ((new_db + 12.0) / 24.0) as f64;
                         state.automate(P::OutputGain, norm.clamp(0.0, 1.0));

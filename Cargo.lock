@@ -9,29 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "aether"
-version = "1.4.1"
-dependencies = [
- "clap-sys",
- "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
- "lx-slint-editor",
- "serde",
- "serde_json",
- "slint",
- "tracing",
- "truce",
- "truce-clap",
- "truce-core",
- "truce-loader",
- "truce-lv2",
- "truce-params",
- "truce-test",
- "truce-vst3",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -309,27 +286,104 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62af46d040ba9df09edc6528dae9d8e49f5f3e82f55b7d2ec31a733c38dbc49d"
 
 [[package]]
-name = "aurum"
-version = "0.4.2"
+name = "aura"
+version = "0.1.0"
 dependencies = [
- "clap-sys",
- "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
- "lx-slint-editor",
- "realfft",
- "serde",
- "serde_json",
+ "aura-clap",
+ "aura-core",
+ "aura-derive",
+ "aura-lv2",
+ "aura-params",
+ "aura-vst3",
+]
+
+[[package]]
+name = "aura-baseview"
+version = "0.1.0"
+dependencies = [
+ "baseview",
+ "copypasta",
+ "keyboard-types 0.8.3",
+ "raw-window-handle",
  "slint",
- "tracing",
- "truce",
- "truce-clap",
- "truce-core",
- "truce-loader",
- "truce-lv2",
- "truce-params",
- "truce-test",
- "truce-vst3",
+]
+
+[[package]]
+name = "aura-build"
+version = "0.1.0"
+dependencies = [
+ "slint-build",
+]
+
+[[package]]
+name = "aura-clap"
+version = "0.1.0"
+dependencies = [
+ "aura-core",
+ "aura-params",
+ "clap-sys",
+]
+
+[[package]]
+name = "aura-core"
+version = "0.1.0"
+dependencies = [
+ "aura-params",
+]
+
+[[package]]
+name = "aura-derive"
+version = "0.1.0"
+dependencies = [
+ "aura-params",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "aura-editor"
+version = "0.1.0"
+dependencies = [
+ "aura-baseview",
+ "aura-core",
+ "baseview",
+ "log",
+ "raw-window-handle",
+ "slint",
+]
+
+[[package]]
+name = "aura-lv2"
+version = "0.1.0"
+dependencies = [
+ "aura-core",
+ "aura-params",
+ "lv2-sys",
+]
+
+[[package]]
+name = "aura-params"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.13.1",
+]
+
+[[package]]
+name = "aura-test"
+version = "0.1.0"
+dependencies = [
+ "aura-core",
+ "aura-params",
+]
+
+[[package]]
+name = "aura-vst3"
+version = "0.1.0"
+dependencies = [
+ "aura-core",
+ "aura-params",
+ "vst3",
 ]
 
 [[package]]
@@ -678,7 +732,7 @@ checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
  "glob",
  "libc",
- "libloading 0.8.9",
+ "libloading",
 ]
 
 [[package]]
@@ -710,6 +764,12 @@ name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
+
+[[package]]
+name = "com-scrape-types"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ce183b975b8fc736a20919c4002717255fbd867df575c792aeefa9a56a73ad0"
 
 [[package]]
 name = "combine"
@@ -883,15 +943,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam-queue"
-version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "803d13fb3b09d88be9f4dbc29062c66b19bf7170867ceb746d2a8689bf6c7a26"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-utils"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1005,7 +1056,7 @@ version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab8ecd87370524b461f8557c119c405552c396ed91fc0a8eec68679eab26f94a"
 dependencies = [
- "libloading 0.8.9",
+ "libloading",
 ]
 
 [[package]]
@@ -1123,27 +1174,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "equilibrium"
-version = "1.8.1"
-dependencies = [
- "clap-sys",
- "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
- "lx-slint-editor",
- "slint",
- "tracing",
- "truce",
- "truce-clap",
- "truce-core",
- "truce-loader",
- "truce-lv2",
- "truce-params",
- "truce-test",
- "truce-vst3",
 ]
 
 [[package]]
@@ -1636,7 +1666,7 @@ dependencies = [
  "dispatch2",
  "glutin_egl_sys",
  "glutin_wgl_sys",
- "libloading 0.8.9",
+ "libloading",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-core-foundation",
@@ -2552,16 +2582,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libloading"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
-dependencies = [
- "cfg-if",
- "windows-link",
-]
-
-[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2635,15 +2655,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
-name = "lock_api"
-version = "0.4.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
-dependencies = [
- "scopeguard",
-]
-
-[[package]]
 name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2659,48 +2670,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "lucent"
-version = "1.2.1"
-dependencies = [
- "clap-sys",
- "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
- "lx-slint-editor",
- "realfft",
- "slint",
- "tracing",
- "truce",
- "truce-clap",
- "truce-core",
- "truce-loader",
- "truce-lv2",
- "truce-params",
- "truce-test",
- "truce-vst3",
-]
-
-[[package]]
-name = "lucent-relay"
-version = "1.1.2"
-dependencies = [
- "clap-sys",
- "lx-analysis",
- "lx-dsp",
- "lx-slint-build",
- "lx-slint-editor",
- "realfft",
- "slint",
- "tracing",
- "truce",
- "truce-clap",
- "truce-core",
- "truce-loader",
- "truce-lv2",
- "truce-params",
- "truce-test",
- "truce-vst3",
-]
+name = "lv2-sys"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dd0f9e7de3649dcec348de51cbf611ab88688b97c0ce038f8c07b996b2a8e30"
 
 [[package]]
 name = "lx-analysis"
@@ -2731,38 +2704,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "lx-slint-baseview"
-version = "0.1.0"
-source = "git+https://github.com/lxndrbe/lx-slint-baseview?branch=main#83759622d1137f23f0634ecf44d367bc0617a5c2"
-dependencies = [
- "baseview",
- "copypasta",
- "keyboard-types 0.8.3",
- "raw-window-handle",
- "slint",
-]
-
-[[package]]
 name = "lx-slint-build"
 version = "0.1.0"
 dependencies = [
- "slint-build",
- "truce-font",
+ "aura-build",
 ]
 
 [[package]]
 name = "lx-slint-editor"
 version = "0.1.0"
 dependencies = [
+ "aura-baseview",
+ "aura-core",
+ "aura-params",
  "baseview",
  "fontique",
  "log",
- "lx-slint-baseview",
  "paste",
  "raw-window-handle",
  "slint",
- "truce-core",
- "truce-params",
 ]
 
 [[package]]
@@ -2823,15 +2783,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "malloc_buf"
-version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2887,7 +2838,9 @@ dependencies = [
 name = "meridian"
 version = "1.11.1"
 dependencies = [
- "clap-sys",
+ "aura",
+ "aura-editor",
+ "aura-test",
  "lx-analysis",
  "lx-dsp",
  "lx-slint-build",
@@ -2895,14 +2848,6 @@ dependencies = [
  "realfft",
  "slint",
  "tracing",
- "truce",
- "truce-clap",
- "truce-core",
- "truce-loader",
- "truce-lv2",
- "truce-params",
- "truce-test",
- "truce-vst3",
 ]
 
 [[package]]
@@ -3147,15 +3092,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "objc"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "915b1b472bc21c53464d6c8461c9d3af805ba1ef837e1cac254428f4a77177b1"
-dependencies = [
- "malloc_buf",
 ]
 
 [[package]]
@@ -3579,29 +3515,6 @@ name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
-
-[[package]]
-name = "parking_lot"
-version = "0.12.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a"
-dependencies = [
- "lock_api",
- "parking_lot_core",
-]
-
-[[package]]
-name = "parking_lot_core"
-version = "0.9.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1"
-dependencies = [
- "cfg-if",
- "libc",
- "redox_syscall 0.5.18",
- "smallvec",
- "windows-link",
-]
 
 [[package]]
 name = "parlance"
@@ -5184,153 +5097,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "truce"
-version = "6.3.0"
-dependencies = [
- "truce-core",
- "truce-derive",
- "truce-gui-types",
- "truce-loader",
- "truce-params",
- "truce-plugin",
-]
-
-[[package]]
-name = "truce-build"
-version = "6.3.0"
-dependencies = [
- "base64",
- "serde",
- "toml",
- "truce-utils",
-]
-
-[[package]]
-name = "truce-clap"
-version = "6.3.0"
-dependencies = [
- "clap-sys",
- "crossbeam-queue",
- "log",
- "objc",
- "truce-core",
- "truce-params",
-]
-
-[[package]]
-name = "truce-core"
-version = "6.3.0"
-dependencies = [
- "crossbeam-queue",
- "crossbeam-utils",
- "png",
- "truce-params",
- "truce-utils",
-]
-
-[[package]]
-name = "truce-derive"
-version = "6.3.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
- "toml",
- "truce-build",
- "truce-params",
- "truce-utils",
-]
-
-[[package]]
-name = "truce-driver"
-version = "6.3.0"
-dependencies = [
- "truce-core",
- "truce-params",
-]
-
-[[package]]
-name = "truce-font"
-version = "6.3.0"
-
-[[package]]
-name = "truce-gui-types"
-version = "6.3.0"
-dependencies = [
- "objc2 0.6.4",
- "truce-core",
-]
-
-[[package]]
-name = "truce-loader"
-version = "6.3.0"
-dependencies = [
- "crc32fast",
- "libloading 0.9.0",
- "log",
- "parking_lot",
- "truce-core",
- "truce-gui-types",
- "truce-params",
- "truce-plugin",
-]
-
-[[package]]
-name = "truce-lv2"
-version = "6.3.0"
-dependencies = [
- "base64",
- "objc",
- "truce-build",
- "truce-core",
- "truce-params",
- "x11-dl",
-]
-
-[[package]]
-name = "truce-params"
-version = "6.3.0"
-dependencies = [
- "bitflags 2.13.1",
-]
-
-[[package]]
-name = "truce-plugin"
-version = "6.3.0"
-dependencies = [
- "truce-core",
- "truce-gui-types",
- "truce-params",
-]
-
-[[package]]
-name = "truce-test"
-version = "6.3.0"
-dependencies = [
- "png",
- "toml",
- "truce-build",
- "truce-core",
- "truce-driver",
- "truce-params",
- "truce-plugin",
-]
-
-[[package]]
-name = "truce-utils"
-version = "6.3.0"
-
-[[package]]
-name = "truce-vst3"
-version = "6.3.0"
-dependencies = [
- "cc",
- "crossbeam-queue",
- "truce-core",
- "truce-params",
-]
-
-[[package]]
 name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5529,6 +5295,15 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vst3"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e31e3fe7a6f028ded8c5a9984cf283319e6dc63572c9b71da1d4ee9d71d3b6bf"
+dependencies = [
+ "com-scrape-types",
+]
 
 [[package]]
 name = "vtable"
@@ -6229,7 +6004,7 @@ dependencies = [
  "as-raw-xcb-connection",
  "gethostname",
  "libc",
- "libloading 0.8.9",
+ "libloading",
  "once_cell",
  "rustix 1.1.4",
  "x11rb-protocol",

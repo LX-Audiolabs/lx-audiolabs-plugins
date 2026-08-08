@@ -12,30 +12,23 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
 default = ["clap"]
-clap = ["dep:truce-clap", "dep:clap-sys"]
-vst3 = ["dep:truce-vst3"]
-lv2  = ["dep:truce-lv2"]
-shell = ["truce/shell", "clap"]
+clap = ["aura/clap"]
+vst3 = ["aura/vst3"]
+lv2 = ["aura/lv2"]
 
 [dependencies]
-truce        = { workspace = true }
-truce-core   = { workspace = true }
-truce-params = { workspace = true }
-truce-clap   = { workspace = true, optional = true }
-truce-vst3   = { workspace = true, optional = true }
-truce-lv2    = { workspace = true, optional = true }
-truce-loader = { workspace = true }
-slint        = { workspace = true }
-clap-sys     = { workspace = true, optional = true }
+aura = { workspace = true }
+aura-editor = { workspace = true, features = ["backend-femtovg"] }
+slint = { workspace = true }
 
 lx-slint-editor = { path = "../../crates/lx-slint-editor" }
-lx-dsp      = { path = "../../crates/lx-dsp" }
+lx-dsp = { path = "../../crates/lx-dsp" }
 lx-analysis = { path = "../../crates/lx-analysis" }
-realfft         = "3"
-tracing         = "0.1"
+realfft = "3"
+tracing = "0.1"
 
 [build-dependencies]
 lx-slint-build = { workspace = true }
 
 [dev-dependencies]
-truce-test = { workspace = true }
+aura-test = { workspace = true }
