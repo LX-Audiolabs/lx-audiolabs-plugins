@@ -8,6 +8,24 @@ unchanged), **major** = breaking.
 
 ---
 
+## 2026-08-08 — Meridian AURA pilot (host smoke green)
+
+### Meridian (branch `cutover/meridian-aura`)
+
+- **First product plugin on AURA** (path deps to sibling `AURA` repo). Framework:
+  `PluginLogic` / derive params / CLAP export / `lx-slint-editor` on aura-baseview.
+  Product DSP/UI stay: `lx-dsp`, `lx-analysis`, `lx-ui-slint`.
+- **Host smoke green:** Bitwig + REAPER load and run; clap-validator 32 pass / 0 fail
+  (`-j 1`). CLAP id remains **`be.lxndr.meridian`** (session-stable).
+- Tooling notes for rebuilds: rustc **1.96.0** pin; release without LTO until
+  workspace link fix; install only user CLAP path (no dual Program Files copy).
+
+### Version
+
+No SemVer bump yet — cutover branch pilot, not a catalog release tag.
+
+---
+
 ## 2026-08-04 — Bundled UI font (Linux footer clip fix)
 
 ### Alle Plugins (shared)
