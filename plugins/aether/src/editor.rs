@@ -2,10 +2,12 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use lx_slint_editor::{apply_ui_zoom, LxSlintEditor, PluginContext, UiZoom};
+use aura::prelude::*;
 use slint::{ModelRc, SharedString, VecModel};
-use truce_core::cast::{discrete_index, discrete_norm};
-use truce_core::editor::{Editor, PluginContextReadF32};
+use lx_slint_editor::{
+    apply_ui_zoom, discrete_index, discrete_norm, LxPluginContext, LxSlintEditor,
+    PluginContextReadF32, UiZoom,
+};
 
 use crate::presets::{
     apply_profile, build_profile_md, default_preset_names, find_profile, load_cached_last_profile,
@@ -252,7 +254,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             let vault_state = vault_state.clone();
             let init_vp = init_vp.clone();
             let init_last = init_cfg.last_preset.clone();
-            move |state: PluginContext<AetherParams>| {
+            move |state: LxPluginContext<AetherParams>| {
                 let ui = AetherUi::new().expect("AetherUi::new");
                 ui.set_version(SharedString::from(VERSION));
 
@@ -568,7 +570,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             let params_for_curve = params.clone();
             let shared_for_sync = shared.clone();
             let vault_state_sync = vault_state.clone();
-            move |ui: &AetherUi, state: &PluginContext<AetherParams>| {
+            move |ui: &AetherUi, state: &LxPluginContext<AetherParams>| {
                 let Ok(mut cache) = sync_cache.lock() else {
                     return;
                 };
@@ -667,25 +669,25 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                 // --- plain-value text fields ---
                 let plain = |p: P| -> f32 {
                     match p {
-                        P::Eq1Freq => state.params().eq1_freq.raw_target() as f32,
-                        P::Eq1Gain => state.params().eq1_gain.raw_target() as f32,
-                        P::Eq1Q => state.params().eq1_q.raw_target() as f32,
-                        P::Eq2Freq => state.params().eq2_freq.raw_target() as f32,
-                        P::Eq2Gain => state.params().eq2_gain.raw_target() as f32,
-                        P::Eq2Q => state.params().eq2_q.raw_target() as f32,
-                        P::Eq3Freq => state.params().eq3_freq.raw_target() as f32,
-                        P::Eq3Gain => state.params().eq3_gain.raw_target() as f32,
-                        P::Eq3Q => state.params().eq3_q.raw_target() as f32,
-                        P::Eq4Freq => state.params().eq4_freq.raw_target() as f32,
-                        P::Eq4Gain => state.params().eq4_gain.raw_target() as f32,
-                        P::Eq4Q => state.params().eq4_q.raw_target() as f32,
-                        P::Eq5Freq => state.params().eq5_freq.raw_target() as f32,
-                        P::Eq5Gain => state.params().eq5_gain.raw_target() as f32,
-                        P::Eq5Q => state.params().eq5_q.raw_target() as f32,
-                        P::Blend => state.params().blend.raw_target() as f32,
-                        P::CfAngle => state.params().cf_angle.raw_target() as f32,
-                        P::CfAmount => state.params().cf_amount.raw_target() as f32,
-                        P::Gain => state.params().gain.raw_target() as f32,
+                        P::Eq1Freq => state.eq1_freq.raw_target() as f32,
+                        P::Eq1Gain => state.eq1_gain.raw_target() as f32,
+                        P::Eq1Q => state.eq1_q.raw_target() as f32,
+                        P::Eq2Freq => state.eq2_freq.raw_target() as f32,
+                        P::Eq2Gain => state.eq2_gain.raw_target() as f32,
+                        P::Eq2Q => state.eq2_q.raw_target() as f32,
+                        P::Eq3Freq => state.eq3_freq.raw_target() as f32,
+                        P::Eq3Gain => state.eq3_gain.raw_target() as f32,
+                        P::Eq3Q => state.eq3_q.raw_target() as f32,
+                        P::Eq4Freq => state.eq4_freq.raw_target() as f32,
+                        P::Eq4Gain => state.eq4_gain.raw_target() as f32,
+                        P::Eq4Q => state.eq4_q.raw_target() as f32,
+                        P::Eq5Freq => state.eq5_freq.raw_target() as f32,
+                        P::Eq5Gain => state.eq5_gain.raw_target() as f32,
+                        P::Eq5Q => state.eq5_q.raw_target() as f32,
+                        P::Blend => state.blend.raw_target() as f32,
+                        P::CfAngle => state.cf_angle.raw_target() as f32,
+                        P::CfAmount => state.cf_amount.raw_target() as f32,
+                        P::Gain => state.gain.raw_target() as f32,
                         _ => 0.0,
                     }
                 };

@@ -4,10 +4,12 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use lx_slint_editor::{apply_ui_zoom, LxSlintEditor, PluginContext, UiZoom};
+use aura::prelude::*;
+use aura::FloatParam;
+use lx_slint_editor::{
+    apply_ui_zoom, LxPluginContext, LxSlintEditor, PluginContextReadF32, UiZoom,
+};
 use slint::{ModelRc, SharedString, VecModel};
-use truce_core::editor::{Editor, PluginContextReadF32};
-use truce_params::FloatParam;
 
 use crate::presets::{
     apply_stereo_from_preset, load_presets, param_norm, pink_noise_preset, preset_names,
@@ -271,7 +273,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
             let shared = shared.clone();
             let vault_state = vault_state.clone();
             let init_vp = init_vp.clone();
-            move |state: PluginContext<EquilibriumParams>| {
+            move |state: LxPluginContext<EquilibriumParams>| {
                 let ui = EquilibriumUi::new().expect("EquilibriumUi::new");
                 ui.set_version(SharedString::from(VERSION));
 
@@ -595,7 +597,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
         {
             let shared = shared.clone();
             let vault_state = vault_state.clone();
-            move |ui: &EquilibriumUi, state: &PluginContext<EquilibriumParams>| {
+            move |ui: &EquilibriumUi, state: &LxPluginContext<EquilibriumParams>| {
                 let Ok(mut cache) = sync_cache.lock() else {
                     return;
                 };
@@ -638,7 +640,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     10, P::SoloHigh => solo_high,
                 );
 
-                let p = state.params();
+                let p = &state.params;
                 let set_txt = |ui: &EquilibriumUi, cache: &mut SyncCache, i: usize, s: String| {
                     if changed_str(&mut cache.texts[i], &s) {
                         let ss = SharedString::from(s.as_str());

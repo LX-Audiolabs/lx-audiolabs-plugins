@@ -1,6 +1,6 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
-// Equilibrium — Pre-master spectral balancer (truce port).
+// Equilibrium — Pre-master spectral balancer (AURA).
 //
 // 5-band LR2 crossover (80/300/2000/6000 Hz) with per-band Gain,
 // Stereo Width (M/S), Pan (constant-power), and Solo.
@@ -10,11 +10,8 @@
 //   → per-band: Gain → M/S Width → Pan → Solo
 //   → sum → Mono Floor (Side HPF) → Mono/Delta → Gain → Auto Gain → clamp
 
-use lx_dsp::state_migration;
 use std::sync::Arc;
-use truce::prelude::*;
-use truce_core::editor::Editor;
-use truce_core::state::StateLoadError;
+use aura::prelude::*;
 
 use lx_analysis::{EquilibriumShared, SnapFFT};
 use lx_dsp::{AutoLoudMeter, Biquad, LR2Crossover};
@@ -53,6 +50,7 @@ pub(crate) const MINUS_INF_DB: f32 = -90.0;
 pub struct EquilibriumParams {
     // 5 Band Gains
     #[param(
+        id = 1,
         name = "Sub Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -62,6 +60,7 @@ pub struct EquilibriumParams {
     )]
     pub low_gain: FloatParam,
     #[param(
+        id = 2,
         name = "Bass Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -71,6 +70,7 @@ pub struct EquilibriumParams {
     )]
     pub bass_gain: FloatParam,
     #[param(
+        id = 3,
         name = "Mid Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -80,6 +80,7 @@ pub struct EquilibriumParams {
     )]
     pub mid_gain: FloatParam,
     #[param(
+        id = 4,
         name = "Pres Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -89,6 +90,7 @@ pub struct EquilibriumParams {
     )]
     pub high_mid_gain: FloatParam,
     #[param(
+        id = 5,
         name = "Air Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -100,6 +102,7 @@ pub struct EquilibriumParams {
 
     // 5 Band Widths
     #[param(
+        id = 6,
         name = "Sub Width",
         default = 100.0,
         range = "linear(0.0, 150.0)",
@@ -110,6 +113,7 @@ pub struct EquilibriumParams {
     )]
     pub low_width: FloatParam,
     #[param(
+        id = 7,
         name = "Bass Width",
         default = 100.0,
         range = "linear(0.0, 150.0)",
@@ -120,6 +124,7 @@ pub struct EquilibriumParams {
     )]
     pub bass_width: FloatParam,
     #[param(
+        id = 8,
         name = "Mid Width",
         default = 100.0,
         range = "linear(0.0, 150.0)",
@@ -130,6 +135,7 @@ pub struct EquilibriumParams {
     )]
     pub mid_width: FloatParam,
     #[param(
+        id = 9,
         name = "Pres Width",
         default = 100.0,
         range = "linear(0.0, 150.0)",
@@ -140,6 +146,7 @@ pub struct EquilibriumParams {
     )]
     pub high_mid_width: FloatParam,
     #[param(
+        id = 10,
         name = "Air Width",
         default = 100.0,
         range = "linear(0.0, 150.0)",
@@ -152,6 +159,7 @@ pub struct EquilibriumParams {
 
     // 5 Band Pans (-1.0 L to +1.0 R)
     #[param(
+        id = 11,
         name = "Sub Pan",
         default = 0.0,
         range = "linear(-1.0, 1.0)",
@@ -160,6 +168,7 @@ pub struct EquilibriumParams {
     )]
     pub low_pan: FloatParam,
     #[param(
+        id = 12,
         name = "Bass Pan",
         default = 0.0,
         range = "linear(-1.0, 1.0)",
@@ -168,6 +177,7 @@ pub struct EquilibriumParams {
     )]
     pub bass_pan: FloatParam,
     #[param(
+        id = 13,
         name = "Mid Pan",
         default = 0.0,
         range = "linear(-1.0, 1.0)",
@@ -176,6 +186,7 @@ pub struct EquilibriumParams {
     )]
     pub mid_pan: FloatParam,
     #[param(
+        id = 14,
         name = "Pres Pan",
         default = 0.0,
         range = "linear(-1.0, 1.0)",
@@ -184,6 +195,7 @@ pub struct EquilibriumParams {
     )]
     pub high_mid_pan: FloatParam,
     #[param(
+        id = 15,
         name = "Air Pan",
         default = 0.0,
         range = "linear(-1.0, 1.0)",
@@ -194,6 +206,7 @@ pub struct EquilibriumParams {
 
     // Mono Floor frequency (0 = off, 1–300 Hz)
     #[param(
+        id = 16,
         name = "Mono Floor",
         default = 0.0,
         range = "linear(0.0, 300.0)",
@@ -203,6 +216,7 @@ pub struct EquilibriumParams {
 
     // Output manual gain
     #[param(
+        id = 17,
         name = "Output Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -212,33 +226,33 @@ pub struct EquilibriumParams {
     pub output_gain: FloatParam,
 
     // Solos
-    #[param(name = "Solo Sub", default = 0)]
+    #[param(id = 18, name = "Solo Sub", default = 0)]
     pub solo_low: BoolParam,
-    #[param(name = "Solo Bass", default = 0)]
+    #[param(id = 19, name = "Solo Bass", default = 0)]
     pub solo_bass: BoolParam,
-    #[param(name = "Solo Mid", default = 0)]
+    #[param(id = 20, name = "Solo Mid", default = 0)]
     pub solo_mid: BoolParam,
-    #[param(name = "Solo Pres", default = 0)]
+    #[param(id = 21, name = "Solo Pres", default = 0)]
     pub solo_high_mid: BoolParam,
-    #[param(name = "Solo Air", default = 0)]
+    #[param(id = 22, name = "Solo Air", default = 0)]
     pub solo_high: BoolParam,
 
     // Modes
-    #[param(name = "Mono Sum", default = 0, group = "Monitor")]
+    #[param(id = 23, name = "Mono Sum", default = 0, group = "Monitor")]
     pub mono_active: BoolParam,
-    #[param(name = "Delta Diff", default = 0, group = "Monitor")]
+    #[param(id = 24, name = "Delta Diff", default = 0, group = "Monitor")]
     pub delta_active: BoolParam,
-    #[param(name = "Listen Profile", default = 0, group = "Monitor")]
+    #[param(id = 25, name = "Listen Profile", default = 0, group = "Monitor")]
     pub listen_active: BoolParam,
-    #[param(name = "Auto Loudness", default = 0, group = "Monitor")]
+    #[param(id = 26, name = "Auto Loudness", default = 0, group = "Monitor")]
     pub auto_gain_active: BoolParam,
-    #[param(name = "Bypass", default = 0, group = "Monitor")]
+    #[param(id = 27, name = "Bypass", default = 0, group = "Monitor")]
     pub bypass_active: BoolParam,
 
     // Pre-Master mode
-    #[param(name = "Pre-Master", default = 0, group = "Monitor")]
+    #[param(id = 28, name = "Pre-Master", default = 0, group = "Monitor")]
     pub pre_master_active: BoolParam,
-    #[param(name = "Pre-Master Target", default = -3.0, range = "linear(-6.0, -3.0)", unit = "dB")]
+    #[param(id = 29, name = "Pre-Master Target", default = -3.0, range = "linear(-6.0, -3.0)", unit = "dB")]
     pub pre_master_target_db: FloatParam,
 
     #[skip]
@@ -395,8 +409,30 @@ impl PluginLogic for Equilibrium {
     type Params = EquilibriumParams;
     type DspState = EquilibriumDspState;
 
+    fn info() -> PluginInfo {
+        let mut info = PluginInfo::new(
+            "Equilibrium",
+            "LX Audiolabs",
+            env!("CARGO_PKG_VERSION"),
+            "equilibrium",
+        );
+        // Stable ship IDs — must match pre-AURA truce Equilibrium (Bitwig keys
+        // sessions on clap id; com.lx-audiolabs.* breaks existing projects).
+        info.clap_id = "be.lxndr.equilibrium";
+        info.vst3_id = "be.lxndr.equilibrium";
+        info.lv2_uri = "https://lx-audiolabs.com/lv2/equilibrium";
+        info.category = PluginCategory::Effect;
+        info
+    }
+
     fn bus_layouts() -> Vec<BusLayout> {
         vec![BusLayout::stereo()]
+    }
+
+    fn init(params: &Self::Params, sample_rate: f64) -> Self::DspState {
+        let mut state = EquilibriumDspState::default();
+        Self::reset(&mut state, params, &AudioConfig::new(sample_rate, 4096));
+        state
     }
 
     fn reset(state: &mut EquilibriumDspState, params: &EquilibriumParams, config: &AudioConfig) {
@@ -466,60 +502,32 @@ impl PluginLogic for Equilibrium {
     fn process(
         state: &mut EquilibriumDspState,
         params: &EquilibriumParams,
-        buffer: &mut AudioBuffer,
-        _events: &EventList,
+        buffer: &mut AudioBuffer<'_, f32>,
         _ctx: &mut ProcessContext,
     ) -> ProcessStatus {
         process::run(state, params, buffer)
     }
 
-    fn snapshot_into(_state: &EquilibriumDspState, _buf: &mut Vec<u8>) -> bool {
-        false
-    }
-    fn load_state(_state: &mut EquilibriumDspState, data: &[u8]) -> Result<(), StateLoadError> {
-        if let Some(params) = state_migration::try_parse_niceplug_state(data) {
-            for (name, _value) in params {
-                match name.as_str() {
-                    "low_gain" => {} // params are immutable in load_state; legacy migration skipped
-                    "bass_gain" => {}
-                    "mid_gain" => {}
-                    "high_mid_gain" => {}
-                    "high_gain" => {}
-                    "low_width" => {}
-                    "bass_width" => {}
-                    "mid_width" => {}
-                    "high_mid_width" => {}
-                    "high_width" => {}
-                    "low_pan" => {}
-                    "bass_pan" => {}
-                    "mid_pan" => {}
-                    "high_mid_pan" => {}
-                    "high_pan" => {}
-                    "mono_floor" => {}
-                    "output_gain" => {}
-                    "solo_low" => {}
-                    "solo_bass" => {}
-                    "solo_mid" => {}
-                    "solo_high_mid" => {}
-                    "solo_high" => {}
-                    "mono_active" => {}
-                    "delta_active" => {}
-                    "listen_active" => {}
-                    "auto_gain_active" => {}
-                    "bypass_active" => {}
-                    "pre_master_active" => {}
-                    "pre_master_target_db" => {}
-                    _ => {} // Unknown param — skip silently
-                }
-            }
-        }
-        Ok(())
-    }
-    fn state_changed(_state: &mut EquilibriumDspState, _params: &EquilibriumParams) {}
-
-    fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
-        editor::build_editor(params)
+    fn editor(params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {
+        Some(editor::build_editor(params))
     }
 }
 
-truce::plugin! { logic: Equilibrium, params: EquilibriumParams }
+#[cfg(feature = "clap")]
+aura::export!(Equilibrium);
+
+#[cfg(feature = "vst3")]
+aura::export_vst3!(Equilibrium);
+
+#[cfg(feature = "lv2")]
+aura::export_lv2!(Equilibrium);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn state_round_trips() {
+        aura_test::assert_state_round_trip::<Equilibrium>();
+    }
+}

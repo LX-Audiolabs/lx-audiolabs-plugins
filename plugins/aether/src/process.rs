@@ -2,7 +2,7 @@
 //!
 //! ponytail: same-crate module split only — no behavior change.
 
-use truce::prelude::*;
+use aura::prelude::*;
 use lx_dsp::FtzDazGuard;
 
 use crate::{AetherDspState, AetherParams, CF_DELAY_MAX, NUM_BANDS};
@@ -10,12 +10,12 @@ use crate::{AetherDspState, AetherParams, CF_DELAY_MAX, NUM_BANDS};
 pub(crate) fn run(
     state: &mut AetherDspState,
     params: &AetherParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
 ) -> ProcessStatus {
     let _ftz = FtzDazGuard::new();
 
-    if buffer.num_input_channels() < 2 {
-        return ProcessStatus::Normal;
+    if buffer.num_inputs() < 2 {
+        return ProcessStatus::Continue;
     }
     // ponytail: never process with empty delay (would panic on % 0)
     if state.cf_delay_l.len() < 2 || state.cf_delay_r.len() < 2 {
@@ -31,11 +31,15 @@ pub(crate) fn run(
     let sr = state.sample_rate.max(1.0);
     let num_samples = buffer.num_samples();
 
+    // Copy inputs — AURA buffer has separate input/output borrows (no dual-mut io()).
+    let in0: Vec<f32> = buffer.input(0).to_vec();
+    let in1: Vec<f32> = buffer.input(1).to_vec();
+    let mut out0 = vec![0.0f32; num_samples];
+    let mut out1 = vec![0.0f32; num_samples];
+
     let mut in_peak = 0.0f32;
     for i in 0..num_samples {
-        in_peak = in_peak
-            .max(buffer.input(0)[i].abs())
-            .max(buffer.input(1)[i].abs());
+        in_peak = in_peak.max(in0[i].abs()).max(in1[i].abs());
     }
     let in_db = if in_peak < 1e-9 {
         -90.0
@@ -48,11 +52,11 @@ pub(crate) fn run(
         .store(in_db, std::sync::atomic::Ordering::Release);
 
     if params.bypass.value() {
-        for ch in 0..buffer.channels() {
-            let (inp, out) = buffer.io(ch);
-            out.copy_from_slice(inp);
+        for ch in 0..buffer.num_outputs() {
+            let src = buffer.input(ch).to_vec();
+            buffer.output(ch).copy_from_slice(&src);
         }
-        return ProcessStatus::Normal;
+        return ProcessStatus::Continue;
     }
 
     state.update_eq_coeffs(params);
@@ -75,8 +79,8 @@ pub(crate) fn run(
     }
 
     for i in 0..num_samples {
-        let in_l = buffer.input(0)[i];
-        let in_r = buffer.input(1)[i];
+        let in_l = in0[i];
+        let in_r = in1[i];
 
         let mut eq_l = in_l;
         let mut eq_r = in_r;
@@ -102,9 +106,12 @@ pub(crate) fn run(
 
         let gain_smoothed = params.gain.value();
         let g = 10.0_f32.powf(gain_smoothed / 20.0);
-        buffer.output(0)[i] = cf_l * g;
-        buffer.output(1)[i] = cf_r * g;
+        out0[i] = cf_l * g;
+        out1[i] = cf_r * g;
     }
 
-    ProcessStatus::Normal
+    buffer.output(0).copy_from_slice(&out0);
+    buffer.output(1).copy_from_slice(&out1);
+
+    ProcessStatus::Continue
 }

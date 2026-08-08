@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use lx_analysis::{list_custom_presets, Profile, DEFAULT_TOLERANCES};
-use lx_slint_editor::PluginContext;
+use lx_slint_editor::LxPluginContext;
 
 use crate::EquilibriumParams;
 use crate::EquilibriumParamsParamId as P;
@@ -75,7 +75,7 @@ pub fn param_norm(id: P, plain: f64) -> f64 {
 }
 
 /// Apply stereo settings from a target profile (not band gains — those are analysis targets).
-pub fn apply_stereo_from_preset(ctx: &PluginContext<EquilibriumParams>, p: &EqPreset) {
+pub fn apply_stereo_from_preset(ctx: &LxPluginContext<EquilibriumParams>, p: &EqPreset) {
     for (id, val) in [
         (P::LowWidth, p.widths[0] as f64),
         (P::BassWidth, p.widths[1] as f64),

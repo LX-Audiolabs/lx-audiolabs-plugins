@@ -4,8 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
-use lx_slint_editor::PluginContext;
-use truce_core::cast::discrete_norm;
+use lx_slint_editor::{discrete_norm, LxPluginContext};
 
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;
@@ -196,7 +195,7 @@ pub fn scan_aether_presets(dir: &Path) -> Vec<PresetEntry> {
 
 // ─── Apply / build ───────────────────────────────────────────────────────────
 
-pub fn apply_profile(ctx: &PluginContext<AetherParams>, p: &AetherProfile) {
+pub fn apply_profile(ctx: &LxPluginContext<AetherParams>, p: &AetherProfile) {
     let band_ids = [
         (P::Eq1Type, P::Eq1Freq, P::Eq1Gain, P::Eq1Q),
         (P::Eq2Type, P::Eq2Freq, P::Eq2Gain, P::Eq2Q),

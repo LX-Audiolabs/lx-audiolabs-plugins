@@ -9,6 +9,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aether"
+version = "1.4.1"
+dependencies = [
+ "aura",
+ "aura-editor",
+ "aura-test",
+ "lx-analysis",
+ "lx-dsp",
+ "lx-slint-build",
+ "lx-slint-editor",
+ "serde",
+ "serde_json",
+ "slint",
+ "tracing",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1174,6 +1191,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "equilibrium"
+version = "1.8.1"
+dependencies = [
+ "aura",
+ "aura-editor",
+ "aura-test",
+ "lx-analysis",
+ "lx-dsp",
+ "lx-slint-build",
+ "lx-slint-editor",
+ "slint",
+ "tracing",
 ]
 
 [[package]]
@@ -2667,6 +2699,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fae87c125b03c1d2c0150c90365d7d6bcc53fb73a9acaef207d2d065860f062"
 dependencies = [
  "imgref",
+]
+
+[[package]]
+name = "lucent"
+version = "1.2.1"
+dependencies = [
+ "aura",
+ "aura-editor",
+ "aura-test",
+ "lx-analysis",
+ "lx-dsp",
+ "lx-slint-build",
+ "lx-slint-editor",
+ "realfft",
+ "slint",
+ "tracing",
+]
+
+[[package]]
+name = "lucent-relay"
+version = "1.1.2"
+dependencies = [
+ "aura",
+ "aura-editor",
+ "aura-test",
+ "lx-analysis",
+ "lx-dsp",
+ "lx-slint-build",
+ "lx-slint-editor",
+ "realfft",
+ "slint",
+ "tracing",
 ]
 
 [[package]]

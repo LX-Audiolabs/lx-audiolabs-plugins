@@ -7,7 +7,7 @@
 
 use std::f32::consts::FRAC_PI_4;
 use std::sync::atomic::Ordering;
-use truce::prelude::*;
+use aura::prelude::*;
 
 use lx_analysis::{SnapMode, SCOPE_BUFFER_LEN};
 use lx_dsp::{FtzDazGuard, DBTP_CEILING};
@@ -53,18 +53,18 @@ pub(crate) struct BlockMetrics {
 pub(crate) fn run(
     state: &mut EquilibriumDspState,
     params: &EquilibriumParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
 ) -> ProcessStatus {
     let _ftz = FtzDazGuard::new();
 
-    if buffer.num_input_channels() < 2 {
-        return ProcessStatus::Normal;
+    if buffer.num_inputs() < 2 || buffer.num_outputs() < 2 {
+        return ProcessStatus::Continue;
     }
 
     let mut ctrl = param_update(state, params);
     let mut metrics = process_block(state, params, buffer, &mut ctrl);
     publish(state, params, buffer, &ctrl, &mut metrics);
-    ProcessStatus::Normal
+    ProcessStatus::Continue
 }
 
 fn param_update(state: &mut EquilibriumDspState, params: &EquilibriumParams) -> ProcessControl {
@@ -185,7 +185,7 @@ fn param_update(state: &mut EquilibriumDspState, params: &EquilibriumParams) -> 
 fn process_block(
     state: &mut EquilibriumDspState,
     params: &EquilibriumParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
     ctrl: &mut ProcessControl,
 ) -> BlockMetrics {
     let sample_rate = ctrl.sample_rate;
@@ -213,36 +213,22 @@ fn process_block(
     let mut block_band_power = [0.0f32; 5];
     let mut block_input_band_power = [0.0f32; 5];
 
-    // Raw pointers to output buffers — avoids borrow conflicts when both
-    // output channels are needed simultaneously (feed, scope, pre-master).
+    // Copy I/O — AURA buffer has separate input/output borrows (no dual-mut io()).
     let num_samples = buffer.num_samples();
-    let (out0_ptr, out1_ptr): (*mut f32, *mut f32);
-    {
-        let (_, out0) = buffer.io(0);
-        out0_ptr = out0.as_mut_ptr();
-    }
-    {
-        let out1_slice = buffer.output(1);
-        out1_ptr = out1_slice.as_mut_ptr();
-    }
-    // SAFETY: both pointers are valid, non-aliasing output channels
-    #[allow(unsafe_code)]
-    let (out0, out1): (&mut [f32], &mut [f32]) = unsafe {
-        (
-            std::slice::from_raw_parts_mut(out0_ptr, num_samples),
-            std::slice::from_raw_parts_mut(out1_ptr, num_samples),
-        )
-    };
+    let in0: Vec<f32> = buffer.input(0).to_vec();
+    let in1: Vec<f32> = buffer.input(1).to_vec();
+    let mut out0 = vec![0.0f32; num_samples];
+    let mut out1 = vec![0.0f32; num_samples];
 
     // Feed input to LUFS meter BEFORE we modify the buffer
     if is_measuring {
-        state.auto_loud_in.feed(buffer.input(0), buffer.input(1));
+        state.auto_loud_in.feed(&in0, &in1);
     }
 
     for i in 0..num_samples {
         count_samples += 1;
-        let in_l = buffer.input(0)[i];
-        let in_r = buffer.input(1)[i];
+        let in_l = in0[i];
+        let in_r = in1[i];
 
         sum_power_in += in_l * in_l + in_r * in_r;
 
@@ -478,6 +464,9 @@ fn process_block(
 
     ctrl.snap_phase = snap_phase;
 
+    buffer.output(0).copy_from_slice(&out0);
+    buffer.output(1).copy_from_slice(&out1);
+
     BlockMetrics {
         max_out_peak,
         max_out_peak_l,
@@ -495,7 +484,7 @@ fn process_block(
 fn publish(
     state: &mut EquilibriumDspState,
     params: &EquilibriumParams,
-    buffer: &mut AudioBuffer,
+    buffer: &mut AudioBuffer<'_, f32>,
     ctrl: &ProcessControl,
     metrics: &mut BlockMetrics,
 ) {
@@ -518,23 +507,10 @@ fn publish(
     let mut block_input_band_power = metrics.block_input_band_power;
     let num_samples = metrics.num_samples;
 
-    // Re-bind output channels for post-process (pre-master, scope, auto-loud out)
-    let (out0_ptr, out1_ptr): (*mut f32, *mut f32);
-    {
-        let (_, out0) = buffer.io(0);
-        out0_ptr = out0.as_mut_ptr();
-    }
-    {
-        let out1_slice = buffer.output(1);
-        out1_ptr = out1_slice.as_mut_ptr();
-    }
-    #[allow(unsafe_code)]
-    let (out0, out1): (&mut [f32], &mut [f32]) = unsafe {
-        (
-            std::slice::from_raw_parts_mut(out0_ptr, num_samples),
-            std::slice::from_raw_parts_mut(out1_ptr, num_samples),
-        )
-    };
+    // Copy outs for post-process (pre-master, scope, auto-loud out) — AURA
+    // buffer has separate input/output borrows (no dual-mut io()).
+    let mut out0: Vec<f32> = buffer.output(0).to_vec();
+    let mut out1: Vec<f32> = buffer.output(1).to_vec();
     // Pink noise carries equal energy per octave, so a band's total power
     // scales with its octave span — wider bands read hotter and the display
     // stair-steps upward. Divide each band's power by its octave width so a
@@ -711,7 +687,7 @@ fn publish(
         state.auto_loud_out.reset();
     }
     if is_measuring {
-        state.auto_loud_out.feed(out0, out1);
+        state.auto_loud_out.feed(&out0, &out1);
         let target_samples = (5.0 * sample_rate as f64) as u64;
         if state.auto_loud_out.sample_count() >= target_samples {
             let in_lufs = state.auto_loud_in.loudness_db();
@@ -879,4 +855,7 @@ fn publish(
                 .store((start_pos + n) % buf_len, Ordering::Release);
         }
     }
+
+    buffer.output(0).copy_from_slice(&out0);
+    buffer.output(1).copy_from_slice(&out1);
 }

@@ -1,6 +1,6 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
-// Aether — Headphone monitoring corrector (truce port).
+// Aether — Headphone monitoring corrector (AURA).
 //
 // MONITORING ONLY: place in Reaper Monitor-FX or on a separate monitor track,
 // never in the print/mastering chain (crossfeed alters the audio).
@@ -12,11 +12,9 @@
 // so it commutes with the crossfeed — order is conceptual, not sonic.
 
 use lx_analysis::AetherShared;
-use lx_dsp::{Biquad, state_migration};
+use lx_dsp::Biquad;
 use std::sync::Arc;
-use truce::prelude::*;
-use truce_core::editor::Editor;
-use truce_core::state::StateLoadError;
+use aura::prelude::*;
 
 mod editor;
 mod process;
@@ -30,7 +28,7 @@ pub(crate) const CF_DELAY_MAX: usize = 512; // ponytail: used in AetherDspState:
 
 #[derive(Params)]
 pub struct AetherParams {
-    #[param(
+    #[param(id = 1,
         name = "EQ1 Freq",
         default = 105.0,
         range = "log(20.0, 20000.0)",
@@ -38,7 +36,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq1_freq: FloatParam,
-    #[param(
+    #[param(id = 2,
         name = "EQ1 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -46,7 +44,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq1_gain: FloatParam,
-    #[param(
+    #[param(id = 3,
         name = "EQ1 Q",
         default = 0.7,
         range = "log(0.3, 8.0)",
@@ -54,7 +52,7 @@ pub struct AetherParams {
     )]
     pub eq1_q: FloatParam,
 
-    #[param(
+    #[param(id = 4,
         name = "EQ2 Freq",
         default = 300.0,
         range = "log(20.0, 20000.0)",
@@ -62,7 +60,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq2_freq: FloatParam,
-    #[param(
+    #[param(id = 5,
         name = "EQ2 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -70,7 +68,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq2_gain: FloatParam,
-    #[param(
+    #[param(id = 6,
         name = "EQ2 Q",
         default = 1.0,
         range = "log(0.3, 8.0)",
@@ -78,7 +76,7 @@ pub struct AetherParams {
     )]
     pub eq2_q: FloatParam,
 
-    #[param(
+    #[param(id = 7,
         name = "EQ3 Freq",
         default = 1200.0,
         range = "log(20.0, 20000.0)",
@@ -86,7 +84,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq3_freq: FloatParam,
-    #[param(
+    #[param(id = 8,
         name = "EQ3 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -94,7 +92,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq3_gain: FloatParam,
-    #[param(
+    #[param(id = 9,
         name = "EQ3 Q",
         default = 1.0,
         range = "log(0.3, 8.0)",
@@ -102,7 +100,7 @@ pub struct AetherParams {
     )]
     pub eq3_q: FloatParam,
 
-    #[param(
+    #[param(id = 10,
         name = "EQ4 Freq",
         default = 4000.0,
         range = "log(20.0, 20000.0)",
@@ -110,7 +108,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq4_freq: FloatParam,
-    #[param(
+    #[param(id = 11,
         name = "EQ4 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -118,7 +116,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq4_gain: FloatParam,
-    #[param(
+    #[param(id = 12,
         name = "EQ4 Q",
         default = 1.0,
         range = "log(0.3, 8.0)",
@@ -126,7 +124,7 @@ pub struct AetherParams {
     )]
     pub eq4_q: FloatParam,
 
-    #[param(
+    #[param(id = 13,
         name = "EQ5 Freq",
         default = 10000.0,
         range = "log(20.0, 20000.0)",
@@ -134,7 +132,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq5_freq: FloatParam,
-    #[param(
+    #[param(id = 14,
         name = "EQ5 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -142,7 +140,7 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq5_gain: FloatParam,
-    #[param(
+    #[param(id = 15,
         name = "EQ5 Q",
         default = 0.7,
         range = "log(0.3, 8.0)",
@@ -150,18 +148,18 @@ pub struct AetherParams {
     )]
     pub eq5_q: FloatParam,
 
-    #[param(name = "EQ1 Type", default = 1, range = "discrete(0, 3)")]
+    #[param(id = 16, name = "EQ1 Type", default = 1, range = "discrete(0, 3)")]
     pub eq1_type: IntParam,
-    #[param(name = "EQ2 Type", default = 2, range = "discrete(0, 3)")]
+    #[param(id = 17, name = "EQ2 Type", default = 2, range = "discrete(0, 3)")]
     pub eq2_type: IntParam,
-    #[param(name = "EQ3 Type", default = 2, range = "discrete(0, 3)")]
+    #[param(id = 18, name = "EQ3 Type", default = 2, range = "discrete(0, 3)")]
     pub eq3_type: IntParam,
-    #[param(name = "EQ4 Type", default = 2, range = "discrete(0, 3)")]
+    #[param(id = 19, name = "EQ4 Type", default = 2, range = "discrete(0, 3)")]
     pub eq4_type: IntParam,
-    #[param(name = "EQ5 Type", default = 3, range = "discrete(0, 3)")]
+    #[param(id = 20, name = "EQ5 Type", default = 3, range = "discrete(0, 3)")]
     pub eq5_type: IntParam,
 
-    #[param(
+    #[param(id = 21,
         name = "Blend",
         default = 100.0,
         range = "linear(0.0, 100.0)",
@@ -172,7 +170,7 @@ pub struct AetherParams {
     )]
     pub blend: FloatParam,
 
-    #[param(
+    #[param(id = 22,
         name = "Crossfeed Angle",
         default = 60.0,
         range = "linear(30.0, 75.0)",
@@ -181,7 +179,7 @@ pub struct AetherParams {
         group = "Aether"
     )]
     pub cf_angle: FloatParam,
-    #[param(
+    #[param(id = 23,
         name = "Crossfeed Amount",
         default = 0.0,
         range = "linear(0.0, 100.0)",
@@ -191,7 +189,7 @@ pub struct AetherParams {
         group = "Aether"
     )]
     pub cf_amount: FloatParam,
-    #[param(
+    #[param(id = 24,
         name = "Crossfeed Realism",
         default = 0,
         range = "discrete(0, 2)",
@@ -199,7 +197,7 @@ pub struct AetherParams {
     )]
     pub cf_realism: IntParam,
 
-    #[param(
+    #[param(id = 25,
         name = "Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -209,7 +207,7 @@ pub struct AetherParams {
     )]
     pub gain: FloatParam,
 
-    #[param(name = "Bypass", default = 0)]
+    #[param(id = 26, name = "Bypass", default = 0)]
     pub bypass: BoolParam,
 
     #[skip]
@@ -219,7 +217,7 @@ pub struct AetherParams {
 impl AetherParams {
     /// Real value display for `unit = "%"` params: our plain values are
     /// already the percent number (e.g. `100.0` means `100%`), not a
-    /// 0.0-1.0 fraction. `truce_params::format_param_value`'s built-in
+    /// 0.0-1.0 fraction. `aura_params::format_param_value`'s built-in
     /// Percent case multiplies by 100 assuming the latter, so it would
     /// show `10000%` for a real 100% value without this override.
     fn fmt_pct(&self, value: f64) -> String {
@@ -395,12 +393,32 @@ impl PluginLogic for Aether {
     type Params = AetherParams;
     type DspState = AetherDspState;
 
+    fn info() -> PluginInfo {
+        let mut info = PluginInfo::new(
+            "Aether",
+            "LX Audiolabs",
+            env!("CARGO_PKG_VERSION"),
+            "aether",
+        );
+        // Stable ship IDs — must match pre-AURA truce Aether (Bitwig keys sessions
+        // on clap id; com.lx-audiolabs.* breaks existing projects + device cache).
+        info.clap_id = "be.lxndr.aether";
+        info.vst3_id = "be.lxndr.aether";
+        info.lv2_uri = "https://lx-audiolabs.com/lv2/aether";
+        info.category = PluginCategory::Effect;
+        info
+    }
+
     fn bus_layouts() -> Vec<BusLayout> {
         vec![BusLayout::stereo()]
     }
 
-    fn init(_params: &AetherParams, _cx: &InitContext) -> AetherDspState {
-        AetherDspState::default()
+    fn init(params: &AetherParams, sample_rate: f64) -> AetherDspState {
+        let mut state = AetherDspState::default();
+        // Biquad::default() zero-coefs would silence output if a host never
+        // calls reset — seed real coefficients at init.
+        Self::reset(&mut state, params, &AudioConfig::new(sample_rate, 4096));
+        state
     }
 
     fn reset(state: &mut AetherDspState, params: &AetherParams, config: &AudioConfig) {
@@ -430,39 +448,33 @@ impl PluginLogic for Aether {
     fn process(
         state: &mut AetherDspState,
         params: &AetherParams,
-        buffer: &mut AudioBuffer,
-        _events: &EventList,
+        buffer: &mut AudioBuffer<'_, f32>,
         _ctx: &mut ProcessContext,
     ) -> ProcessStatus {
         process::run(state, params, buffer)
     }
 
-    fn snapshot_into(_state: &AetherDspState, _buf: &mut Vec<u8>) -> bool {
-        false
-    }
-    fn load_state(_state: &mut AetherDspState, data: &[u8]) -> Result<(), StateLoadError> {
-        if let Some(_params) = state_migration::try_parse_niceplug_state(data) {
-            // Note: load_state in 6.x receives state, not self. The param values
-            // must be set via the params reference passed by the host, but here we
-            // only have &AetherParams which is immutable. In practice, Truce's
-            // load_state is called with params already mutable by the runtime.
-            // For NicePlug migration, we skip — the state bytes are envelope-only
-            // in modern hosts; this path is for legacy session recovery.
-        }
-        Ok(())
-    }
-    fn state_changed(_state: &mut AetherDspState, _params: &AetherParams) {}
+    // AURA handles state via params — truce's snapshot_into / load_state /
+    // state_changed (and the lx_dsp::state_migration legacy path) are gone.
 
-    fn editor(params: Arc<Self::Params>) -> Box<dyn Editor> {
-        editor::build_editor(params)
+    fn editor(params: Arc<Self::Params>) -> Option<Box<dyn Editor>> {
+        Some(editor::build_editor(params))
     }
 }
 
-truce::plugin! { logic: Aether, params: AetherParams }
+#[cfg(feature = "clap")]
+aura::export!(Aether);
+
+#[cfg(feature = "vst3")]
+aura::export_vst3!(Aether);
+
+#[cfg(feature = "lv2")]
+aura::export_lv2!(Aether);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn parses_autoeq() {
         let txt = "Preamp: -7.13 dB\nFilter 1: ON LSC Fc 105.0 Hz Gain 3.3 dB Q 0.70\nFilter 2: ON PK Fc 118.4 Hz Gain -3.3 dB Q 0.45\nFilter 3: OFF PK Fc 200.0 Hz Gain 1.0 dB Q 1.00\nFilter 4: ON HSC Fc 10000.0 Hz Gain 2.0 dB Q 0.70\n";
@@ -471,5 +483,10 @@ mod tests {
         assert_eq!(p.filters.len(), 3);
         assert_eq!(p.filters[0].type_code, 1);
         assert_eq!(p.filters[2].type_code, 3);
+    }
+
+    #[test]
+    fn state_round_trips() {
+        aura_test::assert_state_round_trip::<Aether>();
     }
 }
