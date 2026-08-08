@@ -620,8 +620,10 @@ impl PluginLogic for Meridian {
             env!("CARGO_PKG_VERSION"),
             "meridian",
         );
-        info.clap_id = "com.lx-audiolabs.meridian";
-        info.vst3_id = "com.lx-audiolabs.meridian";
+        // Stable ship IDs — must match pre-AURA truce Meridian (Bitwig keys sessions
+        // on clap id; com.lx-audiolabs.* breaks existing projects + device cache).
+        info.clap_id = "be.lxndr.meridian";
+        info.vst3_id = "be.lxndr.meridian";
         info.lv2_uri = "https://lx-audiolabs.com/lv2/meridian";
         info.category = PluginCategory::Effect;
         info
