@@ -16,9 +16,9 @@ crate = "lucent"
 category = "analyzer"
 
 [[plugin]]
-name = "Aurum"
-bundle_id = "aurum"
-crate = "aurum"
+name = "Mensor"
+bundle_id = "mensor"
+crate = "mensor"
 category = "effect"
 
 [[plugin]]

@@ -12,5 +12,5 @@ crate_vs_plugin = "Reusable logic belongs in crates/, product logic belongs in p
 # Intentional product / DSP-crate noise — keep graph health green without losing rules.
 [[suppress]]
 code = "large_param_surface"
-node = "aurum"
-reason = "Aurum product surface (~70 params) is intentional"
+node = "mensor"
+reason = "Mensor product surface (~70 params) is intentional"

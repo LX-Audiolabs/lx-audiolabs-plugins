@@ -2,7 +2,7 @@
 # Builds release CLAPs via cargo-aura, packages Plugin-vX.Y.Z-{win|linux}.zip
 #
 # Default: Aether, Meridian, Equilibrium, Lucent, Lucent Relay x both platforms.
-# Aurum still map if passed explicitly - not default (WIP).
+# Mensor still map if passed explicitly - not default (WIP).
 # Lucent in the set also builds Lucent-Bundle (Lucent + Lucent Relay together).
 #
 # Usage:

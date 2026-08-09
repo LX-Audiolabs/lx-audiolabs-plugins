@@ -433,22 +433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aurum"
-version = "0.4.2"
-dependencies = [
- "aura",
- "aura-build",
- "aura-dsp",
- "aura-editor",
- "aura-test",
- "realfft",
- "serde",
- "serde_json",
- "slint",
- "tracing",
-]
-
-[[package]]
 name = "auto_enums"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2888,6 +2872,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mensor"
+version = "0.4.2"
+dependencies = [
+ "aura",
+ "aura-build",
+ "aura-dsp",
+ "aura-editor",
+ "aura-test",
+ "realfft",
+ "serde",
+ "serde_json",
+ "slint",
+ "tracing",
 ]
 
 [[package]]

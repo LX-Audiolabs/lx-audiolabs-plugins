@@ -63,11 +63,11 @@ No SemVer bump / catalog tag yet — cutover branch, not a release train.
 | Aether        | 1.4.0  | 1.4.1  | patch | Bundled font (Konsistenz)            |
 | Lucent        | 1.2.0  | 1.2.1  | patch | Bundled font (Konsistenz)            |
 | Lucent Relay  | 1.1.1  | 1.1.2  | patch | Bundled font (Konsistenz)            |
-| Aurum         | 0.4.1  | 0.4.2  | patch | Bundled font (Konsistenz)            |
+| Mensor        | 0.4.1  | 0.4.2  | patch | Bundled font (Konsistenz)            |
 
 ---
 
-## 2026-08-04 — Aurum 0.4.1: Clipper Defaults 0 dB + SHAPE/COLOR Layout
+## 2026-08-04 — Mensor 0.4.1: Clipper Defaults 0 dB + SHAPE/COLOR Layout
 
 - **Clipper Ceil M / Ceil S:** Range jetzt −6…**0 dB**, Default **0 dB** (vorher
   −1 dB → Eingangssignal clippte sofort). RESET-Button setzt ebenfalls 0 dB;

@@ -25,9 +25,9 @@ jobs:
           - crate: aether
             clap: "Aether"
             version_toml: plugins/aether/Cargo.toml
-          - crate: aurum
-            clap: "Aurum"
-            version_toml: plugins/aurum/Cargo.toml
+          - crate: mensor
+            clap: "Mensor"
+            version_toml: plugins/mensor/Cargo.toml
           - crate: equilibrium
             clap: "Equilibrium"
             version_toml: plugins/equilibrium/Cargo.toml

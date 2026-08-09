@@ -15,7 +15,7 @@ crates/                 # libraries
 plugins/                # products
   aether/ meridian/ equilibrium/
   lucent/ lucent-relay/
-  aurum/
+  mensor/
 ```
 
 Runtime GUI: **aura-editor** + **aura-baseview** (default `backend-femtovg` + OpenGL).
@@ -66,7 +66,7 @@ import {
 | `equilibrium` | Pre-master spectral balancer |
 | `lucent` | Spectrum analyzer (standalone / hybrid / relay) |
 | `lucent-relay` | Relay publisher |
-| `aurum` | All-in-one mastering (M/S EQ, comp, sat, limiters) |
+| `mensor` | All-in-one mastering (M/S EQ, comp, sat, limiters) |
 
 ## Build
 
