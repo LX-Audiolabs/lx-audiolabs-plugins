@@ -6,4 +6,4 @@
 # (for lib/test codegen crashes: CARGO_PROFILE_DEV_OPT_LEVEL=2 CARGO_PROFILE_TEST_OPT_LEVEL=2).
 # Revisit on the next stable (1.98+). Mirrors AURA/rust-toolchain.toml.
 [toolchain]
-channel = "1.96.0"
+channel = "1.97.1"
