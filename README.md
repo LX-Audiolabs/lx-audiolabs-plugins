@@ -7,6 +7,11 @@
 
 Slint UI workspace for LX Audiolabs plugins (CLAP / VST3 / LV2 via AURA).
 
+> **Status:** truce → AURA cutover complete. All six plugins (aether,
+> equilibrium, lucent, lucent-relay, mensor, meridian) build and install with
+> `cargo aura`. The shared product UI lives in `lx-ui-slint` on top of
+> `aura-editor` + `aura-baseview`.
+
 ## Layout
 
 ```
@@ -71,7 +76,7 @@ import {
 ## Build
 
 ```powershell
-# Workspace check
+# Workspace check (debug profile by default)
 cargo check --workspace
 
 # Single plugin CLAP install (release, Windows host)
@@ -79,6 +84,10 @@ cargo aura install --clap -plug meridian
 
 # Multiple plugins at once
 cargo aura install --clap -plug aether meridian equilibrium
+
+# Build without --release uses the dev/debug profile.
+# Add --release for optimized builds (used by install and build-local-zip.ps1).
+cargo aura build --clap -plug aether
 
 # Package release ZIPs → dist/  (default: Aether+Meridian+Equilibrium+Lucent+Relay × win+linux)
 # also writes Lucent-Bundle-vX.Y.Z-{win|linux}.zip when lucent is in the set

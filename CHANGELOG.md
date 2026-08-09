@@ -10,30 +10,34 @@ unchanged), **major** = breaking.
 
 ## 2026-08-08 — AURA product cutover (host smoke)
 
-Branch: **`cutover/meridian-aura`**. Framework path deps → sibling `AURA` repo.
-Shared stack: `PluginLogic` / derive params / CLAP export / `lx-slint-editor` on
-aura-baseview. Product DSP/UI stay in `lx-dsp`, `lx-analysis`, `lx-ui-slint`.
+Branch: **`cutover/meridian-aura`** → merged 2026-08-09. Framework path deps →
+sibling `AURA` repo. Shared stack: `PluginLogic` / derive params / CLAP export /
+`aura-editor` on `aura-baseview`. Product DSP/UI stay in `lx-dsp`,
+`lx-analysis`, `lx-ui-slint`.
 
 ### Status
 
-| Plugin | AURA code | First host smoke | CLAP id (stable) |
-|--------|-----------|------------------|------------------|
-| **Meridian** | done | **green** (Bitwig + REAPER) | `be.lxndr.meridian` |
-| **Aether** | done | **green** (first smoke) | `be.lxndr.aether` |
-| **Equilibrium** | done | **green** (first smoke) | `be.lxndr.equilibrium` |
-| **Lucent** | in progress | — | `be.lxndr.lucent` (keep) |
-| **Lucent Relay** | in progress | — | `be.lxndr.*` (keep) |
+| Plugin | AURA code | First host smoke / release build | CLAP id (stable) |
+|--------|-----------|----------------------------------|------------------|
+| **Aether** | done | **green** (first smoke + release) | `be.lxndr.aether` |
+| **Mensor** | done | **green** (release) | `[removed]` (renamed from *aurum* — too close to *AURA*) |
+| **Equilibrium** | done | **green** (first smoke + release) | `be.lxndr.equilibrium` |
+| **Lucent** | done | **green** (release; rustfft AVX ICE fixed) | `be.lxndr.lucent` (keep) |
+| **Lucent Relay** | done | **green** (release) | `be.lxndr.*` (keep) |
+| **Meridian** | done | **green** (Bitwig + REAPER + release) | `be.lxndr.meridian` |
 
 ### Tooling notes
 
 - rustc **1.96.0** pin (`rust-toolchain.toml`); 1.97 ICE/lld on this machine
 - clap-validator: prefer `-j 1` on Windows (parallel ACCESS_VIOLATION flakes)
 - Install: **one** CLAP path only (`%LOCALAPPDATA%\Programs\Common\CLAP\…`)
-- Release: `CARGO_PROFILE_RELEASE_LTO=false` until workspace LTO link fix
+- Release: `codegen-units = 16` in root `Cargo.toml` avoids a rustc ICE in
+  `rustfft` AVX code (was `1`); LTO stays enabled
 
 ### Version
 
-No SemVer bump / catalog tag yet — cutover branch, not a release train.
+Cutover complete — no catalog release tag yet; next tags happen on the
+post-cutover release train. AURA framework version during cutover: **0.5.0**.
 
 ---
 
