@@ -36,7 +36,9 @@ slint           = { version = "=1.17.1", default-features = false, features = [
 [profile.release]
 opt-level = 3
 lto = true
-codegen-units = 1
+# codegen-units = 1 triggers a rustc ICE in rustfft 6.4.1 AVX code
+# (lucent release build, Rust 1.96). 16 avoids it while keeping LTO.
+codegen-units = 16
 strip = true
 # MUST be unwind: AURA host fence uses catch_unwind.
 panic = "unwind"
