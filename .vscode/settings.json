@@ -1,11 +1,11 @@
 {
-  // lx-slint-build injects fonts + @truce only at cargo build time (OUT_DIR).
-  // Slint LSP needs the same paths for import / @truce resolution in the editor.
+  // aura-build injects fonts + @aura only at cargo build time (OUT_DIR).
+  // Slint LSP needs the same paths for import / @aura resolution in the editor.
   // Absolute paths — relative paths break in multi-root workspaces.
   "slint.includePaths": [
-    "L:/LX-Audiolabs/truce-dev/crates/truce-font/fonts"
+    "L:/LX-Audiolabs/AURA/crates/aura-build/fonts"
   ],
   "slint.libraryPaths": {
-    "truce": "L:/LX-Audiolabs/lx-audiolabs-plugins/crates/lx-slint-build/ui/widgets.slint"
+    "aura": "L:/LX-Audiolabs/AURA/crates/aura-build/ui/widgets.slint"
   }
 }

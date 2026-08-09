@@ -4,7 +4,13 @@
 # MSVC-host rustc for this target).
 #
 # gnu (glibc .so / .clap): need a real libc sysroot. Zig provides that via
-# cargo-zigbuild's `zig cc` filter. Plain `cargo` / `cargo truce` pick these
+# Cross-compilation from Windows → Linux.
+#
+# musl: rust-lld is enough for staticlib/rlib (cdylib is unsupported on
+# MSVC-host rustc for this target).
+#
+# gnu (glibc .so / .clap): need a real libc sysroot. Zig provides that via
+# cargo-zigbuild's `zig cc` filter. Plain `cargo` / `cargo aura` pick these
 # linkers up — no need to prefix every build with `cargo zigbuild`.
 #
 # Requires: `zig` + `cargo-zigbuild` on PATH
@@ -12,7 +18,7 @@
 #   cargo install cargo-zigbuild
 #
 # Fontconfig (Linux cross from Windows):
-# 1) lx-slint-editor enables fontique/fontconfig-dlopen for target_os=linux
+# 1) aura-editor enables fontique/fontconfig-dlopen for target_os=linux
 #    so fontique uses dlopen bindings (not linked Fc* symbols).
 # 2) RUST_FONTCONFIG_DLOPEN makes yeslogic-fontconfig-sys skip pkg-config
 #    even if the feature flag is not unified for some reason.

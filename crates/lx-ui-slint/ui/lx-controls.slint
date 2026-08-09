@@ -1,5 +1,5 @@
-// Branded LX controls — custom knob/slider/segmented; no @truce import
-// (LSP can't resolve @truce; cargo build injects it via truce-slint-build only).
+// Branded LX controls — custom knob/slider/segmented; no @aura import
+// (LX UI ships its own components; @aura is available via aura-build but unused here).
 
 import { Lx } from "lx-theme.slint";
 
@@ -599,7 +599,7 @@ export component LxSegmentedButton inherits Rectangle {
     }
 }
 
-// ─── Wrappers around @truce controls ─────────────────────────────────────────
+// ─── Custom LX controls ──────────────────────────────────────────────────────
 
 // ─── Custom horizontal slider ────────────────────────────────────────────────
 

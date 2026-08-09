@@ -1,5 +1,5 @@
 # build-local-zip.ps1
-# Builds release CLAPs via cargo-truce, packages Plugin-vX.Y.Z-{win|linux}.zip
+# Builds release CLAPs via cargo-aura, packages Plugin-vX.Y.Z-{win|linux}.zip
 #
 # Default: Aether, Meridian, Equilibrium, Lucent, Lucent Relay x both platforms.
 # Aurum still map if passed explicitly - not default (WIP).
@@ -15,7 +15,7 @@
 #   winget install zig.zig --source winget
 #   cargo install cargo-zigbuild
 #   rustup target add x86_64-unknown-linux-gnu
-#   cargo-truce with --target-aware artifact names (truce >= 6.1.9 / truce-dev)
+#   cargo-aura (installed from AURA repo)
 # Zig linker is wired in .cargo/config.toml + .cargo/zigcc-*.bat
 #
 # Output:
@@ -39,7 +39,7 @@ param(
 $ErrorActionPreference = "Stop"
 $distDir = "dist"
 
-# CLAP product names from truce.toml (cargo-truce safe_filename / file_stem)
+# CLAP product names (must match aura.toml bundle_id → display name)
 $clapNames = @{
     "aether"       = "Aether"
     "aurum"        = "Aurum"
@@ -112,15 +112,32 @@ function Build-And-Package {
         $env:RUST_FONTCONFIG_DLOPEN = "on"
     }
 
-    # cargo-truce only keeps a single -p filter (last wins). Build one crate per call.
+    # cargo-aura builds one plugin at a time; copy the cdylib into target\bundles
+    # and rename to <DisplayName>.clap for packaging.
     foreach ($p in $PluginList) {
-        Write-Host "--- cargo truce build --clap -p $p [$Plat] ---" -ForegroundColor DarkCyan
-        $buildArgs = @("truce", "build", "--clap", "-p", $p)
+        Write-Host "--- cargo aura build --clap -plug $p [$Plat] ---" -ForegroundColor DarkCyan
+        $buildArgs = @("aura", "build", "--clap", "-plug", $p, "--release")
         if ($Plat -eq "linux") {
             $buildArgs += @("--target", $Target)
         }
         & cargo @buildArgs
         if ($LASTEXITCODE -ne 0) { throw "Build failed ($Plat / $p)" }
+
+        $clapName = $Names[$p]
+        $crateName = $p -replace '-', '_'
+        $src = if ($Plat -eq "linux") {
+            Join-Path "target" $Target | Join-Path -ChildPath "release" | Join-Path -ChildPath "lib$crateName.so"
+        } else {
+            Join-Path "target" "release" | Join-Path -ChildPath "$crateName.dll"
+        }
+        $dstDir = $bundlesDir
+        New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+        $dst = Join-Path $dstDir ($clapName + ".clap")
+        if (-not (Test-Path $src)) {
+            throw "Built artifact not found: $src"
+        }
+        Copy-Item -Path $src -Destination $dst -Force
+        Write-Host "  -> $dst" -ForegroundColor DarkGray
     }
 
     New-Item -ItemType Directory -Force -Path $OutDir | Out-Null

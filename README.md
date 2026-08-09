@@ -5,23 +5,20 @@
 [![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
 [![AI](https://img.shields.io/badge/dev-AI--assisted-6E40C9.svg)](https://github.com/LX-Audiolabs/agal)
 
-Slint UI workspace for LX Audiolabs plugins (CLAP / VST3 / LV2 via truce).
+Slint UI workspace for LX Audiolabs plugins (CLAP / VST3 / LV2 via AURA).
 
 ## Layout
 
 ```
 crates/                 # libraries
-  lx-slint-build/       # build helper: @truce widgets + bundled JetBrains Mono (all plugin build.rs)
-  lx-slint-editor/      # truce::Editor on slint-baseview
   lx-ui-slint/          # design system (Lx* components)
-  lx-dsp/ lx-analysis/ lx-vault/ lx-shm/
 plugins/                # products
   aether/ meridian/ equilibrium/
   lucent/ lucent-relay/
   aurum/
 ```
 
-Runtime GUI: **lx-slint-editor** + **lx-slint-baseview** (default `backend-femtovg` + OpenGL). Optional A/B: `backend-skia`, `backend-wgpu`, `backend-wgpu-vulkan`.
+Runtime GUI: **aura-editor** + **aura-baseview** (default `backend-femtovg` + OpenGL).
 
 ## System requirements (UI)
 
@@ -78,7 +75,10 @@ import {
 cargo check --workspace
 
 # Single plugin CLAP install (release, Windows host)
-cargo truce install --clap -p meridian
+cargo aura install --clap -plug meridian
+
+# Multiple plugins at once
+cargo aura install --clap -plug aether meridian equilibrium
 
 # Package release ZIPs → dist/  (default: Aether+Meridian+Equilibrium+Lucent+Relay × win+linux)
 # also writes Lucent-Bundle-vX.Y.Z-{win|linux}.zip when lucent is in the set
@@ -98,15 +98,15 @@ cargo install cargo-zigbuild
 rustup target add x86_64-unknown-linux-gnu
 
 # one plugin
-cargo truce build --clap -p aether --target x86_64-unknown-linux-gnu
-# → target\bundles\x86_64-unknown-linux-gnu\Aether.clap
+cargo aura build --clap -plug aether --target x86_64-unknown-linux-gnu
+# → target\x86_64-unknown-linux-gnu\release\libaether.so  (rename/copy to Aether.clap)
 
 # or zip packaging (default already includes linux via -Platform both)
 .\build-local-zip.ps1 -Platform linux
 # → dist\*-vX.Y.Z-linux.zip
 ```
 
-Cross-builds: `lx-slint-editor` enables `fontique/fontconfig-dlopen` on Linux
+Cross-builds: `aura-editor` enables `fontique/fontconfig-dlopen` on Linux
 targets, and `.cargo/config.toml` sets `RUST_FONTCONFIG_DLOPEN=on`, so no
 Linux fontconfig sysroot / pkg-config is needed. Fontconfig is loaded at
 runtime (`libfontconfig.so.1`) on the Linux host.
@@ -117,7 +117,6 @@ Native Linux CI: GitHub Actions → **Build Linux CLAPs** (`workflow_dispatch`).
 
 | Dep | Source |
 |-----|--------|
-| truce | path `../truce-dev` (local) / clone for CI |
-| lx-slint-baseview | public git [`lxndrbe/lx-slint-baseview`](https://github.com/lxndrbe/lx-slint-baseview) |
+| AURA | path `../AURA` (local) / clone for CI |
 
 Local baseview edits: uncomment the `[patch]` block at the bottom of root `Cargo.toml`.

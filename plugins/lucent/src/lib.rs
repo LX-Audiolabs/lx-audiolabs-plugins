@@ -918,7 +918,7 @@ pub struct LucentParams {
 impl LucentParams {
     /// Real value display for `unit = "%"` params: our plain values are
     /// already the percent number (e.g. `50.0` means `50%`), not a
-    /// 0.0-1.0 fraction. `truce_params::format_param_value`'s built-in
+    /// 0.0-1.0 fraction. `aura_params::format_param_value`'s built-in
     /// Percent case multiplies by 100 assuming the latter, so it would
     /// show `5000%` for a real 50% value without this override.
     fn fmt_pct(&self, value: f64) -> String {

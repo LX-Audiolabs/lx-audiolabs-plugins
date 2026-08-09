@@ -23,5 +23,5 @@ Detail when needed: `agal skills sync --only ui/slint` → `agal/skills/04-ui/sl
 ## Build
 
 ```bash
-cargo truce install --clap -p <pluginname>
+cargo aura install --clap -plug <pluginname>
 ```

@@ -1,0 +1,48 @@
+[vendor]
+name = "LX Audiolabs"
+id = "be.lxndr"
+url = "https://lx-audiolabs.github.io"
+
+[[plugin]]
+name = "Lucent Relay"
+bundle_id = "lucentrelay"
+crate = "lucent-relay"
+category = "analyzer"
+
+[[plugin]]
+name = "Lucent"
+bundle_id = "lucent"
+crate = "lucent"
+category = "analyzer"
+
+[[plugin]]
+name = "Aurum"
+bundle_id = "aurum"
+crate = "aurum"
+category = "effect"
+
+[[plugin]]
+name = "Equilibrium"
+bundle_id = "equilibrium"
+crate = "equilibrium"
+category = "effect"
+
+[[plugin]]
+name = "Aether"
+bundle_id = "aether"
+crate = "aether"
+category = "effect"
+
+[[plugin]]
+name = "Meridian"
+bundle_id = "meridian"
+crate = "meridian"
+category = "effect"
+
+# Where `cargo aura install --clap|--vst3|--lv2` copies artifacts.
+# `dir` is the base; format subdirs CLAP / VST3 / LV2 are appended.
+# Env vars expand: %LOCALAPPDATA%, %COMMONPROGRAMFILES%, $HOME, …
+# Per-format full path: clap = "C:\\Program Files\\Common Files\\CLAP"
+# Env CLAPINS / VST3INS / LV2INS still override when set.
+[install]
+dir = "%LOCALAPPDATA%\\Programs\\Common"

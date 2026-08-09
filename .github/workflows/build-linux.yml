@@ -1,6 +1,5 @@
 # Native Linux x86_64 CLAP builds (workflow_dispatch).
-# truce is a path dep → clone LX-Audiolabs/truce as sibling ../truce-dev.
-# lx-slint-baseview comes from public git (Cargo.toml).
+# AURA is a path dep → clone LX-Audiolabs/AURA as sibling ../AURA.
 
 name: Build Linux CLAPs
 
@@ -45,8 +44,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout truce (path dep ../truce-dev)
-        run: git clone --depth 1 https://github.com/LX-Audiolabs/truce.git ../truce-dev
+      - name: Checkout AURA (path dep ../AURA)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
 
       - uses: dtolnay/rust-toolchain@stable
 
