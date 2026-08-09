@@ -27,6 +27,19 @@
 [env]
 RUST_FONTCONFIG_DLOPEN = "on"
 
+# ── Rustc miscompilation workaround ────────────────────────────────────────
+# rustc 1.96.0/1.97.1 miscompile build scripts at opt-level 0 (the default),
+# producing random STATUS_ACCESS_VIOLATION / STATUS_ILLEGAL_INSTRUCTION /
+# STATUS_PRIVILEGED_INSTRUCTION crashes. Full clean + toolchain reinstall fixes
+# it temporarily but the crash resurfaces after dep rebuilds.
+# opt-level=2 sidesteps the codegen bug. Revisit on rustc 1.98+.
+# Cf. rust-toolchain.toml, AURA/rust-toolchain.toml.
+[profile.dev.build-override]
+opt-level = 2
+
+[profile.release.build-override]
+opt-level = 2
+
 [target.x86_64-unknown-linux-musl]
 linker = "rust-lld"
 
