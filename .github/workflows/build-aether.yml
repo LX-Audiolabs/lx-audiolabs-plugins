@@ -1,0 +1,131 @@
+name: Build Aether
+
+on:
+  workflow_dispatch:
+
+# AURA is a path dep (../AURA). Clone sibling before cargo.
+
+jobs:
+  build-linux:
+    name: Linux (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Checkout AURA (path dep ../AURA)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: linux-aether-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: linux-aether-
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y || sudo apt-get update -y || true
+          sudo apt-get install -y \
+            pkg-config \
+            libfreetype6-dev \
+            libfontconfig1-dev \
+            libgles2-mesa-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxrandr-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libegl-dev \
+            libgl-dev
+      - name: Build Aether
+        run: cargo build --release --package aether
+      - name: Read version
+        id: version
+        run: echo "version=$(grep '^version' plugins/aether/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" >> $GITHUB_OUTPUT
+      - name: Bundle CLAP
+        run: |
+          rm -rf target/bundled
+          mkdir -p target/bundled
+          cp target/release/libaether.so target/bundled/Aether.clap
+          echo "✓ Created: Aether.clap"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: aether-v${{ steps.version.outputs.version }}-linux
+          path: target/bundled/*.clap
+          if-no-files-found: error
+
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Checkout AURA (path dep ../AURA)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: macos-aether-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: macos-aether-
+      - name: Build Aether
+        run: cargo build --release --package aether
+      - name: Read version
+        id: version
+        run: echo "version=$(grep '^version' plugins/aether/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" >> $GITHUB_OUTPUT
+      - name: Bundle CLAP
+        run: |
+          rm -rf target/bundled
+          mkdir -p target/bundled
+          cp target/release/libaether.dylib target/bundled/Aether.clap
+          echo "✓ Created: Aether.clap"
+      - name: Sign CLAP bundle (ad-hoc)
+        run: codesign --force -s - target/bundled/Aether.clap
+      - uses: actions/upload-artifact@v6
+        with:
+          name: aether-v${{ steps.version.outputs.version }}-macos
+          path: target/bundled/*.clap
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows (x86_64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Checkout AURA (path dep ../AURA)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: windows-aether-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: windows-aether-
+      - name: Build Aether
+        run: cargo build --release --package aether
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(grep '^version' plugins/aether/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" >> $GITHUB_OUTPUT
+      - name: Bundle CLAP
+        shell: bash
+        run: |
+          rm -rf target/bundled
+          mkdir -p target/bundled
+          cp target/release/aether.dll target/bundled/Aether.clap
+          echo "✓ Created: Aether.clap"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: aether-v${{ steps.version.outputs.version }}-win
+          path: target/bundled/*.clap
+          if-no-files-found: error

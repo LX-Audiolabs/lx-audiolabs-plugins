@@ -1,0 +1,143 @@
+name: Build Lucent
+
+on:
+  workflow_dispatch:
+
+# AURA is a path dep (../AURA). Clone sibling before cargo.
+# Lucent + Lucent-Relay ship together (same workflow).
+
+jobs:
+  build-linux:
+    name: Linux (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Checkout AURA (path dep ../AURA)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: linux-lucent-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: linux-lucent-
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y || sudo apt-get update -y || true
+          sudo apt-get install -y \
+            pkg-config \
+            libfreetype6-dev \
+            libfontconfig1-dev \
+            libgles2-mesa-dev \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxrandr-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libegl-dev \
+            libgl-dev
+      - name: Build Lucent
+        run: cargo build --release --package lucent
+      - name: Build Lucent Relay
+        run: cargo build --release --package lucent-relay
+      - name: Read version
+        id: version
+        run: echo "version=$(grep '^version' plugins/lucent/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" >> $GITHUB_OUTPUT
+      - name: Bundle CLAP
+        run: |
+          rm -rf target/bundled
+          mkdir -p target/bundled
+          cp target/release/liblucent.so target/bundled/Lucent.clap
+          cp target/release/liblucent_relay.so target/bundled/Lucent-Relay.clap
+          echo "[OK] Created: Lucent.clap, Lucent-Relay.clap"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: lucent-v${{ steps.version.outputs.version }}-linux
+          path: target/bundled/*.clap
+          if-no-files-found: error
+
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Checkout AURA (path dep ../AURA)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: macos-lucent-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: macos-lucent-
+      - name: Build Lucent
+        run: cargo build --release --package lucent
+      - name: Build Lucent Relay
+        run: cargo build --release --package lucent-relay
+      - name: Read version
+        id: version
+        run: echo "version=$(grep '^version' plugins/lucent/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" >> $GITHUB_OUTPUT
+      - name: Bundle CLAP
+        run: |
+          rm -rf target/bundled
+          mkdir -p target/bundled
+          cp target/release/liblucent.dylib target/bundled/Lucent.clap
+          cp target/release/liblucent_relay.dylib target/bundled/Lucent-Relay.clap
+          echo "[OK] Created: Lucent.clap, Lucent-Relay.clap"
+      - name: Sign CLAP bundles (ad-hoc)
+        run: |
+          codesign --force -s - target/bundled/Lucent.clap
+          codesign --force -s - target/bundled/Lucent-Relay.clap
+      - uses: actions/upload-artifact@v6
+        with:
+          name: lucent-v${{ steps.version.outputs.version }}-macos
+          path: target/bundled/*.clap
+          if-no-files-found: error
+
+  build-windows:
+    name: Windows (x86_64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Checkout AURA (path dep ../AURA)
+        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/
+          key: windows-lucent-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: windows-lucent-
+      - name: Build Lucent
+        run: cargo build --release --package lucent
+      - name: Build Lucent Relay
+        run: cargo build --release --package lucent-relay
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(grep '^version' plugins/lucent/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" >> $GITHUB_OUTPUT
+      - name: Bundle CLAP
+        shell: bash
+        run: |
+          rm -rf target/bundled
+          mkdir -p target/bundled
+          cp target/release/lucent.dll target/bundled/Lucent.clap
+          cp target/release/lucent_relay.dll target/bundled/Lucent-Relay.clap
+          echo "[OK] Created: Lucent.clap, Lucent-Relay.clap"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: lucent-v${{ steps.version.outputs.version }}-win
+          path: target/bundled/*.clap
+          if-no-files-found: error
