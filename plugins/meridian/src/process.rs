@@ -896,34 +896,25 @@ if is_measuring {
 
 // Goniometer scope buffer
 {
-    let start_pos = params.shared.scope.write_pos.load(Ordering::Acquire);
-    if let Ok(mut scope) = params.shared.scope.samples.try_lock() {
-        let buf_len = SCOPE_BUFFER_LEN;
-        let n = num_samples.min(buf_len);
-        let block_peak = (0..n)
-            .map(|i| out0[i].abs().max(out1[i].abs()))
-            .fold(0.0f32, f32::max)
-            .max(1e-9);
-        let att = 1.0 - (-(n as f32) / (0.005 * sample_rate)).exp();
-        let rel = 1.0 - (-(n as f32) / (0.300 * sample_rate)).exp();
-        if block_peak > state.scope_vis_envelope {
-            state.scope_vis_envelope += att * (block_peak - state.scope_vis_envelope);
-        } else {
-            state.scope_vis_envelope += rel * (block_peak - state.scope_vis_envelope);
-        }
-        let vis_gain = if state.scope_vis_envelope > 1e-5 {
-            (0.9 / state.scope_vis_envelope).min(20.0)
-        } else {
-            0.0
-        };
-        for i in 0..n {
-            let pos = (start_pos + i) % buf_len;
-            scope[pos] = [out0[i] * vis_gain, out1[i] * vis_gain];
-        }
-        params
-            .shared
-            .scope.write_pos
-            .store((start_pos + n) % buf_len, Ordering::Release);
+    let n = num_samples.min(SCOPE_BUFFER_LEN);
+    let block_peak = (0..n)
+        .map(|i| out0[i].abs().max(out1[i].abs()))
+        .fold(0.0f32, f32::max)
+        .max(1e-9);
+    let att = 1.0 - (-(n as f32) / (0.005 * sample_rate)).exp();
+    let rel = 1.0 - (-(n as f32) / (0.300 * sample_rate)).exp();
+    if block_peak > state.scope_vis_envelope {
+        state.scope_vis_envelope += att * (block_peak - state.scope_vis_envelope);
+    } else {
+        state.scope_vis_envelope += rel * (block_peak - state.scope_vis_envelope);
+    }
+    let vis_gain = if state.scope_vis_envelope > 1e-5 {
+        (0.9 / state.scope_vis_envelope).min(20.0)
+    } else {
+        0.0
+    };
+    for i in 0..n {
+        params.shared.scope.push(out0[i] * vis_gain, out1[i] * vis_gain);
     }
 }
 }

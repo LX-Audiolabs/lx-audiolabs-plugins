@@ -253,33 +253,32 @@ fn res_marker_cmds(bin: usize, sample_rate: f32) -> String {
     )
 }
 
+/// Rolling display window fed by [`ScopeRing::drain`] — a fixed-size
+/// look-back independent of the audio-thread ring's own capacity.
+const GONIO_WINDOW: usize = 512;
+
 /// Goniometer path (M/S rotation) — Meridian port, visual auto-gain happens
-/// in `process()` (`scope_vis_envelope`).
-fn gonio_path(shared: &LucentShared, w: f32, h: f32, out: &mut String) {
+/// in `process()` (`scope_vis_envelope`). `window` is the caller's
+/// persistent display buffer (`SyncCache::gonio_window`); this drains
+/// newly-pushed stereo pairs into it and evicts the oldest once it
+/// exceeds [`GONIO_WINDOW`].
+fn gonio_path(shared: &LucentShared, window: &mut Vec<[f32; 2]>, w: f32, h: f32, out: &mut String) {
     out.clear();
-    let (samples, write_pos) = {
-        let pos = shared.scope.write_pos.load(Ordering::Relaxed);
-        let samples = match shared.scope.samples.try_lock() {
-            Ok(v) => v.clone(),
-            Err(_) => return,
-        };
-        (samples, pos)
-    };
-    if samples.is_empty() {
+    window.extend(shared.scope.drain());
+    let excess = window.len().saturating_sub(GONIO_WINDOW);
+    if excess > 0 {
+        window.drain(..excess);
+    }
+    if window.is_empty() {
         return;
     }
 
-    let points_to_take = 512usize.min(SCOPE_BUFFER_LEN);
     let cx = w * 0.5;
     let cy = h * 0.5;
     let scale = cx.min(cy) * 0.9;
     let inv_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
-    let n = samples.len();
 
-    for i in 0..points_to_take {
-        let age = points_to_take - 1 - i;
-        let idx = (write_pos + n - age - 1) % n;
-        let [l, r] = samples[idx];
+    for (i, [l, r]) in window.iter().enumerate() {
         // M vertical, S horizontal (industry standard 45° rotation)
         let m = (l + r) * inv_sqrt2;
         let side = (l - r) * inv_sqrt2;
@@ -579,6 +578,8 @@ struct SyncCache {
     path_scratch: String,
     mask_scratch: String,
     gonio_scratch: String,
+    /// Persistent goniometer display window — see `gonio_path`.
+    gonio_window: Vec<[f32; 2]>,
 }
 
 impl SyncCache {
@@ -622,6 +623,7 @@ impl SyncCache {
             path_scratch: String::new(),
             mask_scratch: String::new(),
             gonio_scratch: String::new(),
+            gonio_window: Vec::new(),
         }
     }
 
@@ -1176,7 +1178,17 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 }
 
                 // --- goniometer ---
-                gonio_path(&shared_sync, 139.0, 139.0, &mut cache.gonio_scratch);
+                // Reborrow once: splitting two fields through the `MutexGuard`'s
+                // `DerefMut` directly (two separate `&mut cache.field` calls)
+                // trips E0499, unlike splitting fields of a plain `&mut SyncCache`.
+                let cache = &mut *cache;
+                gonio_path(
+                    &shared_sync,
+                    &mut cache.gonio_window,
+                    139.0,
+                    139.0,
+                    &mut cache.gonio_scratch,
+                );
                 ui.set_gonio_path(SharedString::from(cache.gonio_scratch.as_str()));
             }
         },

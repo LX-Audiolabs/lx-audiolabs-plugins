@@ -117,6 +117,8 @@ struct SyncCache {
     /// Previous tick SNAP active — falling edge writes SNAPSHOT-*.md
     snap_was_active: bool,
     snap_blink: u32,
+    /// Persistent goniometer display window — see `gonio_path`.
+    gonio_window: Vec<[f32; 2]>,
 }
 
 impl SyncCache {
@@ -132,6 +134,7 @@ impl SyncCache {
             gr_peak_hold: 0.0,
             gr_peak_hold_ticks: 0,
             was_measuring: false,
+            gonio_window: Vec::new(),
             floats: [f32::NAN; 30],
             ints: [f32::NAN; 6],
             bools: [None; 5],
@@ -932,7 +935,10 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     ui.set_spectrum_fill(spectrum_fill_brush(fq));
                 }
                 ui.set_gonio_path(slint::SharedString::from(gonio_path(
-                    shared, 139.0, 139.0,
+                    shared,
+                    &mut cache.gonio_window,
+                    139.0,
+                    139.0,
                 )));
             }
         },
@@ -1165,32 +1171,30 @@ fn gr_envelope_path(history: &[f32], current: f32, w: f32, h: f32) -> String {
 
 // --- goniometer path (M/S rotation — vault frozen spec) -------------------
 
-fn gonio_path(shared: &MeridianShared, w: f32, h: f32) -> String {
-    use aura_dsp::analysis::SCOPE_BUFFER_LEN;
-    let (samples, write_pos) = {
-        let pos = shared.scope.write_pos.load(Ordering::Relaxed);
-        let samples = match shared.scope.samples.try_lock() {
-            Ok(v) => v.clone(),
-            Err(_) => return String::new(),
-        };
-        (samples, pos)
-    };
-    if samples.is_empty() {
+/// Rolling display window fed by `ScopeRing::drain` — a fixed-size
+/// look-back independent of the audio-thread ring's own capacity.
+const GONIO_WINDOW: usize = 512;
+
+/// `window` is the caller's persistent display buffer
+/// (`SyncCache::gonio_window`); newly-pushed stereo pairs are drained
+/// into it and the oldest evicted once it exceeds [`GONIO_WINDOW`].
+fn gonio_path(shared: &MeridianShared, window: &mut Vec<[f32; 2]>, w: f32, h: f32) -> String {
+    window.extend(shared.scope.drain());
+    let excess = window.len().saturating_sub(GONIO_WINDOW);
+    if excess > 0 {
+        window.drain(..excess);
+    }
+    if window.is_empty() {
         return String::new();
     }
 
-    let points_to_take = 512usize.min(SCOPE_BUFFER_LEN);
-    let mut s = String::with_capacity(points_to_take * 24);
+    let mut s = String::with_capacity(window.len() * 24);
     let cx = w * 0.5;
     let cy = h * 0.5;
     let scale = cx.min(cy) * 0.9;
     let inv_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
-    let n = samples.len();
 
-    for i in 0..points_to_take {
-        let age = points_to_take - 1 - i;
-        let idx = (write_pos + n - age - 1) % n;
-        let [l, r] = samples[idx];
+    for (i, [l, r]) in window.iter().enumerate() {
         // M vertical, S horizontal (industry standard 45° rotation)
         let m = (l + r) * inv_sqrt2;
         let side = (l - r) * inv_sqrt2;

@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 
 use aura::prelude::*;
 use aura::FloatParam;
-use aura_dsp::analysis::*;
 use aura_dsp::analysis::product_shared::EquilibriumShared;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
@@ -140,6 +139,8 @@ struct SyncCache {
     snap_was_active: bool,
     snap_blink: u32,
     snap_label: String,
+    /// Persistent goniometer display window — see `gonio_path`.
+    gonio_window: Vec<[f32; 2]>,
 }
 
 impl SyncCache {
@@ -173,6 +174,7 @@ impl SyncCache {
             snap_was_active: false,
             snap_blink: 0,
             snap_label: String::new(),
+            gonio_window: Vec::new(),
         }
     }
 
@@ -982,7 +984,12 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 }
                 cache.snap_was_active = snap_now;
 
-                ui.set_gonio_path(SharedString::from(gonio_path(&shared, 139.0, 139.0)));
+                ui.set_gonio_path(SharedString::from(gonio_path(
+                    &shared,
+                    &mut cache.gonio_window,
+                    139.0,
+                    139.0,
+                )));
             }
         },
     )
@@ -990,29 +997,28 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
     .into()
 }
 
-fn gonio_path(shared: &EquilibriumShared, w: f32, h: f32) -> String {
-    let (samples, write_pos) = {
-        let pos = shared.scope.write_pos.load(Ordering::Relaxed);
-        let samples = match shared.scope.samples.try_lock() {
-            Ok(v) => v.clone(),
-            Err(_) => return String::new(),
-        };
-        (samples, pos)
-    };
-    if samples.is_empty() {
+/// Rolling display window fed by `ScopeRing::drain` — a fixed-size
+/// look-back independent of the audio-thread ring's own capacity.
+const GONIO_WINDOW: usize = 512;
+
+/// `window` is the caller's persistent display buffer
+/// (`SyncCache::gonio_window`); newly-pushed stereo pairs are drained
+/// into it and the oldest evicted once it exceeds [`GONIO_WINDOW`].
+fn gonio_path(shared: &EquilibriumShared, window: &mut Vec<[f32; 2]>, w: f32, h: f32) -> String {
+    window.extend(shared.scope.drain());
+    let excess = window.len().saturating_sub(GONIO_WINDOW);
+    if excess > 0 {
+        window.drain(..excess);
+    }
+    if window.is_empty() {
         return String::new();
     }
-    let points_to_take = 512usize.min(SCOPE_BUFFER_LEN);
-    let mut s = String::with_capacity(points_to_take * 24);
+    let mut s = String::with_capacity(window.len() * 24);
     let cx = w * 0.5;
     let cy = h * 0.5;
     let scale = cx.min(cy) * 0.9;
     let inv_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
-    let n = samples.len();
-    for i in 0..points_to_take {
-        let age = points_to_take - 1 - i;
-        let idx = (write_pos + n - age - 1) % n;
-        let [l, r] = samples[idx];
+    for (i, [l, r]) in window.iter().enumerate() {
         let m = (l + r) * inv_sqrt2;
         let side = (l - r) * inv_sqrt2;
         let x = cx - side * scale;

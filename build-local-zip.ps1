@@ -42,7 +42,7 @@ $distDir = "dist"
 # CLAP product names (must match aura.toml bundle_id → display name)
 $clapNames = @{
     "aether"       = "Aether"
-    "aurum"        = "Aurum"
+    "mensor"       = "Mensor"
     "equilibrium"  = "Equilibrium"
     "meridian"     = "Meridian"
     "lucent"       = "Lucent"
