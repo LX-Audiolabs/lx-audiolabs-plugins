@@ -1,0 +1,5 @@
+# LSP config for Slint extension — resolves `@aura` imports at edit time.
+# AURA is a path dep; point at its source checkout (same as Cargo.toml path dep).
+
+[library_paths]
+aura = "../AURA/crates/aura-build/ui/widgets.slint"
