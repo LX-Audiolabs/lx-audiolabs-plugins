@@ -353,7 +353,6 @@ dependencies = [
 name = "aura-derive"
 version = "0.5.0"
 dependencies = [
- "aura-params",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
