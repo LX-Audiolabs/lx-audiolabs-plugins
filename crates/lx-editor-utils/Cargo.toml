@@ -7,10 +7,10 @@ authors = ["LX Audiolabs"]
 publish = false
 
 [dependencies]
- aura = { workspace = true }
- aura-editor = { workspace = true }
- paste = "1"
- slint = { workspace = true }
+aura = { workspace = true }
+aura-editor = { workspace = true, features = ["backend-femtovg"] }
+paste = "1"
+slint = { workspace = true }
 
 [build-dependencies]
- aura-build = { workspace = true }
+aura-build = { workspace = true }
