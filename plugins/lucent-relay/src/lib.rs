@@ -20,10 +20,10 @@ const RESOLVE_INTERVAL_MS: u64 = 250;
 // AURA requires at least one Param field. `process()` always copies input to
 // output regardless of bypass state (pure pass-through analyzer), so a visible
 // Bypass control is a no-op from the user's perspective - hidden per user request.
-// ponytail: _flush_sentinel FloatParam works around truce flush edge-case
-// with single-BoolParam plugins (clap-validator state-reproducibility-flush).
-// Hidden per user request - re-check clap-validator after this change; if the
-// edge-case resurfaces (validator only tests non-hidden params), un-hide this one.
+// The `_flush_sentinel` FloatParam is required: AURA/CLAP's flush path with a
+// single hidden BoolParam does not propagate parameter changes correctly in
+// clap-validator's param-set-events / param-set-no-cookies tests. Verified on
+// AURA 0.6.0 / clap-validator current. Keep hidden.
 
 #[derive(Params)]
 pub struct LucentRelayParams {
