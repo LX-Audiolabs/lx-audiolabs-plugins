@@ -13,16 +13,17 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use aura_dsp::analysis::*;
-use aura_dsp::analysis::product_shared::LucentShared;
-use aura_dsp::analysis::vault::{load_config, save_config};
+use lx_analysis::product_shared::LucentShared;
+use lx_vault::{load_config, save_config};
 use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
 use aura_shm::*;
 use aura_shm::SPECTRUM_BINS;
+use lx_editor_utils::{dirty::*, meter::*, snap::snap_filename, tick::*, viz::*};
 use slint::{ModelRc, SharedString, VecModel};
 use aura::prelude::*;
 
@@ -42,9 +43,6 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Spectrum viewBox — Path fit:fill maps these onto full pit width×height.
 const PATH_W: f32 = 620.0;
 const PATH_H: f32 = 300.0;
-
-/// Match vizia `TICK_INTERVAL` — telemetry / host→UI poll ~30 Hz.
-const TICK_INTERVAL: Duration = Duration::from_millis(33);
 
 /// SPAN-matched display range (dev lucent SpectrumConfig).
 const SPEC_MIN_DB: f32 = -78.0;
@@ -83,72 +81,6 @@ pub(crate) fn mode_status(mode: usize) -> &'static str {
         .unwrap_or("?")
 }
 
-/// 1/3-octave fractional-band smoothing (dev `lx-ui` canvas, default SMOOTH on look).
-fn smooth_spectrum_third_octave(spectrum: &[f32], sample_rate: f32) -> Vec<f32> {
-    if spectrum.is_empty() {
-        return Vec::new();
-    }
-    let fft_size = SPECTRUM_BINS * 2;
-    let log_min = 20.0_f32.ln();
-    let log_max = 20000.0_f32.ln();
-    let bin_hz = sample_rate / fft_size as f32;
-    const DENOM_LOW: f32 = 3.0;
-    const DENOM_HIGH: f32 = 20.0;
-    const F_LOW: f32 = 500.0;
-    const F_HIGH: f32 = 16000.0;
-    let taper_lo = F_LOW.ln();
-    let taper_hi = F_HIGH.ln();
-    const STEPS: usize = 240;
-    let len = spectrum.len();
-
-    let power: Vec<f32> = spectrum
-        .iter()
-        .map(|&db| 10.0_f32.powf(db * 0.1))
-        .collect();
-
-    let mut out = Vec::with_capacity(STEPS + 1);
-    for i in 0..=STEPS {
-        let frac = i as f32 / STEPS as f32;
-        let ln_fc = log_min + (log_max - log_min) * frac;
-        let fc = ln_fc.exp();
-        let t = ((ln_fc - taper_lo) / (taper_hi - taper_lo)).clamp(0.0, 1.0);
-        let denom = DENOM_LOW + (DENOM_HIGH - DENOM_LOW) * t;
-        let half = 2.0_f32.powf(1.0 / (2.0 * denom));
-        const MIN_BIN: f32 = 1.0;
-        let lo = (fc / half / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
-        let hi = (fc * half / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
-        let avg_power = if hi - lo >= 1.0 {
-            let i0 = lo.floor() as usize;
-            let i1 = hi.floor() as usize;
-            let mut sum = 0.0f32;
-            if i0 == i1 {
-                sum = power[i0] * (hi - lo);
-            } else {
-                sum += power[i0] * ((i0 + 1) as f32 - lo);
-                for p in &power[i0 + 1..i1] {
-                    sum += *p;
-                }
-                sum += power[i1] * (hi - i1 as f32);
-            }
-            sum / (hi - lo)
-        } else {
-            let pos = (fc / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
-            let i0 = pos.floor() as usize;
-            let i1 = (i0 + 1).min(len - 1);
-            let t_bin = pos - i0 as f32;
-            power[i0] * (1.0 - t_bin) + power[i1] * t_bin
-        };
-        out.push((10.0 * avg_power.max(1e-12).log10()).clamp(-90.0, 12.0));
-    }
-    if out.len() >= 3 {
-        let raw = out.clone();
-        for i in 1..out.len().saturating_sub(1) {
-            out[i] = raw[i - 1] * 0.25 + raw[i] * 0.5 + raw[i + 1] * 0.25;
-        }
-    }
-    out
-}
-
 fn build_curve(out: &mut String, pts: &[(f32, f32)], fill: bool) {
     if pts.len() < 2 {
         return;
@@ -183,7 +115,7 @@ fn spectrum_path(bins: &[f32], sample_rate: f32, smooth: bool, fill: bool, out: 
     let n = bins.len();
     let fft_size = (n * 2) as f32;
     if smooth {
-        let sm = smooth_spectrum_third_octave(bins, sample_rate);
+        let sm = smooth_spectrum_third_octave(bins, sample_rate, n * 2);
         let denom = sm.len().saturating_sub(1).max(1) as f32;
         let pts: Vec<(f32, f32)> = sm
             .iter()
@@ -251,58 +183,6 @@ fn res_marker_cmds(bin: usize, sample_rate: f32) -> String {
         xr = x + 4.0,
         xl = x - 4.0
     )
-}
-
-/// Rolling display window fed by [`ScopeRing::drain`] — a fixed-size
-/// look-back independent of the audio-thread ring's own capacity.
-const GONIO_WINDOW: usize = 512;
-
-/// Goniometer path (M/S rotation) — Meridian port, visual auto-gain happens
-/// in `process()` (`scope_vis_envelope`). `window` is the caller's
-/// persistent display buffer (`SyncCache::gonio_window`); this drains
-/// newly-pushed stereo pairs into it and evicts the oldest once it
-/// exceeds [`GONIO_WINDOW`].
-fn gonio_path(shared: &LucentShared, window: &mut Vec<[f32; 2]>, w: f32, h: f32, out: &mut String) {
-    out.clear();
-    window.extend(shared.scope.drain());
-    let excess = window.len().saturating_sub(GONIO_WINDOW);
-    if excess > 0 {
-        window.drain(..excess);
-    }
-    if window.is_empty() {
-        return;
-    }
-
-    let cx = w * 0.5;
-    let cy = h * 0.5;
-    let scale = cx.min(cy) * 0.9;
-    let inv_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
-
-    for (i, [l, r]) in window.iter().enumerate() {
-        // M vertical, S horizontal (industry standard 45° rotation)
-        let m = (l + r) * inv_sqrt2;
-        let side = (l - r) * inv_sqrt2;
-        let x = cx - side * scale;
-        let y = cy - m * scale;
-        if i == 0 {
-            out.push_str(&format!("M {x:.1} {y:.1}"));
-        } else {
-            out.push_str(&format!(" L {x:.1} {y:.1}"));
-        }
-    }
-}
-
-/// Map peak dB → 0..1 over −60..+6 dB (LxLedPeakMeter range).
-fn peak_norm(db: f32) -> f32 {
-    ((db + 60.0) / 66.0).clamp(0.0, 1.0)
-}
-
-fn fmt_db(v: f32) -> String {
-    if v <= -60.0 {
-        "-inf".to_string()
-    } else {
-        format!("{v:.1}")
-    }
 }
 
 fn max_hold_score(map: &mut HashMap<usize, f32>, bin: usize, score: f32) {
@@ -424,24 +304,6 @@ fn format_masking_text(
 
 // ─── SNAP (session max-hold markdown, dev parity) ───────────────────────────
 
-fn snap_filename(vault_path: &str) -> String {
-    let dir = std::path::Path::new(vault_path);
-    let mut max_n = 0u32;
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for e in entries.flatten() {
-            let s = e.file_name().to_string_lossy().into_owned();
-            if let Some(inner) = s
-                .strip_prefix("SNAPSHOT-")
-                .and_then(|r| r.strip_suffix(".md"))
-                && let Ok(n) = inner.parse::<u32>()
-            {
-                max_n = max_n.max(n);
-            }
-        }
-    }
-    format!("SNAPSHOT-{:03}.md", max_n + 1)
-}
-
 #[allow(clippy::too_many_arguments)]
 fn snap_markdown(
     instance_name: &str,
@@ -536,9 +398,7 @@ fn snap_markdown(
 // ─── Sync cache (Meridian pattern: 33 ms due() + dirty mirrors) ─────────────
 
 struct SyncCache {
-    last_tick: Instant,
-    /// First open must fill UI even if Instant says "not due".
-    primed: bool,
+    tick: TickCache,
     // Dirty mirrors — only call Slint setters when value changes.
     mode: f32,
     sens: f32,
@@ -585,10 +445,7 @@ struct SyncCache {
 impl SyncCache {
     fn new(vault_path: Option<String>) -> Self {
         Self {
-            last_tick: Instant::now()
-                .checked_sub(TICK_INTERVAL)
-                .unwrap_or_else(Instant::now),
-            primed: false,
+            tick: TickCache::new(),
             mode: f32::NAN,
             sens: f32::NAN,
             sens_text_q: f32::NAN,
@@ -628,34 +485,7 @@ impl SyncCache {
     }
 
     fn due(&mut self) -> bool {
-        let now = Instant::now();
-        if !self.primed || now.duration_since(self.last_tick) >= TICK_INTERVAL {
-            self.last_tick = now;
-            self.primed = true;
-            true
-        } else {
-            false
-        }
-    }
-}
-
-#[inline]
-fn changed_f32(prev: &mut f32, v: f32) -> bool {
-    if *prev != v {
-        *prev = v;
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn changed_bool(prev: &mut Option<bool>, v: bool) -> bool {
-    if *prev != Some(v) {
-        *prev = Some(v);
-        true
-    } else {
-        false
+        self.tick.due()
     }
 }
 
@@ -1183,7 +1013,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 // trips E0499, unlike splitting fields of a plain `&mut SyncCache`.
                 let cache = &mut *cache;
                 gonio_path(
-                    &shared_sync,
+                    shared_sync.scope.drain(),
                     &mut cache.gonio_window,
                     139.0,
                     139.0,

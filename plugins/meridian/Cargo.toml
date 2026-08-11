@@ -22,8 +22,10 @@ aura-editor = { workspace = true, features = ["backend-femtovg"] }
 slint = { workspace = true }
 
 aura-dsp = { workspace = true }
+lx-vault = { workspace = true }
+lx-analysis = { workspace = true }
+lx-editor-utils = { path = "../../crates/lx-editor-utils" }
 
-paste = "1"
 realfft = "3"
 tracing = "0.1"
 

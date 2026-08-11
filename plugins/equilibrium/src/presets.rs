@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use aura_editor::typed::*;
+use lx_editor_utils::snap::snap_filename;
 use serde::{Deserialize, Serialize};
 
 use crate::EquilibriumParams;
@@ -151,7 +152,7 @@ fn parse_frontmatter_list(content: &str, key: &str) -> Vec<String> {
 
 /// Parse a preset/profile from Markdown — requires plugin: equilibrium frontmatter and all 5 bands
 pub fn parse_preset_from_markdown(content: &str) -> Option<Profile> {
-    let frontmatter = aura_dsp::analysis::vault::parse_frontmatter(content);
+    let frontmatter = lx_vault::parse_frontmatter(content);
 
     match frontmatter.get("plugin").map(|s| s.as_str()) {
         Some("equilibrium") => {}
@@ -289,7 +290,7 @@ pub fn list_custom_presets(
     let mut presets = Vec::new();
     let mut seen_paths = std::collections::HashSet::new();
 
-    let local_dir = aura_dsp::analysis::vault::get_plugin_dir(plugin_name).join("presets");
+    let local_dir = lx_vault::get_plugin_dir(plugin_name).join("presets");
     let _ = std::fs::create_dir_all(&local_dir);
 
     let mut scan_dir = |dir: &Path| {
@@ -444,26 +445,8 @@ pub fn profile_for_save(
 pub fn preset_save_dir(vault_path: &Option<String>) -> PathBuf {
     match vault_path {
         Some(vp) if !vp.is_empty() => PathBuf::from(vp),
-        _ => aura_dsp::analysis::vault::get_plugin_dir("Equilibrium").join("presets"),
+        _ => lx_vault::get_plugin_dir("Equilibrium").join("presets"),
     }
-}
-
-pub fn snap_filename(vault_path: &str) -> String {
-    let dir = Path::new(vault_path);
-    let mut max_n = 0u32;
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for e in entries.flatten() {
-            let s = e.file_name().to_string_lossy().into_owned();
-            if let Some(inner) = s
-                .strip_prefix("SNAPSHOT-")
-                .and_then(|r| r.strip_suffix(".md"))
-                && let Ok(n) = inner.parse::<u32>()
-            {
-                max_n = max_n.max(n);
-            }
-        }
-    }
-    format!("SNAPSHOT-{:03}.md", max_n + 1)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -1,0 +1,13 @@
+[package]
+name = "lx-analysis"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["LX Audiolabs"]
+description = "LX product analysis façade: *Shared UI state + re-exports of portable aura-dsp analysis"
+publish = false
+
+[dependencies]
+aura-dsp = { workspace = true }
+atomic_float = "1.1"
+lx-vault = { path = "../lx-vault" }

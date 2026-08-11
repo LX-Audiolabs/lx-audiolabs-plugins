@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use aura::prelude::*;
 
 use aura_dsp::analysis::*;
-use aura_dsp::analysis::product_shared::LucentShared;
+use lx_analysis::product_shared::LucentShared;
 use aura_shm::*;
 use aura_shm::SPECTRUM_BINS;
 

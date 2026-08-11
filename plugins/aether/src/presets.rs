@@ -1,11 +1,11 @@
 //! Aether preset vault — markdown profiles compatible with the Vizia Aether.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use aura_editor::typed::*;
-use aura_dsp::analysis::vault::*;
+use lx_vault::*;
+use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
 
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;
@@ -371,40 +371,8 @@ pub fn preset_save_dir(vault_path: &Option<String>) -> PathBuf {
 
 // ─── Background scan ─────────────────────────────────────────────────────────
 
-pub struct PendingPresets {
-    pub ready: AtomicBool,
-    pub generation: AtomicU32,
-    pub presets: Mutex<Option<(u32, Vec<PresetEntry>)>>,
-}
-
-impl PendingPresets {
-    pub fn new() -> Self {
-        Self {
-            ready: AtomicBool::new(false),
-            generation: AtomicU32::new(0),
-            presets: Mutex::new(None),
-        }
-    }
-
-    pub fn bump_generation(&self) -> u32 {
-        let new = self.generation.load(Ordering::Relaxed).wrapping_add(1);
-        self.generation.store(new, Ordering::Release);
-        self.ready.store(false, Ordering::Release);
-        if let Ok(mut guard) = self.presets.lock() {
-            *guard = None;
-        }
-        new
-    }
-}
-
-impl Default for PendingPresets {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets>, generation: u32) {
-    std::thread::spawn(move || {
+pub fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets<PresetEntry>>, generation: u32) {
+    spawn_vault_scan_impl(pending, generation, move || {
         let mut scanned = scan_aether_presets(Path::new(&vp));
         // Also pick up local plugin presets that aren't in the vault.
         let local = get_plugin_dir("Aether").join("presets");
@@ -413,10 +381,7 @@ pub fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets>, generation: u3
                 scanned.push(entry);
             }
         }
-        if let Ok(mut guard) = pending.presets.lock() {
-            *guard = Some((generation, scanned));
-        }
-        pending.ready.store(true, Ordering::Release);
+        scanned
     });
 }
 

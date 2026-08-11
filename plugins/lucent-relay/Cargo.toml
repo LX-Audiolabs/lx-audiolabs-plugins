@@ -20,6 +20,7 @@ lv2 = ["aura/lv2"]
 aura = { workspace = true }
 aura-editor = { workspace = true, features = ["backend-femtovg"] }
 aura-dsp = { workspace = true }
+lx-analysis = { workspace = true }
 aura-shm = { workspace = true }
 slint = { workspace = true }
 

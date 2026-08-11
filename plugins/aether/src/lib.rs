@@ -11,7 +11,7 @@
 // The Harman EQ is a plain per-channel-identical linear EQ (no M/S, no L/R diff),
 // so it commutes with the crossfeed — order is conceptual, not sonic.
 
-use aura_dsp::analysis::product_shared::AetherShared;
+use lx_analysis::product_shared::AetherShared;
 use aura_dsp::fx::Biquad;
 use std::sync::Arc;
 use aura::prelude::*;

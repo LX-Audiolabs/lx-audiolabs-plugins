@@ -14,7 +14,7 @@ use std::sync::Arc;
 use aura::prelude::*;
 
 use aura_dsp::analysis::{SPECTRUM_BINS, SnapFFT};
-use aura_dsp::analysis::product_shared::MeridianShared;
+use lx_analysis::product_shared::MeridianShared;
 use aura_dsp::fx::{AutoLoudMeter, Biquad, Compressor, LR2Crossover, TiltEq};
 
 mod editor;

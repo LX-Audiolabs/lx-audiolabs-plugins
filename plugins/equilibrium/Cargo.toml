@@ -20,9 +20,11 @@ lv2 = ["aura/lv2"]
 aura = { workspace = true }
 aura-editor = { workspace = true, features = ["backend-femtovg"] }
 aura-dsp = { workspace = true }
+lx-vault = { workspace = true }
+lx-analysis = { workspace = true }
 slint = { workspace = true }
 
-paste = "1"
+lx-editor-utils = { path = "../../crates/lx-editor-utils" }
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
 tracing     = "0.1"

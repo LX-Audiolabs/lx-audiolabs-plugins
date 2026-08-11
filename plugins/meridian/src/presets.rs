@@ -1,12 +1,12 @@
 //! Meridian vault presets + SNAP markdown — compatible with Vizia Meridian.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use aura::{FloatParam, IntParam};
-use aura_dsp::analysis::vault::{get_plugin_dir, preset_plugin_name};
+use lx_vault::{get_plugin_dir, preset_plugin_name};
 use aura_editor::typed::LxPluginContext;
+use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -561,6 +561,12 @@ pub fn merge_preset_names(scanned: &[PresetEntry]) -> Vec<String> {
 
 // ─── SNAP file ───────────────────────────────────────────────────────────────
 
+pub fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets<PresetEntry>>, generation: u32) {
+    spawn_vault_scan_impl(pending, generation, move || {
+        list_meridian_presets(if vp.is_empty() { None } else { Some(vp.as_str()) })
+    });
+}
+
 pub fn snap_filename(vault_path: &str) -> String {
     let dir = Path::new(vault_path);
     let mut max_n = 0u32;
@@ -635,49 +641,6 @@ pub fn snap_markdown(
 }
 
 // ─── Background scan ─────────────────────────────────────────────────────────
-
-pub struct PendingPresets {
-    pub ready: AtomicBool,
-    pub generation: AtomicU32,
-    pub presets: Mutex<Option<(u32, Vec<PresetEntry>)>>,
-}
-
-impl PendingPresets {
-    pub fn new() -> Self {
-        Self {
-            ready: AtomicBool::new(false),
-            generation: AtomicU32::new(0),
-            presets: Mutex::new(None),
-        }
-    }
-
-    pub fn bump_generation(&self) -> u32 {
-        let new = self.generation.load(Ordering::Relaxed).wrapping_add(1);
-        self.generation.store(new, Ordering::Release);
-        self.ready.store(false, Ordering::Release);
-        if let Ok(mut guard) = self.presets.lock() {
-            *guard = None;
-        }
-        new
-    }
-}
-
-impl Default for PendingPresets {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// `vp` may be vault path or empty (local-only). Always merges local presets.
-pub fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets>, generation: u32) {
-    std::thread::spawn(move || {
-        let scanned = list_meridian_presets(if vp.is_empty() { None } else { Some(vp.as_str()) });
-        if let Ok(mut guard) = pending.presets.lock() {
-            *guard = Some((generation, scanned));
-        }
-        pending.ready.store(true, Ordering::Release);
-    });
-}
 
 #[cfg(test)]
 mod tests {

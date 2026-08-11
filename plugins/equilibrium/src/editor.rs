@@ -2,14 +2,12 @@
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use aura::prelude::*;
-use aura::FloatParam;
-use aura_dsp::analysis::product_shared::EquilibriumShared;
+use lx_analysis::product_shared::EquilibriumShared;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
-use paste::paste;
+use lx_editor_utils::{dirty::*, meter::*, params::*, slint_helpers::*, tick::*, viz::*};
 use slint::{ModelRc, SharedString, VecModel};
 
 use crate::presets::{
@@ -24,12 +22,6 @@ slint::include_modules!();
 const WINDOW_W: u32 = 990;
 const WINDOW_H: u32 = 670;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const TICK_INTERVAL: Duration = Duration::from_millis(33);
-
-fn names_model(names: &[String]) -> ModelRc<SharedString> {
-    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
-    ModelRc::new(VecModel::from(v))
-}
 
 fn format_pan(plain: f32) -> String {
     if plain.abs() < 0.01 {
@@ -38,41 +30,6 @@ fn format_pan(plain: f32) -> String {
         format!("L {:.0}%", -plain * 100.0)
     } else {
         format!("R {:.0}%", plain * 100.0)
-    }
-}
-
-fn float_default_norm(p: &FloatParam) -> f32 {
-    p.info.range.normalize(p.info.default_plain) as f32
-}
-
-#[inline]
-fn changed_f32(prev: &mut f32, v: f32) -> bool {
-    if *prev != v {
-        *prev = v;
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn changed_bool(prev: &mut Option<bool>, v: bool) -> bool {
-    if *prev != Some(v) {
-        *prev = Some(v);
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn changed_str(prev: &mut String, v: &str) -> bool {
-    if prev.as_str() != v {
-        prev.clear();
-        prev.push_str(v);
-        true
-    } else {
-        false
     }
 }
 
@@ -100,21 +57,8 @@ fn tol_bar_norm(tol_db: f32) -> f32 {
     (tol_db / 42.0).clamp(0.0, 1.0)
 }
 
-fn db_to_meter(db: f32) -> f32 {
-    ((db + 60.0) / 66.0).clamp(0.0, 1.0)
-}
-
-fn fmt_db(v: f32) -> String {
-    if v <= -60.0 {
-        "-inf".into()
-    } else {
-        format!("{v:.1}")
-    }
-}
-
 struct SyncCache {
-    last_tick: Instant,
-    primed: bool,
+    tick: TickCache,
     floats: [f32; 18],
     bools: [Option<bool>; 11],
     texts: [String; 18],
@@ -146,10 +90,7 @@ struct SyncCache {
 impl SyncCache {
     fn new() -> Self {
         Self {
-            last_tick: Instant::now()
-                .checked_sub(TICK_INTERVAL)
-                .unwrap_or_else(Instant::now),
-            primed: false,
+            tick: TickCache::new(),
             floats: [f32::NAN; 18],
             bools: [None; 11],
             texts: std::array::from_fn(|_| String::new()),
@@ -179,77 +120,22 @@ impl SyncCache {
     }
 
     fn due(&mut self) -> bool {
-        let now = Instant::now();
-        if !self.primed || now.duration_since(self.last_tick) >= TICK_INTERVAL {
-            self.last_tick = now;
-            self.primed = true;
-            true
-        } else {
-            false
-        }
+        self.tick.due()
     }
 }
+
+use lx_editor_utils::params::*;
 
 struct VaultUiState {
     vault_path: Option<String>,
     presets: Vec<PresetEntry>,
 }
 
-macro_rules! bind_floats {
-    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let s = $state.clone();
-                $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
-            }
-        )*
-    };
-}
-
-macro_rules! bind_bools {
-    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let s = $state.clone();
-                $ui.[<on_ $name _changed>](move |v: bool| {
-                    s.automate($p, if v { 1.0 } else { 0.0 });
-                });
-            }
-        )*
-    };
-}
-
-macro_rules! sync_floats_dirty {
-    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let v = PluginContextReadF32::get_param($state, $p);
-                if changed_f32(&mut $cache.floats[$idx], v) {
-                    $ui.[<set_ $name>](v);
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! sync_bools_dirty {
-    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let v = PluginContextReadF32::get_param($state, $p) > 0.5;
-                if changed_bool(&mut $cache.bools[$idx], v) {
-                    $ui.[<set_ $name>](v);
-                }
-            }
-        )*
-    };
-}
-
 pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
     let sync_cache = Mutex::new(SyncCache::new());
 
-    let init_cfg = aura_dsp::analysis::vault::load_config("Equilibrium");
+    let init_cfg = lx_vault::load_config("Equilibrium");
     let init_vp = init_cfg.vault_path.clone();
     let init_presets = load_presets(init_vp.as_deref());
     // Seed Pink Noise targets if nothing selected yet.
@@ -419,9 +305,9 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                         let new_vp = if path.is_empty() { None } else { Some(path) };
                         if let Ok(mut vs) = vs_path.lock() {
                             vs.vault_path = new_vp.clone();
-                            let mut cfg = aura_dsp::analysis::vault::load_config("Equilibrium");
+                            let mut cfg = lx_vault::load_config("Equilibrium");
                             cfg.vault_path = new_vp.clone();
-                            let _ = aura_dsp::analysis::vault::save_config("Equilibrium", &cfg);
+                            let _ = lx_vault::save_config("Equilibrium", &cfg);
                             vs.presets = load_presets(new_vp.as_deref());
                             if let Some(ui) = ui_path.upgrade() {
                                 ui.set_preset_names(names_model(&preset_names(&vs.presets)));
@@ -594,7 +480,6 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     });
                 }
 
-                let _ = float_default_norm; // keep helper for future right-click defaults
                 ui
             }
         },
@@ -984,50 +869,18 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                 }
                 cache.snap_was_active = snap_now;
 
-                ui.set_gonio_path(SharedString::from(gonio_path(
-                    &shared,
+                let mut gonio_cmds = String::new();
+                gonio_path(
+                    shared.scope.drain(),
                     &mut cache.gonio_window,
                     139.0,
                     139.0,
-                )));
+                    &mut gonio_cmds,
+                );
+                ui.set_gonio_path(SharedString::from(gonio_cmds));
             }
         },
     )
     .resizable(true)
     .into()
-}
-
-/// Rolling display window fed by `ScopeRing::drain` — a fixed-size
-/// look-back independent of the audio-thread ring's own capacity.
-const GONIO_WINDOW: usize = 512;
-
-/// `window` is the caller's persistent display buffer
-/// (`SyncCache::gonio_window`); newly-pushed stereo pairs are drained
-/// into it and the oldest evicted once it exceeds [`GONIO_WINDOW`].
-fn gonio_path(shared: &EquilibriumShared, window: &mut Vec<[f32; 2]>, w: f32, h: f32) -> String {
-    window.extend(shared.scope.drain());
-    let excess = window.len().saturating_sub(GONIO_WINDOW);
-    if excess > 0 {
-        window.drain(..excess);
-    }
-    if window.is_empty() {
-        return String::new();
-    }
-    let mut s = String::with_capacity(window.len() * 24);
-    let cx = w * 0.5;
-    let cy = h * 0.5;
-    let scale = cx.min(cy) * 0.9;
-    let inv_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
-    for (i, [l, r]) in window.iter().enumerate() {
-        let m = (l + r) * inv_sqrt2;
-        let side = (l - r) * inv_sqrt2;
-        let x = cx - side * scale;
-        let y = cy - m * scale;
-        if i == 0 {
-            s.push_str(&format!("M {x:.1} {y:.1}"));
-        } else {
-            s.push_str(&format!(" L {x:.1} {y:.1}"));
-        }
-    }
-    s
 }

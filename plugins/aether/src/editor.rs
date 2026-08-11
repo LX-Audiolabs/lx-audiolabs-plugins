@@ -1,12 +1,12 @@
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use aura::prelude::*;
+use lx_editor_utils::{dirty::*, slint_helpers::*, tick::*};
 use slint::{ModelRc, SharedString, VecModel};
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
-use aura_dsp::analysis::vault::*;
+use lx_vault::*;
 
 use crate::presets::{
     apply_profile, build_profile_md, default_preset_names, find_profile, load_cached_last_profile,
@@ -23,9 +23,6 @@ slint::include_modules!();
 const WINDOW_W: u32 = 730;
 const WINDOW_H: u32 = 395;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Match Meridian `TICK_INTERVAL` — host→UI poll ~30 Hz.
-const TICK_INTERVAL: Duration = Duration::from_millis(33);
 
 const FREQ_MIN: f32 = 20.0;
 const FREQ_MAX: f32 = 20000.0;
@@ -50,58 +47,6 @@ fn gain_to_norm(v: f32) -> f64 {
 fn q_to_norm(v: f32) -> f64 {
     let span = (Q_MAX / Q_MIN).log10();
     (((v / Q_MIN).log10() / span) as f64).clamp(0.0, 1.0)
-}
-
-fn parse_f32(s: &str) -> Option<f32> {
-    s.trim().replace(',', ".").parse::<f32>().ok()
-}
-
-fn names_model(names: &[String]) -> ModelRc<SharedString> {
-    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
-    ModelRc::new(VecModel::from(v))
-}
-
-// --- dirty helpers ----------------------------------------------------------
-
-#[inline]
-fn changed_f32(prev: &mut f32, v: f32) -> bool {
-    if *prev != v {
-        *prev = v;
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn changed_bool(prev: &mut Option<bool>, v: bool) -> bool {
-    if *prev != Some(v) {
-        *prev = Some(v);
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn changed_i32(prev: &mut i32, v: i32) -> bool {
-    if *prev != v {
-        *prev = v;
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn changed_str(prev: &mut String, v: &str) -> bool {
-    if prev.as_str() != v {
-        prev.clear();
-        prev.push_str(v);
-        true
-    } else {
-        false
-    }
 }
 
 /// Cache key for EQ curve (skip rebuild when bands unchanged).
@@ -151,8 +96,7 @@ fn eq_curve_key(params: &AetherParams, sr: f32) -> EqCurveKey {
 
 /// Per-editor sync bookkeeping (Meridian SyncCache parity).
 struct SyncCache {
-    last_tick: Instant,
-    primed: bool,
+    tick: TickCache,
     eq_key: Option<EqCurveKey>,
     eq_cmds: String,
     // Dirty mirrors
@@ -172,10 +116,7 @@ struct SyncCache {
 impl SyncCache {
     fn new() -> Self {
         Self {
-            last_tick: Instant::now()
-                .checked_sub(TICK_INTERVAL)
-                .unwrap_or_else(Instant::now),
-            primed: false,
+            tick: TickCache::new(),
             eq_key: None,
             eq_cmds: String::new(),
             types: [i32::MIN; 5],
@@ -192,14 +133,7 @@ impl SyncCache {
     }
 
     fn due(&mut self) -> bool {
-        let now = Instant::now();
-        if !self.primed || now.duration_since(self.last_tick) >= TICK_INTERVAL {
-            self.last_tick = now;
-            self.primed = true;
-            true
-        } else {
-            false
-        }
+        self.tick.due()
     }
 }
 
@@ -207,7 +141,7 @@ struct VaultUiState {
     vault_path: Option<String>,
     names: Vec<String>,
     cache: Vec<PresetEntry>,
-    pending: Arc<PendingPresets>,
+    pending: Arc<PendingPresets<PresetEntry>>,
     scanning_for: Option<String>,
 }
 

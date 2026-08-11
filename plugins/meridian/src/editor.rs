@@ -1,17 +1,15 @@
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use aura::prelude::*;
-use aura::FloatParam;
 use slint::{ModelRc, SharedString, VecModel};
 use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
 use aura_dsp::analysis::SPECTRUM_BINS;
-use aura_dsp::analysis::product_shared::MeridianShared;
-use aura_dsp::analysis::vault::{load_config, save_config};
-use paste::paste;
+use lx_analysis::product_shared::MeridianShared;
+use lx_vault::{load_config, save_config};
+use lx_editor_utils::{dirty::*, meter::*, params::*, slint_helpers::*, tick::*, viz::*};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -24,17 +22,9 @@ use aura_dsp::fx::{Biquad, TiltEq};
 
 slint::include_modules!();
 
-fn names_model(names: &[String]) -> ModelRc<SharedString> {
-    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
-    ModelRc::new(VecModel::from(v))
-}
-
 // Frozen vault size (ui-layout-spec / Lx.window-*): 990 × 670
 const WINDOW_W: u32 = 990;
 const WINDOW_H: u32 = 670;
-
-/// Match vizia Meridian `TICK_INTERVAL` — telemetry / host→UI poll ~30 Hz.
-const TICK_INTERVAL: Duration = Duration::from_millis(33);
 
 /// Cache key for EQ curve (vizia `EqCurveKey` parity).
 #[derive(Clone, Copy, PartialEq)]
@@ -88,9 +78,7 @@ fn eq_curve_key(params: &MeridianParams, sr: f32) -> EqCurveKey {
 
 /// Per-editor sync bookkeeping (vizia Ticker + TickAccum + dirty sets).
 struct SyncCache {
-    last_tick: Instant,
-    /// First open must fill UI even if Instant says "not due".
-    primed: bool,
+    tick: TickCache,
     eq_key: Option<EqCurveKey>,
     eq_cmds: String,
     gr_history: Vec<f32>,
@@ -124,10 +112,7 @@ struct SyncCache {
 impl SyncCache {
     fn new() -> Self {
         Self {
-            last_tick: Instant::now()
-                .checked_sub(TICK_INTERVAL)
-                .unwrap_or_else(Instant::now),
-            primed: false,
+            tick: TickCache::new(),
             eq_key: None,
             eq_cmds: String::new(),
             gr_history: vec![0.0; 90],
@@ -156,148 +141,15 @@ impl SyncCache {
     }
 
     fn due(&mut self) -> bool {
-        let now = Instant::now();
-        if !self.primed || now.duration_since(self.last_tick) >= TICK_INTERVAL {
-            self.last_tick = now;
-            self.primed = true;
-            true
-        } else {
-            false
-        }
+        self.tick.due()
     }
-}
-
-#[inline]
-fn changed_f32(prev: &mut f32, v: f32) -> bool {
-    if *prev != v {
-        *prev = v;
-        true
-    } else {
-        false
-    }
-}
-
-#[inline]
-fn changed_bool(prev: &mut Option<bool>, v: bool) -> bool {
-    if *prev != Some(v) {
-        *prev = Some(v);
-        true
-    } else {
-        false
-    }
-}
-
-/// Normalized default for a FloatParam (log/linear/skew — matches host).
-fn float_default_norm(p: &FloatParam) -> f32 {
-    p.info.range.normalize(p.info.default_plain) as f32
-}
-
-// --- binding macros ---------------------------------------------------------
-
-macro_rules! bind_floats {
-    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let s = $state.clone();
-                $ui.[<on_ $name _changed>](move |v| s.automate($p, v as f64));
-            }
-        )*
-    };
-}
-
-/// Right-click knob/slider reset targets (`*_default` properties).
-macro_rules! set_float_defaults {
-    ($ui:expr, $params:expr, $($name:ident),* $(,)?) => {
-        $(
-            paste! {
-                $ui.[<set_ $name _default>](float_default_norm(&$params.$name));
-            }
-        )*
-    };
-}
-
-/// Full RESET + per-control right-click: automate each float to its param default.
-macro_rules! reset_floats {
-    ($state:expr, $params:expr, $($p:expr => $name:ident),* $(,)?) => {
-        $(
-            $state.automate($p, float_default_norm(&$params.$name) as f64);
-        )*
-    };
-}
-
-macro_rules! bind_ints {
-    ($ui:expr, $state:expr, $count:expr, $($p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let s = $state.clone();
-                let count = $count as usize;
-                $ui.[<on_ $name _changed>](move |v: f32| {
-                    s.automate($p, discrete_norm(v.max(0.0) as usize, count));
-                });
-            }
-        )*
-    };
-}
-
-macro_rules! bind_bools {
-    ($ui:expr, $state:expr, $($p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let s = $state.clone();
-                $ui.[<on_ $name _changed>](move |v: bool| {
-                    s.automate($p, if v { 1.0 } else { 0.0 });
-                });
-            }
-        )*
-    };
-}
-
-/// Dirty host→UI float push. `$idx` indexes `SyncCache::floats`.
-macro_rules! sync_floats_dirty {
-    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let v = PluginContextReadF32::get_param($state, $p);
-                if changed_f32(&mut $cache.floats[$idx], v) {
-                    $ui.[<set_ $name>](v);
-                    $ui.[<set_ $name _text>](slint::SharedString::from($state.format_param($p)));
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! sync_ints_dirty {
-    ($ui:expr, $state:expr, $cache:expr, $count:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let idx = discrete_index(PluginContextReadF32::get_param($state, $p) as f64, $count) as f32;
-                if changed_f32(&mut $cache.ints[$idx], idx) {
-                    $ui.[<set_ $name>](idx);
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! sync_bools_dirty {
-    ($ui:expr, $state:expr, $cache:expr, $($idx:expr, $p:expr => $name:ident),* $(,)?) => {
-        $(
-            paste! {
-                let v = PluginContextReadF32::get_param($state, $p) > 0.5;
-                if changed_bool(&mut $cache.bools[$idx], v) {
-                    $ui.[<set_ $name>](v);
-                }
-            }
-        )*
-    };
 }
 
 struct VaultUiState {
     vault_path: Option<String>,
     names: Vec<String>,
     cache: Vec<PresetEntry>,
-    pending: Arc<PendingPresets>,
+    pending: Arc<PendingPresets<PresetEntry>>,
     scanning_for: Option<String>,
 }
 
@@ -704,7 +556,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
 
                 // --- host → UI normalized values (dirty) ---
-                sync_floats_dirty!(ui, state, cache,
+                sync_floats_dirty_with_text!(ui, state, cache,
                     0, P::HpfFreq => hpf_freq,
                     1, P::LpfFreq => lpf_freq,
                     2, P::BassGain => bass_gain,
@@ -934,12 +786,15 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 if changed_f32(&mut cache.spectrum_fill_q, fq) {
                     ui.set_spectrum_fill(spectrum_fill_brush(fq));
                 }
-                ui.set_gonio_path(slint::SharedString::from(gonio_path(
-                    shared,
+                let mut gonio_cmds = String::new();
+                gonio_path(
+                    shared.scope.drain(),
                     &mut cache.gonio_window,
                     139.0,
                     139.0,
-                )));
+                    &mut gonio_cmds,
+                );
+                ui.set_gonio_path(slint::SharedString::from(gonio_cmds));
             }
         },
     )
@@ -947,20 +802,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
     .into()
 }
 
-fn fmt_db(v: f32) -> String {
-    if v <= -60.0 {
-        "-inf".to_string()
-    } else {
-        format!("{v:.1}")
-    }
-}
-
 // --- meter helpers --------------------------------------------------------
-
-/// Map peak dB to 0..1 over the frozen stereo-meter range (−60..+6 dB).
-fn db_to_meter(db: f32) -> f32 {
-    ((db + 60.0) / 66.0).clamp(0.0, 1.0)
-}
 
 fn db_to_gr(db: f32) -> f32 {
     (1.0 - (db / 30.0)).clamp(0.0, 1.0)
@@ -969,73 +811,6 @@ fn db_to_gr(db: f32) -> f32 {
 // --- spectrum path --------------------------------------------------------
 // Y range matches vizia SpectrumConfig default: −70 … −18 dB.
 // X is log-frequency (20 Hz … 20 kHz), same as SpectrumView.
-
-/// 1/3-octave fractional-band smoothing (Lucent `lx-ui` canvas parity).
-/// Returns 241 log-spaced dB points from 20 Hz to 20 kHz.
-fn smooth_spectrum_third_octave(spectrum: &[f32], sample_rate: f32) -> Vec<f32> {
-    if spectrum.is_empty() {
-        return Vec::new();
-    }
-    let fft_size = SPECTRUM_BINS * 2;
-    let log_min = 20.0_f32.ln();
-    let log_max = 20000.0_f32.ln();
-    let bin_hz = sample_rate / fft_size as f32;
-    const DENOM_LOW: f32 = 3.0;
-    const DENOM_HIGH: f32 = 20.0;
-    const F_LOW: f32 = 500.0;
-    const F_HIGH: f32 = 16000.0;
-    let taper_lo = F_LOW.ln();
-    let taper_hi = F_HIGH.ln();
-    const STEPS: usize = 240;
-    let len = spectrum.len();
-
-    let power: Vec<f32> = spectrum
-        .iter()
-        .map(|&db| 10.0_f32.powf(db * 0.1))
-        .collect();
-
-    let mut out = Vec::with_capacity(STEPS + 1);
-    for i in 0..=STEPS {
-        let frac = i as f32 / STEPS as f32;
-        let ln_fc = log_min + (log_max - log_min) * frac;
-        let fc = ln_fc.exp();
-        let t = ((ln_fc - taper_lo) / (taper_hi - taper_lo)).clamp(0.0, 1.0);
-        let denom = DENOM_LOW + (DENOM_HIGH - DENOM_LOW) * t;
-        let half = 2.0_f32.powf(1.0 / (2.0 * denom));
-        const MIN_BIN: f32 = 1.0;
-        let lo = (fc / half / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
-        let hi = (fc * half / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
-        let avg_power = if hi - lo >= 1.0 {
-            let i0 = lo.floor() as usize;
-            let i1 = hi.floor() as usize;
-            let mut sum = 0.0f32;
-            if i0 == i1 {
-                sum = power[i0] * (hi - lo);
-            } else {
-                sum += power[i0] * ((i0 + 1) as f32 - lo);
-                for p in &power[i0 + 1..i1] {
-                    sum += *p;
-                }
-                sum += power[i1] * (hi - i1 as f32);
-            }
-            sum / (hi - lo)
-        } else {
-            let pos = (fc / bin_hz).clamp(MIN_BIN, (len - 1) as f32);
-            let i0 = pos.floor() as usize;
-            let i1 = (i0 + 1).min(len - 1);
-            let t_bin = pos - i0 as f32;
-            power[i0] * (1.0 - t_bin) + power[i1] * t_bin
-        };
-        out.push((10.0 * avg_power.max(1e-12).log10()).clamp(-90.0, 12.0));
-    }
-    if out.len() >= 3 {
-        let raw = out.clone();
-        for i in 1..out.len().saturating_sub(1) {
-            out[i] = raw[i - 1] * 0.25 + raw[i] * 0.5 + raw[i + 1] * 0.25;
-        }
-    }
-    out
-}
 
 fn spectrum_path(shared: &MeridianShared, w: f32, h: f32) -> (String, f32) {
     use aura_dsp::analysis::SPECTRUM_BINS;
@@ -1066,7 +841,7 @@ fn spectrum_path(shared: &MeridianShared, w: f32, h: f32) -> (String, f32) {
     // Collect log-x samples. SMOOTH on = 1/3-octave fractional-band average
     // (Lucent parity); off = raw log-spaced bins (skip sub-20 Hz bins).
     let pts: Vec<(f32, f32)> = if shared.spectrum.smooth.load(Ordering::Relaxed) {
-        let sm = smooth_spectrum_third_octave(&bins[..n], sr);
+        let sm = smooth_spectrum_third_octave(&bins[..n], sr, SPECTRUM_BINS * 2);
         let denom = sm.len().saturating_sub(1).max(1) as f32;
         sm.iter()
             .enumerate()
@@ -1166,46 +941,6 @@ fn gr_envelope_path(history: &[f32], current: f32, w: f32, h: f32) -> String {
     s.push_str(&format!(" L {last_x:.1} {:.1}", val_to_y(current)));
     s.push_str(&format!(" L {last_x:.1} {:.1}", h - MARGIN));
     s.push_str(&format!(" L {:.1} {:.1} Z", MARGIN, h - MARGIN));
-    s
-}
-
-// --- goniometer path (M/S rotation — vault frozen spec) -------------------
-
-/// Rolling display window fed by `ScopeRing::drain` — a fixed-size
-/// look-back independent of the audio-thread ring's own capacity.
-const GONIO_WINDOW: usize = 512;
-
-/// `window` is the caller's persistent display buffer
-/// (`SyncCache::gonio_window`); newly-pushed stereo pairs are drained
-/// into it and the oldest evicted once it exceeds [`GONIO_WINDOW`].
-fn gonio_path(shared: &MeridianShared, window: &mut Vec<[f32; 2]>, w: f32, h: f32) -> String {
-    window.extend(shared.scope.drain());
-    let excess = window.len().saturating_sub(GONIO_WINDOW);
-    if excess > 0 {
-        window.drain(..excess);
-    }
-    if window.is_empty() {
-        return String::new();
-    }
-
-    let mut s = String::with_capacity(window.len() * 24);
-    let cx = w * 0.5;
-    let cy = h * 0.5;
-    let scale = cx.min(cy) * 0.9;
-    let inv_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
-
-    for (i, [l, r]) in window.iter().enumerate() {
-        // M vertical, S horizontal (industry standard 45° rotation)
-        let m = (l + r) * inv_sqrt2;
-        let side = (l - r) * inv_sqrt2;
-        let x = cx - side * scale;
-        let y = cy - m * scale;
-        if i == 0 {
-            s.push_str(&format!("M {x:.1} {y:.1}"));
-        } else {
-            s.push_str(&format!(" L {x:.1} {y:.1}"));
-        }
-    }
     s
 }
 

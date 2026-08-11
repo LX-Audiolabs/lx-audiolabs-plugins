@@ -1,0 +1,16 @@
+[package]
+name = "lx-editor-utils"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["LX Audiolabs"]
+publish = false
+
+[dependencies]
+ aura = { workspace = true }
+ aura-editor = { workspace = true }
+ paste = "1"
+ slint = { workspace = true }
+
+[build-dependencies]
+ aura-build = { workspace = true }
