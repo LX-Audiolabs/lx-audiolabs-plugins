@@ -16,7 +16,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use aura_dsp::analysis::*;
-use lx_analysis::product_shared::LucentShared;
 use lx_vault::{load_config, save_config};
 use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
@@ -1013,7 +1012,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 // trips E0499, unlike splitting fields of a plain `&mut SyncCache`.
                 let cache = &mut *cache;
                 gonio_path(
-                    shared_sync.scope.drain(),
+                    shared_sync.scope.drain().into_iter(),
                     &mut cache.gonio_window,
                     139.0,
                     139.0,
