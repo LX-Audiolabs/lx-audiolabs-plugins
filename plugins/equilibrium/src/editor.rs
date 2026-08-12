@@ -4,11 +4,10 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use aura::prelude::*;
-use lx_analysis::product_shared::EquilibriumShared;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
-use lx_editor_utils::{dirty::*, meter::*, params::*, slint_helpers::*, tick::*, viz::*};
-use slint::{ModelRc, SharedString, VecModel};
+use lx_editor_utils::{bind_bools, bind_floats, dirty::*, meter::*, slint_helpers::*, sync_bools_dirty, sync_floats_dirty, tick::*, viz::*};
+use slint::SharedString;
 
 use crate::presets::{
     apply_stereo_from_preset, load_presets, param_norm, pink_noise_preset, preset_names,
@@ -123,8 +122,6 @@ impl SyncCache {
         self.tick.due()
     }
 }
-
-use lx_editor_utils::params::*;
 
 struct VaultUiState {
     vault_path: Option<String>,
@@ -871,7 +868,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
 
                 let mut gonio_cmds = String::new();
                 gonio_path(
-                    shared.scope.drain(),
+                    shared.scope.drain().into_iter(),
                     &mut cache.gonio_window,
                     139.0,
                     139.0,

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use aura::{FloatParam, IntParam};
 use lx_vault::{get_plugin_dir, preset_plugin_name};
 use aura_editor::typed::LxPluginContext;
-use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
+pub use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;

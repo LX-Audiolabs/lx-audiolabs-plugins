@@ -2,14 +2,17 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use aura::prelude::*;
-use slint::{ModelRc, SharedString, VecModel};
+use slint::SharedString;
 use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
-use aura_dsp::analysis::SPECTRUM_BINS;
 use lx_analysis::product_shared::MeridianShared;
 use lx_vault::{load_config, save_config};
-use lx_editor_utils::{dirty::*, meter::*, params::*, slint_helpers::*, tick::*, viz::*};
+use lx_editor_utils::{
+    bind_bools, bind_floats, bind_ints, dirty::*, meter::*, reset_floats,
+    set_float_defaults, slint_helpers::*, sync_bools_dirty,
+    sync_floats_dirty_with_text, sync_ints_dirty, tick::*, viz::*,
+};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -788,7 +791,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
                 let mut gonio_cmds = String::new();
                 gonio_path(
-                    shared.scope.drain(),
+                    shared.scope.drain().into_iter(),
                     &mut cache.gonio_window,
                     139.0,
                     139.0,

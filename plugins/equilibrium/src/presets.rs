@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use aura_editor::typed::*;
-use lx_editor_utils::snap::snap_filename;
+pub use lx_editor_utils::snap::snap_filename;
 use serde::{Deserialize, Serialize};
 
 use crate::EquilibriumParams;

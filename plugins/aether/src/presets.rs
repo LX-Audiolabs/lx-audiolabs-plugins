@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use aura_editor::typed::*;
 use lx_vault::*;
-use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
+pub use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
 
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use aura::prelude::*;
 use lx_editor_utils::{dirty::*, slint_helpers::*, tick::*};
-use slint::{ModelRc, SharedString, VecModel};
+use slint::SharedString;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
 use lx_vault::*;
