@@ -32,6 +32,19 @@ pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShare
         slot = claimed as i32;
         shared.shm.slot.store(slot, Ordering::Release);
     }
+    // Re-claim if our cached index looks free/stale (host reload, SHM v bump).
+    if slot >= 0
+        && let Some(hub) = relay_hub()
+        && !hub.consumer_slot_live(slot as u8, now_ms)
+    {
+        if let Some(claimed) = hub.claim_consumer_slot(now_ms) {
+            slot = claimed as i32;
+            shared.shm.slot.store(slot, Ordering::Release);
+        } else {
+            slot = -1;
+            shared.shm.slot.store(-1, Ordering::Release);
+        }
+    }
     if slot < 0 {
         return;
     }
@@ -50,6 +63,13 @@ pub(crate) fn editor_ensure_consumer(params: &LucentParams, shared: &LucentShare
                 .or_else(|_| params.name.read().map(|n| n.clone()))
                 .unwrap_or_default()
         });
+    // Keep name_bg in lockstep so the audio heartbeat thread (if any) publishes
+    // the same label Relay's dropdown lists.
+    if let Ok(mut bg) = params.name_bg.try_write()
+        && bg.as_str() != raw.as_str()
+    {
+        *bg = raw.clone();
+    }
     let my_name = display_name(&raw, slot as u8);
     if let Some(hub) = relay_hub() {
         hub.write_consumer_name(slot as u8, &my_name, now_ms);

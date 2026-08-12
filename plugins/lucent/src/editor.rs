@@ -536,6 +536,10 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     .or_else(|| init_vp.clone());
                 ui.set_vault_path(SharedString::from(live_vp.as_deref().unwrap_or("")));
 
+                // Register as SHM consumer immediately on open (not only after
+                // first 33 ms tick) so Relay dropdowns see Lucent without play.
+                editor_ensure_consumer(&params, &shared);
+
                 // Vizia on_edit parity: persist + immediate SHM consumer rename
                 // so Relay target dropdown never sticks on stale "Hub N".
                 let p = params.clone();
