@@ -20,10 +20,15 @@ const RESOLVE_INTERVAL_MS: u64 = 250;
 // AURA requires at least one Param field. `process()` always copies input to
 // output regardless of bypass state (pure pass-through analyzer), so a visible
 // Bypass control is a no-op from the user's perspective - hidden per user request.
-// The `_flush_sentinel` FloatParam is required: AURA/CLAP's flush path with a
-// single hidden BoolParam does not propagate parameter changes correctly in
-// clap-validator's param-set-events / param-set-no-cookies tests. Verified on
-// AURA 0.6.0 / clap-validator current. Keep hidden.
+//
+// `_flush_sentinel` (hidden FloatParam) is required for AURA/CLAP flush with a
+// single hidden BoolParam: without it, clap-validator `param-set-events` /
+// `param-set-no-cookies` fail ("parameter values did not change after flush").
+// Verified AURA 0.6.x. Keep hidden.
+//
+// Not related to param-fuzz ACCESS_VIOLATION flakes on Windows: those appear
+// under parallel clap-validator jobs (`-j > 1`) and pass with `-j 1`. Ship gate:
+// `.\validate-clap.ps1` (always serial).
 
 #[derive(Params)]
 pub struct LucentRelayParams {

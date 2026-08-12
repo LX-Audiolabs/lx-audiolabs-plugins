@@ -97,6 +97,22 @@ cargo aura build --clap -plug aether
 .\build-local-zip.ps1 -Plugins aether,meridian  # subset only
 ```
 
+### CLAP validate (ship gate)
+
+```powershell
+# After install (or point -Paths at a .clap). Always uses -j 1.
+cargo install clap-validator   # once
+cargo aura install --clap -plug lucent-relay
+.\validate-clap.ps1 -Plugins lucent-relay
+.\validate-clap.ps1            # all installed LX CLAPs found on disk
+```
+
+**Windows:** never run `clap-validator` with default/`-j > 1` parallelism as a
+ship gate. Parallel out-of-process jobs can flake with `0xc0000005`
+(ACCESS_VIOLATION), including Lucent Relay `param-fuzz-basic` /
+`param-fuzz-bounds`. Serial (`-j 1`) is green; product process path is fine.
+`validate-clap.ps1` forces `-j 1`.
+
 ### Linux CLAPs (from Windows)
 
 Cross-compile via Zig (already wired in `.cargo/`):

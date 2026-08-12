@@ -29,7 +29,10 @@ sibling `AURA` repo. Shared stack: `PluginLogic` / derive params / CLAP export /
 ### Tooling notes
 
 - rustc **1.96.0** pin (`rust-toolchain.toml`); 1.97 ICE/lld on this machine
-- clap-validator: prefer `-j 1` on Windows (parallel ACCESS_VIOLATION flakes)
+- clap-validator: **always `-j 1` on Windows** (parallel ACCESS_VIOLATION flakes).
+  Lucent Relay `param-fuzz-*` can crash under parallel jobs; serial full suite
+  is green. Ship gate: `.\validate-clap.ps1` (forces `-j 1`). Unrelated to
+  Lucent Relay `_flush_sentinel` (that only fixes param-set flush tests).
 - Install: **one** CLAP path only (`%LOCALAPPDATA%\Programs\Common\CLAP\…`)
 - Release: `codegen-units = 16` in root `Cargo.toml` avoids a rustc ICE in
   `rustfft` AVX code (was `1`); LTO stays enabled
