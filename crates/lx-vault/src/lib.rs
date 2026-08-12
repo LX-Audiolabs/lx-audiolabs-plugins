@@ -53,6 +53,25 @@ pub fn save_config(plugin_name: &str, config: &PluginConfig) -> Result<(), std::
     std::fs::write(path, content)
 }
 
+/// Persist vault path (empty → clear). Loads existing config so `last_preset` is kept.
+pub fn set_vault_path(plugin_name: &str, vault_path: Option<String>) -> Result<(), std::io::Error> {
+    let mut cfg = load_config(plugin_name);
+    cfg.vault_path = vault_path.filter(|s| !s.trim().is_empty());
+    save_config(plugin_name, &cfg)
+}
+
+/// Persist last selected preset name. Loads existing config so `vault_path` is kept.
+/// Empty names are ignored (never wipe a good last_preset by accident).
+pub fn set_last_preset(plugin_name: &str, name: &str) -> Result<(), std::io::Error> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Ok(());
+    }
+    let mut cfg = load_config(plugin_name);
+    cfg.last_preset = Some(name.to_string());
+    save_config(plugin_name, &cfg)
+}
+
 // ─── Frontmatter parsing ─────────────────────────────────────────────────────
 
 #[must_use]

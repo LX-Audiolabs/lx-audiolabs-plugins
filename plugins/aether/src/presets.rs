@@ -322,9 +322,19 @@ pub fn load_cached_last_profile() -> Option<AetherProfile> {
 }
 
 pub fn save_last_preset(vault_path: &Option<String>, profile: &AetherProfile) {
+    // Merge-update: never clear vault_path when caller passes None (select
+    // without vault / lock fail used to wipe APPDATA config on every pick).
     let mut cfg = load_config("Aether");
-    cfg.vault_path = vault_path.clone();
-    cfg.last_preset = Some(profile.name.clone());
+    if let Some(vp) = vault_path {
+        cfg.vault_path = if vp.trim().is_empty() {
+            None
+        } else {
+            Some(vp.clone())
+        };
+    }
+    if !profile.name.trim().is_empty() {
+        cfg.last_preset = Some(profile.name.clone());
+    }
     let _ = save_config("Aether", &cfg);
     let path = last_profile_cache_path();
     let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));

@@ -31,12 +31,12 @@ struct SyncCache {
 }
 
 pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
-    let sync_cache = Mutex::new(SyncCache {
+    let sync_cache = Arc::new(Mutex::new(SyncCache {
         opts: Vec::new(),
         idx: None,
         connected: None,
         status: String::new(),
-    });
+    }));
     // Compact UI — always 100%, ignore global zoom preference.
     let ui_zoom = UiZoom::with_percent(WINDOW_W, WINDOW_H, 100);
     LxSlintEditor::new_with_zoom(
@@ -44,7 +44,18 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
         ui_zoom,
         {
             let params = params.clone();
+            let sync_cache = Arc::clone(&sync_cache);
             move |_state: LxPluginContext<LucentRelayParams>| {
+            // New Slint component each open; wipe dirty mirrors so labels
+            // are re-pushed (stale cache → empty / wrong UI until a value moves).
+            if let Ok(mut c) = sync_cache.lock() {
+                *c = SyncCache {
+                    opts: Vec::new(),
+                    idx: None,
+                    connected: None,
+                    status: String::new(),
+                };
+            }
             let ui = LucentRelayUi::new().expect("LucentRelayUi::new");
 
             ui.set_version(SharedString::from(VERSION));

@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use aura_dsp::analysis::*;
-use lx_vault::{load_config, save_config};
+use lx_vault::{load_config, set_vault_path};
 use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
@@ -508,6 +508,12 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
             let sync_cache = sync_cache.clone();
             let init_vp = init_vp.clone();
             move |state: LxPluginContext<LucentParams>| {
+                // New Slint component each open; wipe dirty mirrors so labels
+                // and layout are re-pushed (stale cache → empty text / collapse).
+                if let Ok(mut c) = sync_cache.lock() {
+                    let vp = c.vault_path.clone();
+                    *c = SyncCache::new(vp);
+                }
                 let ui = LucentUi::new().expect("LucentUi::new");
 
                 ui.set_version(SharedString::from(VERSION));
@@ -522,9 +528,13 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 let name0 = params.name.read().map(|s| s.clone()).unwrap_or_default();
                 ui.set_display_name(SharedString::from(name0.as_str()));
                 ui.set_spectrum_smooth(shared.spectrum.smooth.load(Ordering::Relaxed));
-                if let Some(ref vp) = init_vp {
-                    ui.set_vault_path(SharedString::from(vp.as_str()));
-                }
+                // Live path from sync_cache (survives UI reopen); fall back to config.
+                let live_vp = sync_cache
+                    .lock()
+                    .ok()
+                    .and_then(|c| c.vault_path.clone())
+                    .or_else(|| init_vp.clone());
+                ui.set_vault_path(SharedString::from(live_vp.as_deref().unwrap_or("")));
 
                 // Vizia on_edit parity: persist + immediate SHM consumer rename
                 // so Relay target dropdown never sticks on stale "Hub N".
@@ -620,9 +630,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                     if let Ok(mut c) = cache_v.lock() {
                         c.vault_path = new_vp.clone();
                     }
-                    let mut cfg = load_config("Lucent");
-                    cfg.vault_path = new_vp;
-                    let _ = save_config("Lucent", &cfg);
+                    let _ = set_vault_path("Lucent", new_vp);
                 });
 
                 // Vault Setup PASTE: write draft path only (vault_setup_path).

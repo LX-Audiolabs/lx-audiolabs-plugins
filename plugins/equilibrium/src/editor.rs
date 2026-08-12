@@ -125,28 +125,44 @@ impl SyncCache {
 
 struct VaultUiState {
     vault_path: Option<String>,
+    last_preset: Option<String>,
     presets: Vec<PresetEntry>,
 }
 
 pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
-    let sync_cache = Mutex::new(SyncCache::new());
+    let sync_cache = Arc::new(Mutex::new(SyncCache::new()));
 
     let init_cfg = lx_vault::load_config("Equilibrium");
     let init_vp = init_cfg.vault_path.clone();
+    let init_last = init_cfg.last_preset.clone();
     let init_presets = load_presets(init_vp.as_deref());
-    // Seed Pink Noise targets if nothing selected yet.
+    // Seed targets once: restore last preset if known, else Pink Noise default.
     {
         let pink = pink_noise_preset();
+        let seed = init_last
+            .as_ref()
+            .and_then(|n| {
+                init_presets
+                    .iter()
+                    .find(|(name, _, _)| name == n)
+                    .map(|(_, _, p)| p.clone())
+            })
+            .unwrap_or(pink);
         for b in 0..5 {
-            shared.target_levels[b].store(pink.bands[b], Ordering::Release);
-            shared.target_tolerances[b].store(pink.tolerances[b], Ordering::Release);
+            shared.target_levels[b].store(seed.bands[b], Ordering::Release);
+            shared.target_tolerances[b].store(seed.tolerances[b], Ordering::Release);
         }
-        shared.selected_preset_index.store(0, Ordering::Release);
+        let idx = init_last
+            .as_ref()
+            .and_then(|n| init_presets.iter().position(|(name, _, _)| name == n))
+            .unwrap_or(0);
+        shared.selected_preset_index.store(idx, Ordering::Release);
     }
 
     let vault_state = Arc::new(Mutex::new(VaultUiState {
         vault_path: init_vp.clone(),
+        last_preset: init_last,
         presets: init_presets,
     }));
 
@@ -159,8 +175,13 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
             let params = params.clone();
             let shared = shared.clone();
             let vault_state = vault_state.clone();
-            let init_vp = init_vp.clone();
+            let sync_cache = Arc::clone(&sync_cache);
             move |state: LxPluginContext<EquilibriumParams>| {
+                // New Slint component each open; wipe dirty mirrors so labels
+                // and layout are re-pushed (stale cache → empty text / collapse).
+                if let Ok(mut c) = sync_cache.lock() {
+                    *c = SyncCache::new();
+                }
                 let ui = EquilibriumUi::new().expect("EquilibriumUi::new");
                 ui.set_version(SharedString::from(VERSION));
 
@@ -173,20 +194,27 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     });
                 }
 
-                if let Some(ref vp) = init_vp {
-                    ui.set_vault_path(SharedString::from(vp.as_str()));
-                }
-                if init_vp.as_ref().is_none_or(|v| v.is_empty()) {
+                // Live vault_state — path/name survive UI close.
+                let (live_vp, live_last, names) = vault_state
+                    .lock()
+                    .ok()
+                    .map(|g| {
+                        (
+                            g.vault_path.clone(),
+                            g.last_preset.clone(),
+                            preset_names(&g.presets),
+                        )
+                    })
+                    .unwrap_or_else(|| (None, None, vec!["Pink Noise".into()]));
+                ui.set_vault_path(SharedString::from(live_vp.as_deref().unwrap_or("")));
+                if live_vp.as_ref().is_none_or(|v| v.is_empty()) {
                     ui.set_snap_label(SharedString::from("SET VAULT"));
                 }
-
-                {
-                    let vs = vault_state.lock().ok();
-                    let names = vs
-                        .as_ref()
-                        .map(|g| preset_names(&g.presets))
-                        .unwrap_or_else(|| vec!["Pink Noise".into()]);
-                    ui.set_preset_names(names_model(&names));
+                ui.set_preset_names(names_model(&names));
+                if let Some(ref name) = live_last {
+                    if !name.is_empty() {
+                        ui.set_preset_name(SharedString::from(name.as_str()));
+                    }
                 }
 
                 bind_floats!(ui, state,
@@ -286,6 +314,8 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                         let md = crate::presets::export_preset_to_markdown(&prof);
                         if std::fs::write(&fp, md).is_ok() {
                             vs.presets = load_presets(vs.vault_path.as_deref());
+                            vs.last_preset = Some(name.clone());
+                            let _ = lx_vault::set_last_preset("Equilibrium", &name);
                             ui.set_preset_names(names_model(&preset_names(&vs.presets)));
                             ui.set_preset_name(SharedString::from(name.as_str()));
                             tracing::info!("SAVE Equilibrium preset {}", fp.display());
@@ -302,9 +332,7 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                         let new_vp = if path.is_empty() { None } else { Some(path) };
                         if let Ok(mut vs) = vs_path.lock() {
                             vs.vault_path = new_vp.clone();
-                            let mut cfg = lx_vault::load_config("Equilibrium");
-                            cfg.vault_path = new_vp.clone();
-                            let _ = lx_vault::save_config("Equilibrium", &cfg);
+                            let _ = lx_vault::set_vault_path("Equilibrium", new_vp.clone());
                             vs.presets = load_presets(new_vp.as_deref());
                             if let Some(ui) = ui_path.upgrade() {
                                 ui.set_preset_names(names_model(&preset_names(&vs.presets)));
@@ -362,6 +390,10 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                                     .store(prof.tolerances[b], Ordering::Release);
                             }
                             apply_stereo_from_preset(&sel_state, &prof);
+                            if let Ok(mut vs) = sel_vs.lock() {
+                                vs.last_preset = Some(prof.name.clone());
+                            }
+                            let _ = lx_vault::set_last_preset("Equilibrium", &prof.name);
                             if let Some(ui) = sel_ui.upgrade() {
                                 ui.set_preset_name(SharedString::from(prof.name.as_str()));
                             }

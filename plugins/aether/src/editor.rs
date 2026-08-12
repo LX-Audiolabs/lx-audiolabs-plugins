@@ -1,4 +1,4 @@
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use aura::prelude::*;
@@ -139,6 +139,8 @@ impl SyncCache {
 
 struct VaultUiState {
     vault_path: Option<String>,
+    /// Last selected preset name (UI label + config).
+    last_preset: Option<String>,
     names: Vec<String>,
     cache: Vec<PresetEntry>,
     pending: Arc<PendingPresets<PresetEntry>>,
@@ -147,10 +149,16 @@ struct VaultUiState {
 
 pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
-    let sync_cache = Mutex::new(SyncCache::new());
+    let sync_cache = Arc::new(Mutex::new(SyncCache::new()));
+    // apply_profile only once per plugin instance — not on every UI reopen.
+    let restore_params_once = Arc::new(AtomicBool::new(true));
 
     let init_cfg = load_config("Aether");
     let init_vp = init_cfg.vault_path.clone();
+    let init_last = init_cfg
+        .last_preset
+        .clone()
+        .or_else(|| load_cached_last_profile().map(|p| p.name));
     let vault_pending = Arc::new(PendingPresets::new());
     {
         // Built-ins immediately; bg-scan vault (or local presets).
@@ -171,6 +179,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
     }
     let vault_state = Arc::new(Mutex::new(VaultUiState {
         vault_path: init_vp.clone(),
+        last_preset: init_last.clone(),
         names: default_preset_names(),
         cache: Vec::new(),
         pending: vault_pending,
@@ -185,9 +194,14 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
         {
             let params = params.clone();
             let vault_state = vault_state.clone();
-            let init_vp = init_vp.clone();
-            let init_last = init_cfg.last_preset.clone();
+            let sync_cache = Arc::clone(&sync_cache);
+            let restore_params_once = Arc::clone(&restore_params_once);
             move |state: LxPluginContext<AetherParams>| {
+                // New Slint component each open; wipe dirty mirrors so labels
+                // and layout are re-pushed (stale cache → empty text / collapse).
+                if let Ok(mut c) = sync_cache.lock() {
+                    *c = SyncCache::new();
+                }
                 let ui = AetherUi::new().expect("AetherUi::new");
                 ui.set_version(SharedString::from(VERSION));
 
@@ -200,27 +214,46 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                     });
                 }
 
-                if let Some(ref vp) = init_vp {
-                    ui.set_vault_path(SharedString::from(vp.as_str()));
-                }
+                // Live vault_state (not frozen init_vp) — path/preset survive UI close.
+                let (live_vp, live_last, live_names, live_cache) = vault_state
+                    .lock()
+                    .ok()
+                    .map(|g| {
+                        (
+                            g.vault_path.clone(),
+                            g.last_preset.clone(),
+                            g.names.clone(),
+                            g.cache.clone(),
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        (
+                            None,
+                            None,
+                            default_preset_names(),
+                            Vec::new(),
+                        )
+                    });
+                ui.set_vault_path(SharedString::from(live_vp.as_deref().unwrap_or("")));
+                ui.set_preset_names(names_model(&live_names));
 
-                // Vizia parity: restore last-used preset *values* on open
-                // (not just the name label). Cache first for instant startup;
-                // fall back to built-in / local file via find_profile.
-                let last_name = init_last
+                let last_name = live_last
                     .clone()
                     .or_else(|| load_cached_last_profile().map(|p| p.name))
                     .unwrap_or_default();
                 if !last_name.is_empty() {
                     ui.set_preset_name(SharedString::from(last_name.as_str()));
-                    let profile = load_cached_last_profile()
-                        .filter(|p| p.name == last_name)
-                        .or_else(|| find_profile(&last_name, &init_vp, &[]));
-                    if let Some(pf) = profile {
-                        apply_profile(&state, &pf);
+                    // Values only on first open of this instance. Reopen must
+                    // not re-apply Harman Flat / last_preset over live knobs.
+                    if restore_params_once.swap(false, Ordering::AcqRel) {
+                        let profile = load_cached_last_profile()
+                            .filter(|p| p.name == last_name)
+                            .or_else(|| find_profile(&last_name, &live_vp, &live_cache));
+                        if let Some(pf) = profile {
+                            apply_profile(&state, &pf);
+                        }
                     }
                 }
-                ui.set_preset_names(names_model(&default_preset_names()));
 
                 // ── type cycle ──
                 {
@@ -390,6 +423,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                                     vs.names.push(name.clone());
                                 }
                                 ui.set_preset_names(names_model(&vs.names));
+                                vs.last_preset = Some(name.clone());
                                 save_last_preset(&vs.vault_path, &profile);
                                 if let Some(ref vault) = vs.vault_path.clone()
                                     && !vault.is_empty()
@@ -418,9 +452,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                         let new_vp = if path.is_empty() { None } else { Some(path) };
                         if let Ok(mut vs) = vs_path.lock() {
                             vs.vault_path = new_vp.clone();
-                            let mut cfg = load_config("Aether");
-                            cfg.vault_path = new_vp.clone();
-                            let _ = save_config("Aether", &cfg);
+                            let _ = set_vault_path("Aether", new_vp.clone());
                             if let Some(ref vp) = new_vp {
                                 let scan_gen = vs.pending.bump_generation();
                                 vs.scanning_for = Some(vp.clone());
@@ -485,10 +517,10 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
                         };
                         if let Some(profile) = profile {
                             apply_profile(&s_sel, &profile);
-                            save_last_preset(
-                                &vs_sel.lock().ok().and_then(|g| g.vault_path.clone()),
-                                &profile,
-                            );
+                            if let Ok(mut vs) = vs_sel.lock() {
+                                vs.last_preset = Some(profile.name.clone());
+                                save_last_preset(&vs.vault_path, &profile);
+                            }
                             if let Some(ui) = ui_weak.upgrade() {
                                 ui.set_preset_name(SharedString::from(profile.name.as_str()));
                             }

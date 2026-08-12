@@ -7,7 +7,7 @@ use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
 use lx_analysis::product_shared::MeridianShared;
-use lx_vault::{load_config, save_config};
+use lx_vault::{load_config, set_last_preset, set_vault_path};
 use lx_editor_utils::{
     bind_bools, bind_floats, bind_ints, dirty::*, meter::*, reset_floats,
     set_float_defaults, slint_helpers::*, sync_bools_dirty,
@@ -150,6 +150,8 @@ impl SyncCache {
 
 struct VaultUiState {
     vault_path: Option<String>,
+    /// Last selected preset name (UI label + config).
+    last_preset: Option<String>,
     names: Vec<String>,
     cache: Vec<PresetEntry>,
     pending: Arc<PendingPresets<PresetEntry>>,
@@ -160,12 +162,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
     let shared = params.shared.clone();
 
     // Vizia-parity tick state: 33 ms throttle, dirty sets, EQ cache.
-    // Mutex: LxSlintEditor SyncFn is Send+Sync.
-    let sync_cache = Mutex::new(SyncCache::new());
+    // Arc: build resets on each open; sync uses the same mirrors.
+    let sync_cache = Arc::new(Mutex::new(SyncCache::new()));
 
     // Shared between build callbacks and per-frame sync (scan drain, SNAP write).
     let init_cfg = load_config("Meridian");
     let init_vp = init_cfg.vault_path.clone();
+    let init_last = init_cfg.last_preset.clone();
     let vault_pending = Arc::new(PendingPresets::new());
     {
         let scan_gen = vault_pending.bump_generation();
@@ -177,6 +180,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
     }
     let vault_state = Arc::new(Mutex::new(VaultUiState {
         vault_path: init_vp.clone(),
+        last_preset: init_last,
         names: Vec::new(),
         cache: Vec::new(),
         pending: vault_pending,
@@ -192,8 +196,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
             let params = params.clone();
             let shared = shared.clone();
             let vault_state = vault_state.clone();
-            let init_vp = init_vp.clone();
+            let sync_cache = Arc::clone(&sync_cache);
             move |state: LxPluginContext<MeridianParams>| {
+                // New Slint component each open; wipe dirty mirrors so labels
+                // and layout are re-pushed (stale cache → empty text / collapse).
+                if let Ok(mut c) = sync_cache.lock() {
+                    *c = SyncCache::new();
+                }
                 let ui = MeridianUi::new().unwrap();
 
                 ui.set_ui_zoom_percent(zoom_build.percent() as i32);
@@ -205,11 +214,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     });
                 }
 
-                // SMOOTH default ON (display-only; not a host param).
-                shared
-                    .spectrum.smooth
-                    .store(true, Ordering::Release);
-                ui.set_spectrum_smooth(true);
+                // SMOOTH: keep live shared value across UI reopen (don't force ON).
+                ui.set_spectrum_smooth(shared.spectrum.smooth.load(Ordering::Relaxed));
 
                 // Right-click reset targets: real defaults via range.normalize
                 // (Slint `*_default` props were stubbed at 0.5 → mid-position jumps).
@@ -300,11 +306,23 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 );
 
                 // --- vault / preset / SNAP (Vizia parity) ---
-                if let Some(ref vp) = init_vp {
-                    ui.set_vault_path(SharedString::from(vp.as_str()));
-                }
-                if init_vp.as_ref().is_none_or(|v| v.is_empty()) {
+                // Live vault_state — not frozen init_vp (path/name survive UI close).
+                let (live_vp, live_last, live_names) = vault_state
+                    .lock()
+                    .ok()
+                    .map(|g| (g.vault_path.clone(), g.last_preset.clone(), g.names.clone()))
+                    .unwrap_or((None, None, Vec::new()));
+                ui.set_vault_path(SharedString::from(live_vp.as_deref().unwrap_or("")));
+                if live_vp.as_ref().is_none_or(|v| v.is_empty()) {
                     ui.set_snap_label(SharedString::from("SET VAULT"));
+                }
+                if !live_names.is_empty() {
+                    ui.set_preset_names(names_model(&live_names));
+                }
+                if let Some(ref name) = live_last {
+                    if !name.is_empty() {
+                        ui.set_preset_name(SharedString::from(name.as_str()));
+                    }
                 }
 
                 let snap_shared = shared.clone();
@@ -378,6 +396,8 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                             } else {
                                 vs.cache.push((name.clone(), fp.clone(), profile.clone()));
                             }
+                            vs.last_preset = Some(name.clone());
+                            let _ = set_last_preset("Meridian", &name);
                             vs.names = merge_preset_names(&vs.cache);
                             ui.set_preset_names(names_model(&vs.names));
                             ui.set_preset_name(SharedString::from(name.as_str()));
@@ -402,9 +422,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     let new_vp = if path.is_empty() { None } else { Some(path) };
                     if let Ok(mut vs) = vs_path.lock() {
                         vs.vault_path = new_vp.clone();
-                        let mut cfg = load_config("Meridian");
-                        cfg.vault_path = new_vp.clone();
-                        let _ = save_config("Meridian", &cfg);
+                        let _ = set_vault_path("Meridian", new_vp.clone());
                         let scan_gen = vs.pending.bump_generation();
                         let scan_arg = new_vp.clone().unwrap_or_default();
                         vs.scanning_for = new_vp.clone();
@@ -454,6 +472,10 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     };
                     if let Some(profile) = profile {
                         apply_profile(&sel_state, &sel_params, &profile);
+                        if let Ok(mut vs) = sel_vs.lock() {
+                            vs.last_preset = Some(profile.name.clone());
+                        }
+                        let _ = set_last_preset("Meridian", &profile.name);
                         if let Some(ui) = sel_ui.upgrade() {
                             ui.set_preset_name(SharedString::from(profile.name.as_str()));
                         }

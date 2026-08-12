@@ -2,6 +2,11 @@
 //!
 //! Only call the Slint setter when the value actually changed, avoiding
 //! redundant UI updates on every tick.
+//!
+//! **Reopen:** the host recreates the Slint component on each `Editor::open`,
+//! but product `SyncCache` lives for the whole `Editor` lifetime. Reset the
+//! cache at the start of the build closure (each open), or labels stay empty
+//! and layout collapses until a value actually changes.
 
 /// Update a cached `f32` and return `true` if it changed.
 #[inline]
