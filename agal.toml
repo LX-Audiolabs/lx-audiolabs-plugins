@@ -10,7 +10,4 @@ plugin_target_editor = "Plugins use aura-editor directly; product-specific edito
 crate_vs_plugin = "Reusable logic belongs in crates/, product logic belongs in plugins/."
 
 # Intentional product / DSP-crate noise — keep graph health green without losing rules.
-[[suppress]]
-code = "large_param_surface"
-node = "mensor"
-reason = "Mensor product surface (~70 params) is intentional"
+# (currently none for the stable plugin set)

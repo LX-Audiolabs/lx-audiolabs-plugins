@@ -2912,24 +2912,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mensor"
-version = "0.4.2"
-dependencies = [
- "aura",
- "aura-build",
- "aura-dsp",
- "aura-editor",
- "aura-test",
- "lx-analysis",
- "lx-vault",
- "realfft",
- "serde",
- "serde_json",
- "slint",
- "tracing",
-]
-
-[[package]]
 name = "meridian"
 version = "1.11.1"
 dependencies = [

@@ -14,7 +14,7 @@ export component LxKnob inherits VerticalLayout {
     in property <float> step: 0.0;          // 0 = continuous; 1, 2, ... = discrete
     in property <bool> small: false;        // uses Lx.knob-d-sm instead of Lx.knob-d
     in property <float> default-value: 0.5; // right-click resets to this value
-    // Greyed + no drag (e.g. Mensor Ceil S / Soft S when clip M/S off).
+    // Greyed + no drag (e.g. disabled ceiling / soft-clip controls).
     in property <bool> enabled: true;
 
     callback changed(float);

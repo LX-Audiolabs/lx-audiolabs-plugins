@@ -16,12 +16,6 @@ crate = "lucent"
 category = "analyzer"
 
 [[plugin]]
-name = "Mensor"
-bundle_id = "mensor"
-crate = "mensor"
-category = "effect"
-
-[[plugin]]
 name = "Equilibrium"
 bundle_id = "equilibrium"
 crate = "equilibrium"

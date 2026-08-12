@@ -15,7 +15,7 @@
             "id": "pluginName",
             "type": "pickString",
             "description": "Plugin to build",
-            "options": ["aether", "mensor", "equilibrium", "lucent", "lucent-relay", "meridian"]
+            "options": ["aether", "equilibrium", "lucent", "lucent-relay", "meridian"]
         }
     ]
 }

@@ -33,7 +33,6 @@ $clapFiles = [ordered]@{
     "equilibrium"  = "Equilibrium.clap"
     "lucent"       = "Lucent.clap"
     "lucent-relay" = "Lucent Relay.clap"
-    "mensor"       = "Mensor.clap"
 }
 
 $searchDirs = @(

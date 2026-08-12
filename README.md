@@ -25,9 +25,8 @@ Product plugins for **LX Audiolabs**, built on **[AURA](https://github.com/LX-Au
 | **Equilibrium** | 1.x | Pre-master spectral balancer | yes |
 | **Lucent** | 1.x | Spectrum analyzer (standalone / hybrid / relay) | yes |
 | **Lucent Relay** | 1.x | Relay publisher for Lucent | yes |
-| **Mensor** | 0.4.x | All-in-one mastering (M/S EQ, comp, sat, limiters) | **under development** (not in default release zips) |
 
-Five plugins are the current **shipping set**. **Mensor** is in-tree for development (builds with the rest of the workspace) but is **not** part of the default CLAP packaging train until it leaves 0.x.
+These five plugins are the current **shipping set**.
 
 ---
 
@@ -42,7 +41,6 @@ crates/                 # product libraries
 plugins/                # products
   aether/ meridian/ equilibrium/
   lucent/ lucent-relay/
-  mensor/               # under development
 ```
 
 Runtime GUI: **aura-editor** + **aura-baseview** (default FemtoVG / OpenGL).
@@ -89,7 +87,6 @@ Default editor path is **FemtoVG** → needs a working **OpenGL 3.2 Core** (or n
 | `equilibrium` | Pre-master spectral balancer |
 | `lucent` | Spectrum analyzer (standalone / hybrid / relay) |
 | `lucent-relay` | Relay publisher |
-| `mensor` | Mastering chain — **under development** |
 
 Shared brand UI: `crates/lx-ui-slint` (`LxKnob`, spectrum, shell, …).
 
@@ -110,18 +107,12 @@ cargo check --workspace
 # Install CLAP into the host search path (release)
 cargo aura install --clap --release -plug meridian
 
-# Several shipping plugins
+# All shipping plugins
 cargo aura install --clap --release -plug aether meridian equilibrium lucent lucent-relay
 
-# Mensor (dev only — not default ship)
-cargo aura install --clap --release -plug mensor
-
-# Package release ZIPs → dist/
-# Default set: Aether + Meridian + Equilibrium + Lucent + Lucent Relay (win + linux)
-# Mensor is intentionally omitted unless you pass -Plugins mensor
-.\build-local-zip.ps1
-.\build-local-zip.ps1 -Platform win
-.\build-local-zip.ps1 -Plugins aether,meridian
+# Artifacts are produced under target/release/ (or target/<target-triplet>/release/
+# for cross builds). GitHub Actions builds and packages the release CLAPs; local
+# packaging scripts are no longer shipped in this repository.
 ```
 
 ### CLAP validate (ship gate)
@@ -137,16 +128,20 @@ cargo aura install --clap --release -plug lucent-relay
 
 ### Linux CLAPs (from Windows)
 
-Cross-compile via Zig (wired in `.cargo/`):
+Cross-compile via Zig. The repository no longer hard-codes Windows linker
+wrappers in `.cargo/config.toml`; set the linker via env vars or `cargo-zigbuild`:
 
 ```powershell
 winget install zig.zig --source winget
 cargo install cargo-zigbuild
 rustup target add x86_64-unknown-linux-gnu
 
-cargo aura build --clap --release -plug aether --target x86_64-unknown-linux-gnu
-.\build-local-zip.ps1 -Platform linux
+$env:CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "zig cc"
+cargo build --release --package aether --target x86_64-unknown-linux-gnu
 ```
+
+Then copy `target/x86_64-unknown-linux-gnu/release/libaether.so` to your CLAP
+search path (e.g. `~/.clap/`) or bundle it manually.
 
 ---
 

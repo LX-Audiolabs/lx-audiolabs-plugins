@@ -4,13 +4,12 @@ members = [
     "crates/lx-editor-utils",
     "crates/lx-vault",
     "crates/lx-analysis",
-    # AURA cutover: all plugins migrated.
+    # Stable shipping plugins only. Mensor lives in a private dev branch.
     "plugins/meridian",
     "plugins/aether",
     "plugins/equilibrium",
     "plugins/lucent",
     "plugins/lucent-relay",
-    "plugins/mensor",
 ]
 resolver = "3"
 

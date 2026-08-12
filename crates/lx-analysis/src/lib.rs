@@ -24,5 +24,5 @@ pub use lx_vault::{
 };
 
 pub use product_shared::{
-    AetherShared, EquilibriumShared, LucentShared, MeridianShared, MensorShared,
+    AetherShared, EquilibriumShared, LucentShared, MeridianShared,
 };

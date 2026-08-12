@@ -21,7 +21,7 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target/
-          key: linux-aether-${{ hashFiles('**/Cargo.lock', '.cargo/config.toml') }}
+          key: linux-aether-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: linux-aether-
       - name: Install build dependencies
         run: |
@@ -42,8 +42,6 @@ jobs:
             libegl-dev \
             libgl-dev
       - name: Build Aether
-        env:
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: cc
         run: cargo build --release --package aether
       - name: Read version
         id: version
@@ -75,7 +73,7 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target/
-          key: macos-aether-${{ hashFiles('**/Cargo.lock', '.cargo/config.toml') }}
+          key: macos-aether-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: macos-aether-
       - name: Build Aether
         run: cargo build --release --package aether
@@ -111,7 +109,7 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target/
-          key: windows-aether-${{ hashFiles('**/Cargo.lock', '.cargo/config.toml') }}
+          key: windows-aether-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: windows-aether-
       - name: Build Aether
         run: cargo build --release --package aether
