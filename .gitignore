@@ -7,6 +7,10 @@
 *.swo
 .agents\*
 .vscode\*
+
+# Personal agent config — may contain email / local prefs; never commit.
+AGENTS.md
+
 # Local scratch (soft-fail notes, personal checklists)
 /TODO.md
 # agal orientation layer (local generate). Optional: version adapted skill packs only.

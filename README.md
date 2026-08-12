@@ -1,147 +1,175 @@
-# lx-audiolabs-slint
+# LX Audiolabs — plugins
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Slint](https://img.shields.io/badge/Slint-1.17.1-2379F4.svg)](https://slint.dev)
+[![AURA](https://img.shields.io/badge/framework-AURA-6E40C9.svg)](https://github.com/LX-Audiolabs/aura)
 [![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
-[![AI](https://img.shields.io/badge/dev-AI--assisted-6E40C9.svg)](https://github.com/LX-Audiolabs/agal)
 
-Slint UI workspace for LX Audiolabs plugins (CLAP / VST3 / LV2 via AURA).
+Product plugins for **LX Audiolabs**, built on **[AURA](https://github.com/LX-Audiolabs/aura)** (Slint UI + CLAP-first).
 
-> **Status:** truce → AURA cutover complete. All six plugins (aether,
-> equilibrium, lucent, lucent-relay, mensor, meridian) build and install with
-> `cargo aura`. The shared product UI lives in `lx-ui-slint` on top of
-> `aura-editor` + `aura-baseview`.
+| | |
+|--|--|
+| **License** | [GPL-3.0-or-later](./LICENSE) |
+| **Framework** | [AURA](https://github.com/LX-Audiolabs/aura) (path sibling or git) |
+| **Ship format** | **CLAP** (scripts + release zips) |
+| **Other formats** | VST3 / LV2 via AURA features — **self-build**, not packaged here |
+
+---
+
+## Status
+
+| Plugin | Version | Role | Ship |
+|--------|---------|------|------|
+| **Aether** | 1.x | EQ + crossfeed | yes |
+| **Meridian** | 1.x | Channel strip | yes |
+| **Equilibrium** | 1.x | Pre-master spectral balancer | yes |
+| **Lucent** | 1.x | Spectrum analyzer (standalone / hybrid / relay) | yes |
+| **Lucent Relay** | 1.x | Relay publisher for Lucent | yes |
+| **Mensor** | 0.4.x | All-in-one mastering (M/S EQ, comp, sat, limiters) | **under development** (not in default release zips) |
+
+Five plugins are the current **shipping set**. **Mensor** is in-tree for development (builds with the rest of the workspace) but is **not** part of the default CLAP packaging train until it leaves 0.x.
+
+---
 
 ## Layout
 
 ```
-crates/                 # libraries
+crates/                 # product libraries
   lx-ui-slint/          # design system (Lx* components)
+  lx-editor-utils/      # editor helpers (dirty, meters, snap, …)
+  lx-vault/             # preset paths / last-preset config
+  lx-analysis/          # product *Shared analysis types
 plugins/                # products
   aether/ meridian/ equilibrium/
   lucent/ lucent-relay/
-  mensor/
+  mensor/               # under development
 ```
 
-Runtime GUI: **aura-editor** + **aura-baseview** (default `backend-femtovg` + OpenGL).
+Runtime GUI: **aura-editor** + **aura-baseview** (default FemtoVG / OpenGL).
 
-## System requirements (UI)
+---
 
-**INFO — GPU / OpenGL**
+## Requirements
 
-Default editor path is **FemtoVG** (custom path shaders). That needs a working
-**OpenGL 3.2 Core** context (or newer). OpenGL ES 3.0+ with a solid driver is in
-the same class; pure GL 2.x / ancient Mesa / broken plugin-host GL embeds are
-**unsupported** — the UI may fail to open or crash the host (seen on old Linux +
-REAPER). The older Vizia + Skia builds were softer on weak GL; FemtoVG is not.
+### Framework (AURA)
 
-A future **wgpu** backend would not revive those machines either (modern GPU API).
+This catalog depends on AURA crates. Local layout used by LX:
 
-Audio processing does not depend on OpenGL — only the editor window does.
-
-## Shared UI (`crates/lx-ui-slint`)
-
-Brand CI design system for all Slint plugins:
-
-| Module | Contents |
-|--------|----------|
-| `ui/lx-theme.slint` | `Lx` global — colors, radii, type, spacing |
-| `ui/lx-chrome.slint` | Panel, section, tabs, toggle/danger buttons |
-| `ui/lx-shell.slint` | `LxShellHeader` / body / sidebars / footer |
-| `ui/lx-controls.slint` | `LxKnob`, `LxSlider`, band columns, line edit |
-| `ui/lx-meters.slint` | LED peak meter, correlation, meter bar |
-| `ui/lx-viz.slint` | Spectrum, EQ curve, goniometer |
-| `ui/lx.slint` | Barrel re-export |
-
-Import from a plugin:
-
-```slint
-// path relative to the plugin's ui/main.slint
-import {
-    Lx, LxShellHeader, LxKnob, LxSpectrum, LxGoniometer, LxLedPeakMeter,
-} from "../../../crates/lx-ui-slint/ui/lx.slint";
+```text
+parent/
+  aura/                      # https://github.com/LX-Audiolabs/aura
+  lx-audiolabs-plugins/      # this repo
 ```
 
-## Plugins
+Root `Cargo.toml` uses path deps: `../AURA/...` (folder name may be `aura` or `AURA` — match the path or adjust).
 
-| Crate | Role |
+Also install the CLI from the AURA tree:
+
+```bash
+cargo install --path ../AURA/tools/cargo-aura --locked
+# or clone AURA first, then:
+# cargo install --path path/to/aura/tools/cargo-aura --locked
+export AURA_PATH="/path/to/aura"   # PowerShell: $env:AURA_PATH = "…"
+```
+
+Docs, ship matrix, and format wrappers: **[AURA README](https://github.com/LX-Audiolabs/aura)**.
+
+### System (UI)
+
+Default editor path is **FemtoVG** → needs a working **OpenGL 3.2 Core** (or newer) context. Pure GL 2.x / broken host embeds are unsupported; the UI may fail to open. **Audio processing does not need OpenGL** — only the editor window does.
+
+---
+
+## Plugins (detail)
+
+| Crate | What |
 |-------|------|
 | `aether` | EQ + crossfeed |
 | `meridian` | Channel strip |
 | `equilibrium` | Pre-master spectral balancer |
 | `lucent` | Spectrum analyzer (standalone / hybrid / relay) |
 | `lucent-relay` | Relay publisher |
-| `mensor` | All-in-one mastering (M/S EQ, comp, sat, limiters) |
+| `mensor` | Mastering chain — **under development** |
 
-## Build
+Shared brand UI: `crates/lx-ui-slint` (`LxKnob`, spectrum, shell, …).
+
+```slint
+import {
+    Lx, LxShellHeader, LxKnob, LxSpectrum, LxGoniometer, LxLedPeakMeter,
+} from "../../../crates/lx-ui-slint/ui/lx.slint";
+```
+
+---
+
+## Build (CLAP — supported ship path)
 
 ```powershell
-# Workspace check (debug profile by default)
+# Workspace check
 cargo check --workspace
 
-# Single plugin CLAP install (release, Windows host)
-cargo aura install --clap -plug meridian
+# Install CLAP into the host search path (release)
+cargo aura install --clap --release -plug meridian
 
-# Multiple plugins at once
-cargo aura install --clap -plug aether meridian equilibrium
+# Several shipping plugins
+cargo aura install --clap --release -plug aether meridian equilibrium lucent lucent-relay
 
-# Build without --release uses the dev/debug profile.
-# Add --release for optimized builds (used by install and build-local-zip.ps1).
-cargo aura build --clap -plug aether
+# Mensor (dev only — not default ship)
+cargo aura install --clap --release -plug mensor
 
-# Package release ZIPs → dist/  (default: Aether+Meridian+Equilibrium+Lucent+Relay × win+linux)
-# also writes Lucent-Bundle-vX.Y.Z-{win|linux}.zip when lucent is in the set
+# Package release ZIPs → dist/
+# Default set: Aether + Meridian + Equilibrium + Lucent + Lucent Relay (win + linux)
+# Mensor is intentionally omitted unless you pass -Plugins mensor
 .\build-local-zip.ps1
-.\build-local-zip.ps1 -Platform win           # Windows only
-.\build-local-zip.ps1 -Platform linux         # Linux cross only
-.\build-local-zip.ps1 -Plugins aether,meridian  # subset only
+.\build-local-zip.ps1 -Platform win
+.\build-local-zip.ps1 -Plugins aether,meridian
 ```
 
 ### CLAP validate (ship gate)
 
 ```powershell
-# After install (or point -Paths at a .clap). Always uses -j 1.
 cargo install clap-validator   # once
-cargo aura install --clap -plug lucent-relay
+cargo aura install --clap --release -plug lucent-relay
 .\validate-clap.ps1 -Plugins lucent-relay
 .\validate-clap.ps1            # all installed LX CLAPs found on disk
 ```
 
-**Windows:** never run `clap-validator` with default/`-j > 1` parallelism as a
-ship gate. Parallel out-of-process jobs can flake with `0xc0000005`
-(ACCESS_VIOLATION), including Lucent Relay `param-fuzz-basic` /
-`param-fuzz-bounds`. Serial (`-j 1`) is green; product process path is fine.
-`validate-clap.ps1` forces `-j 1`.
+**Windows:** always use **serial** validation (`-j 1`). Parallel jobs can flake with `0xc0000005`. `validate-clap.ps1` forces `-j 1`.
 
 ### Linux CLAPs (from Windows)
 
-Cross-compile via Zig (already wired in `.cargo/`):
+Cross-compile via Zig (wired in `.cargo/`):
 
 ```powershell
 winget install zig.zig --source winget
 cargo install cargo-zigbuild
 rustup target add x86_64-unknown-linux-gnu
 
-# one plugin
-cargo aura build --clap -plug aether --target x86_64-unknown-linux-gnu
-# → target\x86_64-unknown-linux-gnu\release\libaether.so  (rename/copy to Aether.clap)
-
-# or zip packaging (default already includes linux via -Platform both)
+cargo aura build --clap --release -plug aether --target x86_64-unknown-linux-gnu
 .\build-local-zip.ps1 -Platform linux
-# → dist\*-vX.Y.Z-linux.zip
 ```
 
-Cross-builds: `aura-editor` enables `fontique/fontconfig-dlopen` on Linux
-targets, and `.cargo/config.toml` sets `RUST_FONTCONFIG_DLOPEN=on`, so no
-Linux fontconfig sysroot / pkg-config is needed. Fontconfig is loaded at
-runtime (`libfontconfig.so.1`) on the Linux host.
+---
 
-Native Linux CI: GitHub Actions → **Build Linux CLAPs** (`workflow_dispatch`).
+## VST3 / LV2 (self-build)
 
-### Dependencies
+**Release packaging and default scripts ship CLAP only.**  
+VST3 and LV2 are supported by **AURA** on its [ship matrix](https://github.com/LX-Audiolabs/aura#clap-first-formats); this catalog does not produce VST3/LV2 zips.
 
-| Dep | Source |
-|-----|--------|
-| AURA | path `../AURA` (local) / clone for CI |
+If you need them, build yourself with AURA’s CLI (plugin crates already declare `vst3` / `lv2` features):
 
-Local baseview edits: uncomment the `[patch]` block at the bottom of root `Cargo.toml`.
+```powershell
+# Requires AURA + cargo-aura (see above)
+cargo aura install --vst3 --release -plug meridian   # Windows / macOS
+cargo aura install --lv2  --release -plug meridian   # Linux
+```
+
+Details, host notes, and support matrix: **[github.com/LX-Audiolabs/aura](https://github.com/LX-Audiolabs/aura)**.
+
+---
+
+## License
+
+Copyright © 2026 LX Audiolabs  
+
+GPL-3.0-or-later — see [LICENSE](./LICENSE).  
+Plugins link **AURA** (also GPL-3.0-or-later); distributing a plugin binary means GPL obligations for that combined work. Selling with source is fine; closed-only ships are not.
