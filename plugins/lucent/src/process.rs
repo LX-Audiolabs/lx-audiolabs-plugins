@@ -3,7 +3,7 @@
 //! EMA α=1/6, no SnapFFT on audio thread.
 //! Peak/resonance/masking publish uses reused scratch + in-place registries.
 //!
-//! ponytail: same-crate module split — behavior matches lx-audiolabs-dev lucent.
+//! Module split is same-crate only; process behavior is unchanged.
 
 use std::sync::atomic::Ordering;
 use aura::prelude::*;

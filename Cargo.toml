@@ -4,7 +4,7 @@ members = [
     "crates/lx-editor-utils",
     "crates/lx-vault",
     "crates/lx-analysis",
-    # Shipping plugins only. Unfinished work stays in the internal catalog (lx-audiolabs-dev).
+    # Shipping plugins only.
     "plugins/meridian",
     "plugins/aether",
     "plugins/equilibrium",
