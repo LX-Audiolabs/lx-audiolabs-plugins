@@ -5,21 +5,16 @@
 //! (Aether / Meridian / …) — not framework API.
 
 use aura_dsp::analysis::{
-    AutoLoud, ClipWaveRing, PeakMeters, SPECTRUM_BINS, ScopeRing, ShmClaimShared, SnapPipeline,
-    SpectrumView, band5, band5_tol,
+    AutoLoud, PeakMeters, SPECTRUM_BINS, ScopeRing, ShmClaimShared, SnapPipeline, SpectrumView,
+    band5, band5_tol,
 };
 use atomic_float::AtomicF32;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
+use std::sync::atomic::{AtomicU32, AtomicUsize};
 use std::sync::{Arc, Mutex};
 
 #[inline]
 fn af(v: f32) -> Arc<AtomicF32> {
     Arc::new(AtomicF32::new(v))
-}
-
-#[inline]
-fn ab(v: bool) -> Arc<AtomicBool> {
-    Arc::new(AtomicBool::new(v))
 }
 
 #[inline]
