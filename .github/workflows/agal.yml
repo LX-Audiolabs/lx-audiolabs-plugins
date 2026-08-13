@@ -1,81 +1,14 @@
 name: agal
 
+# Disabled: installed personal github.com/lxndrbe/agal and expected
+# audiolabs/ output. Re-enable after it targets LX-Audiolabs/agal and agal/.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "plugins/**"
-      - "crates/**"
-      - "agal.toml"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/agal.yml"
-
-env:
-  CARGO_TERM_COLOR: always
 
 jobs:
   generate:
+    if: false
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout plugin workspace
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: agal
-
-      - name: Install agal
-        run: cargo install --git https://github.com/lxndrbe/agal --branch main
-
-      - name: Generate agal
-        run: agal .
-
-      - name: Upload agal artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: agal
-          path: |
-            audiolabs/audiolabs.json
-            audiolabs/audiolabs.agent.md
-            audiolabs/audiolabs.delta.md
-            audiolabs/audiolabs.html
-          if-no-files-found: error
-
-      - name: Verify graph + fail on error findings
-        run: |
-          test -f audiolabs/audiolabs.json
-          test -f audiolabs/audiolabs.agent.md
-          python3 - <<'PY'
-          import json, sys
-          with open("audiolabs/audiolabs.json") as f:
-              g = json.load(f)
-          ver = g.get("version", "")
-          assert len(g.get("nodes", [])) > 0
-          ms = g.get("migration_summary") or {}
-          assert ms.get("total_plugins", 0) > 0
-          findings = g.get("findings") or []
-          errors = [f for f in findings if f.get("severity") == "error"]
-          print(
-              f"agal ok: v{ver}, {len(g['nodes'])} nodes, "
-              f"{len(g.get('edges', []))} edges, {ms['total_plugins']} plugins, "
-              f"{len(findings)} findings ({len(errors)} error)"
-          )
-          if errors:
-              for e in errors:
-                  print(f"  ERROR [{e.get('code')}] {e.get('node')}: {e.get('message')}")
-              sys.exit(1)
-          if "delta" in g and g["delta"] is not None:
-              d = g["delta"]
-              print(
-                  f"  delta: first_run={d.get('first_run')} "
-                  f"+{len(d.get('added_nodes') or [])}/-{len(d.get('removed_nodes') or [])} nodes "
-              )
-          PY
-
-      - name: Verify cheatsheet
-        run: test -f audiolabs/Cheatsheet.md
+      - name: disabled
+        run: echo "agal workflow disabled"

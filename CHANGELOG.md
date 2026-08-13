@@ -10,17 +10,15 @@ unchanged), **major** = breaking.
 
 ## 2026-08-08 — AURA product cutover (host smoke)
 
-Branch: **`cutover/meridian-aura`** → merged 2026-08-09. Framework path deps →
-sibling `AURA` repo. Shared stack: `PluginLogic` / derive params / CLAP export /
-`aura-editor` on `aura-baseview`. Product DSP/UI stay in `lx-dsp`,
-`lx-analysis`, `lx-ui-slint`.
+Merged 2026-08-09. Framework path deps → sibling `AURA` repo. Shared stack:
+`PluginLogic` / derive params / CLAP export / `aura-editor` on `aura-baseview`.
+Product UI/analysis stay in `lx-analysis`, `lx-ui-slint`.
 
 ### Status
 
 | Plugin | AURA code | First host smoke / release build | CLAP id (stable) |
 |--------|-----------|----------------------------------|------------------|
 | **Aether** | done | **green** (first smoke + release) | `be.lxndr.aether` |
-| **Mensor** | done | **green** (release) | `[removed]` (renamed from *aurum* — too close to *AURA*) |
 | **Equilibrium** | done | **green** (first smoke + release) | `be.lxndr.equilibrium` |
 | **Lucent** | done | **green** (release; rustfft AVX ICE fixed) | `be.lxndr.lucent` (keep) |
 | **Lucent Relay** | done | **green** (release) | `be.lxndr.*` (keep) |
@@ -70,50 +68,14 @@ post-cutover release train. AURA framework version during cutover: **0.5.0**.
 | Aether        | 1.4.0  | 1.4.1  | patch | Bundled font (Konsistenz)            |
 | Lucent        | 1.2.0  | 1.2.1  | patch | Bundled font (Konsistenz)            |
 | Lucent Relay  | 1.1.1  | 1.1.2  | patch | Bundled font (Konsistenz)            |
-| Mensor        | 0.4.1  | 0.4.2  | patch | Bundled font (Konsistenz)            |
 
 ---
 
-## 2026-08-04 — Mensor 0.4.1: Clipper Defaults 0 dB + SHAPE/COLOR Layout
-
-- **Clipper Ceil M / Ceil S:** Range jetzt −6…**0 dB**, Default **0 dB** (vorher
-  −1 dB → Eingangssignal clippte sofort). RESET-Button setzt ebenfalls 0 dB;
-  Rechtsklick-Reset der Ceil-Knobs = 0 dB, Soft-Knobs = 0 %.
-- **SHAPE kompakter:** M/S-Toggle bottom-aligned in der Knobzeile, Wave-Pits
-  80 → 68 px; M/S-EQ-Reihen gequetscht (Spacing 8→4 px, Bänder 10→6 px) →
-  kein Scrollbalken mehr im SHAPE-Tab.
-- **SWEETEN LPF:** Range 18–35 kHz → **18–20 kHz** (FFT zeigt nur bis 20 kHz —
-  voller Knobweg jetzt sichtbar wirksam), Default 20 kHz, Anzeige in kHz.
-  Rechtsklick-Reset: HPF = 10 Hz (unten), LPF = 20 kHz (oben).
-- **Footer DELIVERY:** LUFS/dBTP/LRA/PLR mit fester Breite (64 px, wie IN LVL)
-  → Anzeige springt nicht mehr bei ein- vs. zweistelligen Werten.
-
----
-
-## 2026-08-04 — Aurum: Rename `aurum-slint` → `aurum` + UI-Fixes
-
-### Aurum 0.4.0 (noch garkeine BETA)
-
-- **Rename:** Crate/Ordner `aurum-slint` → `aurum`; CLAP heißt jetzt "Aurum"
-  (`bundle_id = "aurum"`, fourcc `Aurm`). Das alte Vizia-Aurum ist damit
-  endgültig ersetzt. Workspace/CI/Build-Skripte/README nachgezogen.
-- **SHAPE:** Clipper Soft M / Soft S Defaults 50 % → **0 %** (kein Clipping
-  im Default); RESET-Button setzt ebenfalls 0 %.
-- **M/S EQ:** Gain-Slider → kleine Knobs, Shelf/Q-Buttons (A/B/C) rechts
-  daneben; Spektren-Pits flacher (72/88/104 px) → SIDE-Reihe ohne Scrollen
-  erreichbar.
-- **COLOR / SWEETEN:** EQ-Curve deckt wieder den vollen Pit ab (X-Achse =
-  Spektrum-Achse), HPF-Rampe sitzt korrekt am linken Rand.
-- **LIMIT:** True Peak Limiter jetzt rechts neben dem M/S MB Limiter statt
-  darunter → kein Scrollen.
-- **Header:** `MONO` → `MID` (Reihenfolge MID | SIDE), Param-Name "Mid".
-
-### lx-ui-slint (shared)
+## 2026-08-04 — lx-ui-slint curve fit
 
 - `LxEqCurve`: `fit: ImageFit.fill` auf dem Curve-Path — Koordinaten sind in
-  Rust vorgemappt; Default `contain` letterboxte die Curve (sichtbar als
-  X-Achsen-Versatz in Aurum SWEETEN). Betrifft auch Meridian/Aether (gleiche
-  Overlay-Logik, jetzt überall exakt).
+  Rust vorgemappt; Default `contain` letterboxte die Curve. Betrifft
+  Meridian/Aether (gleiche Overlay-Logik).
 
 ---
 
@@ -150,7 +112,6 @@ post-cutover release train. AURA framework version during cutover: **0.5.0**.
 | Equilibrium   | 1.7.0  | 1.8.0  | minor | Zoom menu + SVG logo                       |
 | Aether        | 1.3.0  | 1.4.0  | minor | Zoom menu + SVG logo                       |
 | Lucent        | 1.1.0  | 1.2.0  | minor | Zoom menu + SVG logo                       |
-| Aurum         | 0.2.6  | 0.3.0  | minor | Zoom menu + SVG logo (0.x feature bump)    |
 | Lucent Relay  | 1.1.0  | 1.1.1  | patch | SVG logo only; stays 100% (compact UI)     |
 
 ### Meridian 1.11.0
@@ -172,10 +133,6 @@ post-cutover release train. AURA framework version during cutover: **0.5.0**.
 ### Lucent Relay 1.1.1 (noch keine BETA)
 
 - Shared SVG brand (`LxBrandLogo`); no zoom menu (window stays design size).
-
-### Aurum 0.3.0 (noch garkeine BETA)
-
-- UI Zoom 75/100/125 via logo menu; shared SVG brand.
 
 ---
 
@@ -199,7 +156,7 @@ post-cutover release train. AURA framework version during cutover: **0.5.0**.
 - **Clipboard-Support:** Ctrl+V für Vault-Pfade in allen Plugins.
 - **Correlation-Bar** unter den Peakmetern ersetzt den alten Correlation-Dot.
 - **Canvas-Größe stabil bei DPI-Änderung** — kein Versatz mehr in Bitwig.
-- **Linux CLAP:** Offizielle Linux-Builds via Zig-Cross-Compilation.
+- **Linux CLAP:** Offizielle Linux-Builds via GitHub Actions.
 - **Linux UI-Stabilität (lx-slint-baseview):** Kein pro-Frame Geometry-Rebuild
   und kein Host-`request_resize`-Kampf (Bitwig wuchs dagegen an) → weniger
   Knob/Slider-Ruckeln und weniger abgeschnittene Footer. Content-Scale bleibt
@@ -244,11 +201,5 @@ post-cutover release train. AURA framework version during cutover: **0.5.0**.
 - SemVer-Align mit Lucent Slint-Edition (1.0.0 war noch Vizia-Linie).
 - All-off-Maske korrigiert.
 - Feature-Parität zur Vizia-Version.
-
-### Aurum 0.2.6 (noch garkeine BETA)
-
-- Peak-Hold-Reset.
-- Clipper-Waveforms gefüllt.
-- LIMIT/COLOR Layout-Politur.
 
 ---

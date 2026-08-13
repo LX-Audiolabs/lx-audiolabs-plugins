@@ -5,8 +5,8 @@
 .DS_Store
 *.swp
 *.swo
-.agents\*
-.vscode\*
+.agents/
+.vscode/
 
 # Personal agent config — may contain email / local prefs; never commit.
 AGENTS.md

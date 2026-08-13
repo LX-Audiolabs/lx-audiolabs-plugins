@@ -5,7 +5,7 @@
 [![AURA](https://img.shields.io/badge/framework-AURA-6E40C9.svg)](https://github.com/LX-Audiolabs/aura)
 [![agal](https://img.shields.io/badge/powered%20by-agal-00ADD8.svg)](https://github.com/LX-Audiolabs/agal)
 
-Product plugins for **LX Audiolabs**, built on **[AURA](https://github.com/LX-Audiolabs/aura)** (Slint UI + CLAP-first).
+Official public product catalog for **LX Audiolabs**, built on **[AURA](https://github.com/LX-Audiolabs/aura)** (Slint UI + CLAP-first). Release CLAPs are built on **GitHub Actions**.
 
 | | |
 |--|--|

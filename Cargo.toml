@@ -4,7 +4,7 @@ members = [
     "crates/lx-editor-utils",
     "crates/lx-vault",
     "crates/lx-analysis",
-    # Stable shipping plugins only. Mensor lives in a private dev branch.
+    # Shipping plugins only. Unfinished work stays in the internal catalog (lx-audiolabs-dev).
     "plugins/meridian",
     "plugins/aether",
     "plugins/equilibrium",
