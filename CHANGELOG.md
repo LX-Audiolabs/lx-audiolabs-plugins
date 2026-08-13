@@ -26,7 +26,7 @@ Product UI/analysis stay in `lx-analysis`, `lx-ui-slint`.
 
 ### Tooling notes
 
-- rustc **1.96.0** pin (`rust-toolchain.toml`); 1.97 ICE/lld on this machine
+- rustc **1.97.1** pin (`rust-toolchain.toml`) — current stable
 - clap-validator: **always `-j 1` on Windows** (parallel ACCESS_VIOLATION flakes).
   Lucent Relay `param-fuzz-*` can crash under parallel jobs; serial full suite
   is green. Ship gate: `.\validate-clap.ps1` (forces `-j 1`). Unrelated to

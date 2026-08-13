@@ -1,18 +1,3 @@
-LX Audiolabs product plugins and shared product crates in this repository
-are licensed under the GNU General Public License v3.0 or later
-(GPL-3.0-or-later).
-
-Copyright (c) 2026 LX Audiolabs
-
-You may use, distribute, and modify this software under the terms of the
-GNU GPL as published by the Free Software Foundation, either version 3 of
-the License, or (at your option) any later version.
-
-The AURA framework (separate repository) is also GPL-3.0-or-later; linking
-plugins against AURA implies GPL obligations for the combined work.
-
-----------------------------------------------------------------------
-
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
