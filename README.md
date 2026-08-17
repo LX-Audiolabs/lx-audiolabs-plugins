@@ -88,14 +88,6 @@ Default editor path is **FemtoVG** → needs a working **OpenGL 3.2 Core** (or n
 | `lucent` | Spectrum analyzer (standalone / hybrid / relay) |
 | `lucent-relay` | Relay publisher |
 
-Shared brand UI: `crates/lx-ui-slint` (`LxKnob`, spectrum, shell, …).
-
-```slint
-import {
-    Lx, LxShellHeader, LxKnob, LxSpectrum, LxGoniometer, LxLedPeakMeter,
-} from "../../../crates/lx-ui-slint/ui/lx.slint";
-```
-
 ---
 
 ## Build (CLAP — supported ship path)
@@ -115,33 +107,9 @@ cargo aura install --clap --release -plug aether meridian equilibrium lucent luc
 # packaging scripts are no longer shipped in this repository.
 ```
 
-### CLAP validate (ship gate)
+### CLAP validate 
 
-```powershell
-cargo install clap-validator   # once
-cargo aura install --clap --release -plug lucent-relay
-.\validate-clap.ps1 -Plugins lucent-relay
-.\validate-clap.ps1            # all installed LX CLAPs found on disk
-```
-
-**Windows:** always use **serial** validation (`-j 1`). Parallel jobs can flake with `0xc0000005`. `validate-clap.ps1` forces `-j 1`.
-
-### Linux CLAPs (from Windows)
-
-Cross-compile via Zig. The repository no longer hard-codes Windows linker
-wrappers in `.cargo/config.toml`; set the linker via env vars or `cargo-zigbuild`:
-
-```powershell
-winget install zig.zig --source winget
-cargo install cargo-zigbuild
-rustup target add x86_64-unknown-linux-gnu
-
-$env:CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "zig cc"
-cargo build --release --package aether --target x86_64-unknown-linux-gnu
-```
-
-Then copy `target/x86_64-unknown-linux-gnu/release/libaether.so` to your CLAP
-search path (e.g. `~/.clap/`) or bundle it manually.
+use https://github.com/free-audio/clap-validator
 
 ---
 
@@ -167,4 +135,4 @@ Details, host notes, and support matrix: **[github.com/LX-Audiolabs/aura](https:
 Copyright © 2026 LX Audiolabs  
 
 GPL-3.0-or-later — see [LICENSE](./LICENSE).  
-Plugins link **AURA** (also GPL-3.0-or-later); distributing a plugin binary means GPL obligations for that combined work. Selling with source is fine; closed-only ships are not.
+Plugins link **AURA** (also GPL-3.0-or-later); distributing a plugin binary means GPL obligations for that combined work.
