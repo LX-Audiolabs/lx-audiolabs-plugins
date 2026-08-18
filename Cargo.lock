@@ -305,7 +305,7 @@ checksum = "628d228f918ac3b82fe590352cc719d30664a0c13ca3a60266fe02c7132d480a"
 
 [[package]]
 name = "aura"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "aura-clap",
  "aura-core",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "aura-baseview"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "baseview",
  "copypasta",
@@ -330,14 +330,14 @@ dependencies = [
 
 [[package]]
 name = "aura-build"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "slint-build",
 ]
 
 [[package]]
 name = "aura-clap"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "aura-core"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "aura-midi",
  "aura-params",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "aura-derive"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "aura-dsp"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "atomic_float",
  "aura-params",
@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "aura-editor"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "aura-baseview",
  "aura-core",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "aura-lv2"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -403,25 +403,25 @@ dependencies = [
 
 [[package]]
 name = "aura-midi"
-version = "0.7.0"
+version = "0.7.2"
 
 [[package]]
 name = "aura-params"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "bitflags 2.13.1",
 ]
 
 [[package]]
 name = "aura-shm"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "shared_memory",
 ]
 
 [[package]]
 name = "aura-test"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "aura-vst3"
-version = "0.7.0"
+version = "0.7.2"
 dependencies = [
  "aura-core",
  "aura-params",
