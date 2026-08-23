@@ -305,7 +305,7 @@ checksum = "628d228f918ac3b82fe590352cc719d30664a0c13ca3a60266fe02c7132d480a"
 
 [[package]]
 name = "aura"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aura-clap",
  "aura-core",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "aura-baseview"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "baseview",
  "copypasta",
@@ -330,14 +330,14 @@ dependencies = [
 
 [[package]]
 name = "aura-build"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "slint-build",
 ]
 
 [[package]]
 name = "aura-clap"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "aura-core"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aura-midi",
  "aura-params",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "aura-derive"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "aura-dsp"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "atomic_float",
  "aura-params",
@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "aura-editor"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aura-baseview",
  "aura-core",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "aura-lv2"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -403,25 +403,25 @@ dependencies = [
 
 [[package]]
 name = "aura-midi"
-version = "0.9.1"
+version = "0.9.2"
 
 [[package]]
 name = "aura-params"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "bitflags 2.13.1",
 ]
 
 [[package]]
 name = "aura-shm"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "shared_memory",
 ]
 
 [[package]]
 name = "aura-test"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "aura-vst3"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "aura-core",
  "aura-params",
@@ -505,9 +505,9 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "baseview"
-version = "0.3.0"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e90905c0b6f990fc4e8aff1eea97c40dc3e77cbc337e2d6fee1581585ed7bb"
+checksum = "69412dad79c1ed7a3f6960eda3707a31f1407a384bc6d49bc133624b347ac185"
 dependencies = [
  "block2 0.6.2",
  "bytemuck",
