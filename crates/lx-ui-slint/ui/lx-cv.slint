@@ -1,0 +1,73 @@
+// Loom-CV routing controls. Own file so lx-controls does not import lx-chrome
+// (that cycle hid LxCvRoute / LxCvRouting from the Slint LSP re-export).
+
+import { Lx } from "lx-theme.slint";
+import { LxSection } from "lx-chrome.slint";
+import { LxKnob, LxCycleBtn } from "lx-controls.slint";
+
+// One Loom-CV destination: cycle through Off/Lock/…/Rand, optional bipolar scale.
+export component LxCvRoute inherits HorizontalLayout {
+    in property <string> label: "SRC";
+    in-out property <int> src: 0;
+    in property <bool> has-scale: false;
+    in property <string> scale-label: "SCL";
+    in-out property <float> scale: 1.0;
+    in property <int> indication: 0;
+    callback src-changed(int);
+    callback scale-changed(float);
+
+    spacing: 8px;
+    alignment: center;
+    vertical-stretch: 0;
+    horizontal-stretch: 0;
+
+    VerticalLayout {
+        spacing: 4px;
+        alignment: center;
+        Text {
+            text: root.label;
+            font-size: Lx.font-xs;
+            color: Lx.text-label;
+            horizontal-alignment: center;
+        }
+        LxCycleBtn {
+            choices: [
+                "Off", "Lock", "Gate", "Pitch",
+                "Bus A", "Bus B", "EOC", "Env", "LFO", "Rand"
+            ];
+            index <=> root.src;
+            btn-width: 52px;
+            changed(v) => { root.src-changed(v); }
+        }
+    }
+
+    if root.has-scale: LxKnob {
+        label: root.scale-label;
+        small: true;
+        minimum: -1.0;
+        maximum: 1.0;
+        default-value: 1.0;
+        value <=> root.scale;
+        indication: root.indication;
+        value-text: round(root.scale * 100) + "%";
+        changed(v) => { root.scale-changed(v); }
+    }
+}
+
+// CV ROUTING card. Drop `LxCvRoute` children into the row.
+export component LxCvRouting inherits Rectangle {
+    background: transparent;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    LxSection {
+        width: 100%;
+        height: 100%;
+        title: "CV ROUTING";
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: center;
+            @children
+        }
+    }
+}

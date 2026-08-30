@@ -1,0 +1,34 @@
+{
+  // Project Zed settings (`.vscode/` does not apply here).
+  //
+  // CargoTom false-positives on `workspace = true` → crates.io keys
+  // (e.g. lx-aura-build): "coundt find crate in workspace". Cargo is fine;
+  // disable the TOML/Rust LSP from that extension in this repo.
+  "languages": {
+    "TOML": {
+      "language_servers": ["!cargo-tom", "..."]
+    },
+    "Rust": {
+      "language_servers": ["rust-analyzer", "!cargo-tom", "..."]
+    }
+  },
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "linkedProjects": ["Cargo.toml"],
+        "cargo": {
+          "buildScripts": { "enable": true }
+        },
+        "procMacro": { "enable": true }
+      }
+    },
+    "slint": {
+      "initialization_options": {
+        "includePaths": ["L:/LX-Audiolabs/AURA/crates/aura-build/fonts"],
+        "libraryPaths": {
+          "aura": "L:/LX-Audiolabs/AURA/crates/aura-build/ui/widgets.slint"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "lx-shm"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["LX Audiolabs"]
+description = "LX Audiolabs shared memory — cross-plugin IPC hub with seqlock-protected slots and heartbeat liveness"
+publish = false
+keywords = ["audio", "ipc", "shared-memory", "plugin"]
+categories = ["multimedia::audio"]
+
+[dependencies]
+shared_memory = "0.12"
