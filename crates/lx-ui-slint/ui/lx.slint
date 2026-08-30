@@ -21,13 +21,15 @@ import {
 } from "lx-shell.slint";
 import {
     LxKnob, LxLineEdit, LxParamField, LxCycleBtn, LxSegmentedButton,
-    LxSlider, LxEqBandColumn, LxBandColumn,
+    LxSlider, LxEqBandColumn, LxBandColumn
 } from "lx-controls.slint";
+import { LxCvRoute, LxCvRouting } from "lx-cv.slint";
 import {
     LxMeterBar, LxCorrelation, LxLedColumn, LxLedPeakMeter,
 } from "lx-meters.slint";
 import {
     LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
+    LxScope, LxDriftShape,
 } from "lx-viz.slint";
 export {
     Lx,
@@ -36,65 +38,8 @@ export {
     LxBrandLogo, LxShellHeader, LxShellBody, LxShellLeft, LxShellMain, LxShellRight, LxShellFooter,
     LxKnob, LxLineEdit, LxParamField, LxCycleBtn, LxSegmentedButton,
     LxSlider, LxEqBandColumn, LxBandColumn,
+    LxCvRoute, LxCvRouting,
     LxMeterBar, LxCorrelation, LxLedColumn, LxLedPeakMeter,
     LxSpectrum, LxEqCurve, LxGoniometer, LxCompDisplay,
-}
-
-// Compile anchor for lx-ui-slint crate.
-export component LxGallery inherits Window {
-    title: "LX Shared UI";
-    preferred-width: Lx.window-w;
-    preferred-height: Lx.window-h;
-    background: Lx.window;
-
-    VerticalLayout {
-        spacing: 0;
-
-        LxShellHeader {
-            plugin-name: "GALLERY";
-            version: "0.1";
-        }
-
-        LxShellBody {
-            LxShellLeft {
-                title: "LEFT BAR";
-                Text {
-                    text: "presets / vault";
-                    font-size: Lx.font-sm;
-                    color: Lx.text-muted;
-                }
-            }
-
-            LxShellMain {
-                Text {
-                    text: "MAIN PANEL";
-                    font-size: Lx.font-lg;
-                    color: Lx.amber-hot;
-                }
-                LxMeterBar {
-                    height: 12px;
-                    level: 0.65;
-                    bar-color: Lx.amber;
-                }
-            }
-
-            LxShellRight {
-                title: "RIGHT BAR";
-                Text {
-                    text: "meters / gonio";
-                    font-size: Lx.font-sm;
-                    color: Lx.text-muted;
-                }
-            }
-        }
-
-        LxShellFooter {
-            Text {
-                text: "FOOTER";
-                font-size: Lx.font-sm;
-                color: Lx.amber-hot;
-                vertical-alignment: center;
-            }
-        }
-    }
+    LxScope, LxDriftShape,
 }

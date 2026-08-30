@@ -5,10 +5,10 @@ use std::sync::{Arc, Mutex};
 use aura::prelude::*;
 use aura_editor::typed::*;
 use aura_editor::ui_zoom::UiZoom;
-use aura_shm::*;
+use lx_shm::*;
 use slint::{ModelRc, SharedString, VecModel};
 
-use crate::{editor_publish_heartbeat, sync_live, LucentRelayParams};
+use crate::{LucentRelayParams, editor_publish_heartbeat, sync_live};
 
 slint::include_modules!();
 
@@ -17,7 +17,10 @@ const WINDOW_H: u32 = 160;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn names_model(names: &[String]) -> ModelRc<SharedString> {
-    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
+    let v: Vec<SharedString> = names
+        .iter()
+        .map(|s| SharedString::from(s.as_str()))
+        .collect();
     ModelRc::new(VecModel::from(v))
 }
 
@@ -46,54 +49,54 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
             let params = params.clone();
             let sync_cache = Arc::clone(&sync_cache);
             move |_state: LxPluginContext<LucentRelayParams>| {
-            // New Slint component each open; wipe dirty mirrors so labels
-            // are re-pushed (stale cache → empty / wrong UI until a value moves).
-            if let Ok(mut c) = sync_cache.lock() {
-                *c = SyncCache {
-                    opts: Vec::new(),
-                    idx: None,
-                    connected: None,
-                    status: String::new(),
-                };
-            }
-            let ui = LucentRelayUi::new().expect("LucentRelayUi::new");
-
-            ui.set_version(SharedString::from(VERSION));
-            let initial_name = params.name.read().map(|s| s.clone()).unwrap_or_default();
-            ui.set_relay_name(SharedString::from(initial_name.as_str()));
-
-            let p = params.clone();
-            ui.on_relay_name_changed(move |txt: SharedString| {
-                if let Ok(mut n) = p.name.write() {
-                    *n = txt.as_str().to_string();
+                // New Slint component each open; wipe dirty mirrors so labels
+                // are re-pushed (stale cache → empty / wrong UI until a value moves).
+                if let Ok(mut c) = sync_cache.lock() {
+                    *c = SyncCache {
+                        opts: Vec::new(),
+                        idx: None,
+                        connected: None,
+                        status: String::new(),
+                    };
                 }
-                // Immediate live mirror + SHM touch so Lucent button renames
-                // without waiting for the next editor tick.
-                sync_live(&p);
-                editor_publish_heartbeat(&p);
-            });
+                let ui = LucentRelayUi::new().expect("LucentRelayUi::new");
 
-            let p = params.clone();
-            ui.on_target_selected(move |idx: i32| {
-                let idx = idx.max(0) as usize;
-                // 0 = broadcast (empty target); 1.. = consumer from last options
-                // Options are rebuilt in sync; store by index into current hub list.
-                let now_ms = now_ms();
-                let lucents = relay_hub()
-                    .map(|hub| hub.read_consumers(now_ms))
-                    .unwrap_or_default();
-                let val = if idx == 0 {
-                    String::new()
-                } else {
-                    lucents.get(idx - 1).cloned().unwrap_or_default()
-                };
-                if let Ok(mut t) = p.target.write() {
-                    *t = val;
-                }
-                sync_live(&p);
-            });
+                ui.set_version(SharedString::from(VERSION));
+                let initial_name = params.name.read().map(|s| s.clone()).unwrap_or_default();
+                ui.set_relay_name(SharedString::from(initial_name.as_str()));
 
-            ui
+                let p = params.clone();
+                ui.on_relay_name_changed(move |txt: SharedString| {
+                    if let Ok(mut n) = p.name.write() {
+                        *n = txt.as_str().to_string();
+                    }
+                    // Immediate live mirror + SHM touch so Lucent button renames
+                    // without waiting for the next editor tick.
+                    sync_live(&p);
+                    editor_publish_heartbeat(&p);
+                });
+
+                let p = params.clone();
+                ui.on_target_selected(move |idx: i32| {
+                    let idx = idx.max(0) as usize;
+                    // 0 = broadcast (empty target); 1.. = consumer from last options
+                    // Options are rebuilt in sync; store by index into current hub list.
+                    let now_ms = now_ms();
+                    let lucents = relay_hub()
+                        .map(|hub| hub.read_consumers(now_ms))
+                        .unwrap_or_default();
+                    let val = if idx == 0 {
+                        String::new()
+                    } else {
+                        lucents.get(idx - 1).cloned().unwrap_or_default()
+                    };
+                    if let Ok(mut t) = p.target.write() {
+                        *t = val;
+                    }
+                    sync_live(&p);
+                });
+
+                ui
             }
         },
         {
@@ -115,9 +118,8 @@ pub fn build_editor(params: Arc<LucentRelayParams>) -> Box<dyn Editor> {
                 // Soft-reconcile stale target (Vizia process path). Hard-clear
                 // caused connect flicker when Lucent renames Hub N → custom name:
                 // sole consumer auto-retargets; multi → broadcast; match stays.
-                use aura_shm::resolve_from_consumers;
-                let resolved =
-                    resolve_from_consumers(&current, &lucent_list).unwrap_or_default();
+                use lx_shm::resolve_from_consumers;
+                let resolved = resolve_from_consumers(&current, &lucent_list).unwrap_or_default();
                 if resolved != current {
                     if let Ok(mut t) = params_sync.target.write() {
                         *t = resolved;

@@ -3,18 +3,18 @@
 //! EMA α=1/6, no SnapFFT on audio thread.
 //! Peak/resonance/masking publish uses reused scratch + in-place registries.
 //!
-//! Module split is same-crate only; process behavior is unchanged.
+//! ponytail: same-crate module split — behavior matches lx-audiolabs-dev lucent.
 
-use std::sync::atomic::Ordering;
 use aura::prelude::*;
 use aura_dsp::analysis::*;
-use aura_shm::*;
-use aura_shm::SPECTRUM_BINS;
 use aura_dsp::fx::FtzDazGuard;
+use lx_shm::SPECTRUM_BINS;
+use lx_shm::*;
+use std::sync::atomic::Ordering;
 
 use crate::{
-    attribute_contributors_into, gain_to_db, power_sum_named_into, publish_masking, publish_relays,
-    publish_resonance, sensitivity_thresholds, LucentDspState, LucentParams,
+    LucentDspState, LucentParams, attribute_contributors_into, gain_to_db, power_sum_named_into,
+    publish_masking, publish_relays, publish_resonance, sensitivity_thresholds,
 };
 
 pub(crate) fn run(
@@ -30,7 +30,12 @@ pub(crate) fn run(
     state.publish_consumer_name(params, now_ms);
 
     // Reset peak holds on request
-    if params.shared.peaks.reset_peak.swap(false, Ordering::Release) {
+    if params
+        .shared
+        .peaks
+        .reset_peak
+        .swap(false, Ordering::Release)
+    {
         state.peak_hold_value = -100.0;
         state.peak_hold_l_value = -100.0;
         state.peak_hold_r_value = -100.0;
@@ -112,12 +117,7 @@ pub(crate) fn run(
             {
                 let n_bins = SPECTRUM_BINS;
                 let mut frame = [0.0f32; SPECTRUM_BINS];
-                compute_spectrum_bins(
-                    &state.fft_output,
-                    &mut frame,
-                    fft_size,
-                    sample_rate,
-                );
+                compute_spectrum_bins(&state.fft_output, &mut frame, fft_size, sample_rate);
                 let sensitivity =
                     sensitivity_thresholds(params.sensitivity.raw_target() as f32 / 100.0);
 
@@ -126,11 +126,7 @@ pub(crate) fn run(
                         // Standalone: no relay interaction — UI registry cleared.
                         publish_relays(state.instance_key, &[]);
                         state.peak_tracker.detect(&frame, &sensitivity, sample_rate);
-                        publish_resonance(
-                            state.instance_key,
-                            state.peak_tracker.res_peaks(),
-                            &[],
-                        );
+                        publish_resonance(state.instance_key, state.peak_tracker.res_peaks(), &[]);
                         publish_masking(state.instance_key, &[]);
                         if let Ok(mut mm) = params.shared.masking_map.try_lock() {
                             mm.iter_mut().for_each(|m| *m = -90.0);
@@ -156,10 +152,7 @@ pub(crate) fn run(
                     1 => {
                         state.peak_tracker.detect(&frame, &sensitivity, sample_rate);
 
-                        let mask = params
-                            .shared
-                            .relay_active_mask
-                            .load(Ordering::Acquire);
+                        let mask = params.shared.relay_active_mask.load(Ordering::Acquire);
                         if let Some(hub) = relay_hub() {
                             state.relay_scratch_n = hub.read_active_into(
                                 &state.cached_display_name,
@@ -173,10 +166,7 @@ pub(crate) fn run(
 
                         // Relay feeds for the editor (curves + toggle bar +
                         // "N relays online") — before the active-mask filter.
-                        publish_relays(
-                            state.instance_key,
-                            &state.relay_scratch[..n_feeds],
-                        );
+                        publish_relays(state.instance_key, &state.relay_scratch[..n_feeds]);
 
                         // Group-level resonance: power-sum of Relay tracks (scratch buf).
                         power_sum_named_into(
@@ -246,10 +236,7 @@ pub(crate) fn run(
                         if let Ok(mut avg) = params.shared.spectrum.avg.try_lock() {
                             avg.iter_mut().for_each(|b| *b = -90.0);
                         }
-                        let mask = params
-                            .shared
-                            .relay_active_mask
-                            .load(Ordering::Acquire);
+                        let mask = params.shared.relay_active_mask.load(Ordering::Acquire);
                         if let Some(hub) = relay_hub() {
                             state.relay_scratch_n = hub.read_active_into(
                                 &state.cached_display_name,
@@ -260,10 +247,7 @@ pub(crate) fn run(
                             state.relay_scratch_n = 0;
                         }
                         let n_feeds = state.relay_scratch_n;
-                        publish_relays(
-                            state.instance_key,
-                            &state.relay_scratch[..n_feeds],
-                        );
+                        publish_relays(state.instance_key, &state.relay_scratch[..n_feeds]);
 
                         // RELAY mode: group resonance from Relay sum only.
                         power_sum_named_into(
@@ -319,15 +303,18 @@ pub(crate) fn run(
     let peak_mono_db = peak_l_db.max(peak_r_db);
     params
         .shared
-        .peaks.output_peak_l
+        .peaks
+        .output_peak_l
         .store(peak_l_db, Ordering::Release);
     params
         .shared
-        .peaks.output_peak_r
+        .peaks
+        .output_peak_r
         .store(peak_r_db, Ordering::Release);
     params
         .shared
-        .peaks.output_peak
+        .peaks
+        .output_peak
         .store(peak_mono_db, Ordering::Release);
     if peak_l_db > state.peak_hold_l_value {
         state.peak_hold_l_value = peak_l_db;
@@ -340,15 +327,18 @@ pub(crate) fn run(
     }
     params
         .shared
-        .peaks.peak_hold_l
+        .peaks
+        .peak_hold_l
         .store(state.peak_hold_l_value, Ordering::Release);
     params
         .shared
-        .peaks.peak_hold_r
+        .peaks
+        .peak_hold_r
         .store(state.peak_hold_r_value, Ordering::Release);
     params
         .shared
-        .peaks.peak_hold
+        .peaks
+        .peak_hold
         .store(state.peak_hold_value, Ordering::Release);
 
     // Stereo balance + correlation
@@ -361,7 +351,11 @@ pub(crate) fn run(
         } else {
             0.0
         };
-        params.shared.peaks.balance.store(balance, Ordering::Release);
+        params
+            .shared
+            .peaks
+            .balance
+            .store(balance, Ordering::Release);
 
         let corr = if sum_l2 > 1e-9 && sum_r2 > 1e-9 {
             sum_lr / (sum_l2.sqrt() * sum_r2.sqrt())
@@ -370,7 +364,8 @@ pub(crate) fn run(
         };
         params
             .shared
-            .peaks.phase_correlation
+            .peaks
+            .phase_correlation
             .store(corr.clamp(-1.0, 1.0), Ordering::Release);
     }
 
@@ -397,7 +392,10 @@ pub(crate) fn run(
             0.0
         };
         for i in 0..n {
-            params.shared.scope.push(lbuf[i] * vis_gain, rbuf[i] * vis_gain);
+            params
+                .shared
+                .scope
+                .push(lbuf[i] * vis_gain, rbuf[i] * vis_gain);
         }
     }
 

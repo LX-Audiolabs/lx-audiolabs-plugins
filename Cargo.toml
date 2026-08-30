@@ -4,6 +4,7 @@ members = [
     "crates/lx-editor-utils",
     "crates/lx-vault",
     "crates/lx-analysis",
+    "crates/lx-shm",
     # Shipping plugins only.
     "plugins/meridian",
     "plugins/aether",
@@ -14,19 +15,22 @@ members = [
 resolver = "3"
 
 [workspace.dependencies]
-# AURA framework (path until crates.io publish)
-aura            = { path = "../AURA/crates/aura", default-features = false }
-aura-params     = { path = "../AURA/crates/aura-params" }
-aura-core       = { path = "../AURA/crates/aura-core" }
-aura-build      = { path = "../AURA/crates/aura-build" }
-aura-editor     = { path = "../AURA/crates/aura-editor", default-features = false }
-aura-baseview   = { path = "../AURA/crates/aura-baseview", default-features = false }
-aura-test       = { path = "../AURA/crates/aura-test" }
+# AURA framework from crates.io. The published crate names use the `lx-*`
+# namespace; lib names (aura::, aura_dsp::, …) are unchanged.
+# default-features=false keeps format features opt-in; dsp is always on for products.
+lx-aura          = { version = "0.12.0", default-features = false, features = ["dsp"] }
+lx-aura-params   = { version = "0.12.0" }
+lx-aura-core     = { version = "0.12.0" }
+lx-aura-build    = { version = "0.12.0" }
+lx-aura-editor   = { version = "0.12.0", default-features = false }
+lx-aura-baseview = { version = "0.12.0", default-features = false }
+# Dev-only test helpers (lib name aura_test).
+lx-aura-test     = { version = "0.12.0" }
 # Portable DSP/analysis algorithms live in AURA; product vault/*Shared in lx_*.
-aura-dsp        = { path = "../AURA/crates/aura-dsp", default-features = false }
-aura-shm        = { path = "../AURA/crates/aura-shm" }
-lx-vault        = { path = "crates/lx-vault" }
-lx-analysis     = { path = "crates/lx-analysis" }
+lx-aura-dsp      = { version = "0.12.0", default-features = false }
+lx-shm           = { path = "crates/lx-shm" }
+lx-vault         = { path = "crates/lx-vault" }
+lx-analysis      = { path = "crates/lx-analysis" }
 
 baseview = "0.3"
 # Pin must match AURA / aura-baseview

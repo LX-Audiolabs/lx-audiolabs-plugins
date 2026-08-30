@@ -3,7 +3,7 @@
 //! `LucentShared::relay_active_mask`.
 
 use crate::RelaySlot;
-use aura_shm::SPECTRUM_BINS;
+use lx_shm::SPECTRUM_BINS;
 
 /// Single Relay feed as shown in the UI (from the Lucent-Relay plugins).
 #[derive(Clone, Debug, PartialEq)]

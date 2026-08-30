@@ -4,7 +4,10 @@ use slint::{ModelRc, SharedString, VecModel};
 
 /// Convert a `&[String]` into a Slint `ModelRc<SharedString>`.
 pub fn names_model(names: &[String]) -> ModelRc<SharedString> {
-    let v: Vec<SharedString> = names.iter().map(|s| SharedString::from(s.as_str())).collect();
+    let v: Vec<SharedString> = names
+        .iter()
+        .map(|s| SharedString::from(s.as_str()))
+        .collect();
     ModelRc::new(VecModel::from(v))
 }
 

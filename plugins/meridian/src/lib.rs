@@ -9,13 +9,13 @@
 //   HPF/LPF → 5-band Series EQ → Tilt → Exciter → Compressor →
 //   Warmth → Inflate → Pan → Stereo Width → Mono/Delta → Gain → clamp
 
+use aura::prelude::*;
 use realfft::RealFftPlanner;
 use std::sync::Arc;
-use aura::prelude::*;
 
 use aura_dsp::analysis::{SPECTRUM_BINS, SnapFFT};
-use lx_analysis::product_shared::MeridianShared;
 use aura_dsp::fx::{AutoLoudMeter, Biquad, Compressor, LR2Crossover, TiltEq};
+use lx_analysis::product_shared::MeridianShared;
 
 mod editor;
 mod presets;
@@ -86,21 +86,27 @@ pub(crate) fn inflate_shape(x: f32, curve: f32) -> f32 {
 #[derive(Params)]
 pub struct MeridianParams {
     // HPF / LPF
-    #[param(id = 1, name = "Low Cut",
+    #[param(
+        id = 1,
+        name = "Low Cut",
         default = 2.0,
         range = "log(2.0, 2000.0)",
         unit = "Hz",
         group = "Filter"
     )]
     pub hpf_freq: FloatParam,
-    #[param(id = 2, name = "High Cut",
+    #[param(
+        id = 2,
+        name = "High Cut",
         default = 35000.0,
         range = "log(200.0, 35000.0)",
         unit = "Hz",
         group = "Filter"
     )]
     pub lpf_freq: FloatParam,
-    #[param(id = 3, name = "Cut Slope",
+    #[param(
+        id = 3,
+        name = "Cut Slope",
         default = 0,
         range = "discrete(0, 1)",
         group = "Filter"
@@ -108,7 +114,9 @@ pub struct MeridianParams {
     pub cut_slope: IntParam,
 
     // Bass EQ shelf
-    #[param(id = 4, name = "Lo Shelf Gain",
+    #[param(
+        id = 4,
+        name = "Lo Shelf Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
         unit = "dB",
@@ -116,7 +124,9 @@ pub struct MeridianParams {
         group = "EQ/Lo Shelf"
     )]
     pub bass_gain: FloatParam,
-    #[param(id = 5, name = "Lo Shelf Slope",
+    #[param(
+        id = 5,
+        name = "Lo Shelf Slope",
         default = 1,
         range = "discrete(0, 2)",
         group = "EQ/Lo Shelf"
@@ -124,7 +134,9 @@ pub struct MeridianParams {
     pub bass_slope: IntParam,
 
     // Lo-Mid EQ
-    #[param(id = 6, name = "Lo-Mid Gain",
+    #[param(
+        id = 6,
+        name = "Lo-Mid Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
         unit = "dB",
@@ -132,7 +144,9 @@ pub struct MeridianParams {
         group = "EQ/Lo-Mid"
     )]
     pub lo_mid_gain: FloatParam,
-    #[param(id = 7, name = "Lo-Mid Slope",
+    #[param(
+        id = 7,
+        name = "Lo-Mid Slope",
         default = 1,
         range = "discrete(0, 2)",
         group = "EQ/Lo-Mid"
@@ -140,7 +154,9 @@ pub struct MeridianParams {
     pub lo_mid_slope: IntParam,
 
     // Mid EQ
-    #[param(id = 8, name = "Mid Gain",
+    #[param(
+        id = 8,
+        name = "Mid Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
         unit = "dB",
@@ -148,7 +164,9 @@ pub struct MeridianParams {
         group = "EQ/Mid"
     )]
     pub mid_gain: FloatParam,
-    #[param(id = 9, name = "Mid Slope",
+    #[param(
+        id = 9,
+        name = "Mid Slope",
         default = 1,
         range = "discrete(0, 2)",
         group = "EQ/Mid"
@@ -156,7 +174,9 @@ pub struct MeridianParams {
     pub mid_slope: IntParam,
 
     // High EQ
-    #[param(id = 10, name = "Hi-Mid Gain",
+    #[param(
+        id = 10,
+        name = "Hi-Mid Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
         unit = "dB",
@@ -164,7 +184,9 @@ pub struct MeridianParams {
         group = "EQ/Hi-Mid"
     )]
     pub high_gain: FloatParam,
-    #[param(id = 11, name = "Hi-Mid Slope",
+    #[param(
+        id = 11,
+        name = "Hi-Mid Slope",
         default = 1,
         range = "discrete(0, 2)",
         group = "EQ/Hi-Mid"
@@ -172,7 +194,9 @@ pub struct MeridianParams {
     pub high_slope: IntParam,
 
     // Excite (high shelf)
-    #[param(id = 12, name = "Hi Shelf Gain",
+    #[param(
+        id = 12,
+        name = "Hi Shelf Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
         unit = "dB",
@@ -180,7 +204,9 @@ pub struct MeridianParams {
         group = "EQ/Hi Shelf"
     )]
     pub excite_gain: FloatParam,
-    #[param(id = 13, name = "Hi Shelf Slope",
+    #[param(
+        id = 13,
+        name = "Hi Shelf Slope",
         default = 1,
         range = "discrete(0, 2)",
         group = "EQ/Hi Shelf"
@@ -188,35 +214,45 @@ pub struct MeridianParams {
     pub excite_slope: IntParam,
 
     // EQ band frequencies
-    #[param(id = 14, name = "Lo Shelf Freq",
+    #[param(
+        id = 14,
+        name = "Lo Shelf Freq",
         default = 80.0,
         range = "log(40.0, 200.0)",
         unit = "Hz",
         group = "EQ/Lo Shelf"
     )]
     pub eq_freq_1: FloatParam,
-    #[param(id = 15, name = "Lo-Mid Freq",
+    #[param(
+        id = 15,
+        name = "Lo-Mid Freq",
         default = 300.0,
         range = "log(150.0, 800.0)",
         unit = "Hz",
         group = "EQ/Lo-Mid"
     )]
     pub eq_freq_2: FloatParam,
-    #[param(id = 16, name = "Mid Freq",
+    #[param(
+        id = 16,
+        name = "Mid Freq",
         default = 1000.0,
         range = "log(500.0, 3000.0)",
         unit = "Hz",
         group = "EQ/Mid"
     )]
     pub eq_freq_3: FloatParam,
-    #[param(id = 17, name = "Hi-Mid Freq",
+    #[param(
+        id = 17,
+        name = "Hi-Mid Freq",
         default = 4000.0,
         range = "log(2000.0, 10000.0)",
         unit = "Hz",
         group = "EQ/Hi-Mid"
     )]
     pub eq_freq_4: FloatParam,
-    #[param(id = 18, name = "Hi Shelf Freq",
+    #[param(
+        id = 18,
+        name = "Hi Shelf Freq",
         default = 12000.0,
         range = "log(6000.0, 20000.0)",
         unit = "Hz",
@@ -225,7 +261,9 @@ pub struct MeridianParams {
     pub eq_freq_5: FloatParam,
 
     // Tilt EQ
-    #[param(id = 19, name = "Tilt",
+    #[param(
+        id = 19,
+        name = "Tilt",
         default = 0.0,
         range = "linear(-2.0, 2.0)",
         unit = "dB",
@@ -234,7 +272,9 @@ pub struct MeridianParams {
     pub tilt_gain: FloatParam,
 
     // Warmth (tube saturation)
-    #[param(id = 20, name = "Warmth Drive",
+    #[param(
+        id = 20,
+        name = "Warmth Drive",
         default = 0.0,
         range = "linear(0.0, 12.0)",
         unit = "dB",
@@ -242,7 +282,9 @@ pub struct MeridianParams {
         group = "Saturator"
     )]
     pub warmth_drive: FloatParam,
-    #[param(id = 21, name = "Warmth Mix",
+    #[param(
+        id = 21,
+        name = "Warmth Mix",
         default = 0.0,
         range = "linear(0.0, 100.0)",
         unit = "%",
@@ -253,7 +295,9 @@ pub struct MeridianParams {
     pub warmth_mix: FloatParam,
 
     // Exciter (HF saturation)
-    #[param(id = 22, name = "Excite Amount",
+    #[param(
+        id = 22,
+        name = "Excite Amount",
         default = 0.0,
         range = "linear(0.0, 30.0)",
         unit = "%",
@@ -262,7 +306,9 @@ pub struct MeridianParams {
         group = "Exciter"
     )]
     pub excite_amount: FloatParam,
-    #[param(id = 23, name = "Excite Blend",
+    #[param(
+        id = 23,
+        name = "Excite Blend",
         default = 0.0,
         range = "linear(0.0, 100.0)",
         unit = "%",
@@ -271,7 +317,9 @@ pub struct MeridianParams {
         group = "Exciter"
     )]
     pub excite_blend: FloatParam,
-    #[param(id = 24, name = "Excite Freq",
+    #[param(
+        id = 24,
+        name = "Excite Freq",
         default = 8000.0,
         range = "log(6000.0, 12000.0)",
         unit = "Hz",
@@ -280,7 +328,9 @@ pub struct MeridianParams {
     pub excite_freq: FloatParam,
 
     // Compressor
-    #[param(id = 25, name = "Comp Threshold",
+    #[param(
+        id = 25,
+        name = "Comp Threshold",
         default = 0.0,
         range = "linear(-30.0, 0.0)",
         unit = "dB",
@@ -288,7 +338,9 @@ pub struct MeridianParams {
         group = "Compressor"
     )]
     pub comp_threshold: FloatParam,
-    #[param(id = 26, name = "Comp Mix",
+    #[param(
+        id = 26,
+        name = "Comp Mix",
         default = 0.0,
         range = "linear(0.0, 100.0)",
         unit = "%",
@@ -297,7 +349,9 @@ pub struct MeridianParams {
         group = "Compressor"
     )]
     pub comp_mix: FloatParam,
-    #[param(id = 27, name = "Comp Attack",
+    #[param(
+        id = 27,
+        name = "Comp Attack",
         default = 15.0,
         range = "linear(5.0, 50.0)",
         unit = "ms",
@@ -305,7 +359,9 @@ pub struct MeridianParams {
         group = "Compressor"
     )]
     pub comp_attack: FloatParam,
-    #[param(id = 28, name = "Comp Release",
+    #[param(
+        id = 28,
+        name = "Comp Release",
         default = 120.0,
         range = "linear(50.0, 300.0)",
         unit = "ms",
@@ -313,14 +369,18 @@ pub struct MeridianParams {
         group = "Compressor"
     )]
     pub comp_release: FloatParam,
-    #[param(id = 29, name = "Comp Ratio",
+    #[param(
+        id = 29,
+        name = "Comp Ratio",
         default = 2.0,
         range = "linear(1.5, 4.0)",
         smooth = "linear(20)",
         group = "Compressor"
     )]
     pub comp_character: FloatParam,
-    #[param(id = 30, name = "Comp Makeup",
+    #[param(
+        id = 30,
+        name = "Comp Makeup",
         default = 0.0,
         range = "linear(0.0, 12.0)",
         unit = "dB",
@@ -330,7 +390,9 @@ pub struct MeridianParams {
     pub comp_makeup: FloatParam,
 
     // Inflate (Oxford-Inflator-inspired loudness/density waveshaper)
-    #[param(id = 31, name = "Inflate Effect",
+    #[param(
+        id = 31,
+        name = "Inflate Effect",
         default = 0.0,
         range = "linear(0.0, 100.0)",
         unit = "%",
@@ -339,7 +401,9 @@ pub struct MeridianParams {
         group = "Inflate"
     )]
     pub inflate_effect: FloatParam,
-    #[param(id = 32, name = "Inflate Curve",
+    #[param(
+        id = 32,
+        name = "Inflate Curve",
         default = 0.0,
         range = "linear(-50.0, 50.0)",
         smooth = "linear(20)",
@@ -352,7 +416,9 @@ pub struct MeridianParams {
     pub inflate_clip: BoolParam,
 
     // Stereo Width
-    #[param(id = 35, name = "Stereo Width",
+    #[param(
+        id = 35,
+        name = "Stereo Width",
         default = 100.0,
         range = "linear(0.0, 200.0)",
         unit = "%",
@@ -362,7 +428,9 @@ pub struct MeridianParams {
     )]
     pub stereo_width: FloatParam,
     // Pan
-    #[param(id = 36, name = "Pan",
+    #[param(
+        id = 36,
+        name = "Pan",
         default = 0.0,
         range = "linear(-1.0, 1.0)",
         smooth = "linear(20)",
@@ -370,7 +438,9 @@ pub struct MeridianParams {
     )]
     pub pan: FloatParam,
     // Output Gain
-    #[param(id = 37, name = "Output Gain",
+    #[param(
+        id = 37,
+        name = "Output Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
         unit = "dB",
@@ -407,7 +477,6 @@ impl MeridianParams {
 pub struct Meridian;
 
 pub struct MeridianDspState {
-
     // HPF/LPF
     pub(crate) hpf_l: Biquad,
     pub(crate) hpf_r: Biquad,
@@ -605,9 +674,6 @@ impl Default for MeridianDspState {
     }
 }
 
-
-
-
 // ─── PluginLogic ─────────────────────────────────────────────────────────────
 
 impl PluginLogic for Meridian {
@@ -700,38 +766,30 @@ impl PluginLogic for Meridian {
         let tilt_db = params.tilt_gain.raw_target() as f32;
         let excite_freq = params.excite_freq.raw_target() as f32;
 
-        state.bass_l
+        state
+            .bass_l
             .set_low_shelf(eq_f1, bass_gain, slope_val(params.bass_slope.value()), sr);
-        state.bass_r
+        state
+            .bass_r
             .set_low_shelf(eq_f1, bass_gain, slope_val(params.bass_slope.value()), sr);
-        state.lo_mid_l.set_peaking_eq(
-            eq_f2,
-            lo_mid_gain,
-            q_val(params.lo_mid_slope.value()),
-            sr,
-        );
-        state.lo_mid_r.set_peaking_eq(
-            eq_f2,
-            lo_mid_gain,
-            q_val(params.lo_mid_slope.value()),
-            sr,
-        );
-        state.mid_l
+        state
+            .lo_mid_l
+            .set_peaking_eq(eq_f2, lo_mid_gain, q_val(params.lo_mid_slope.value()), sr);
+        state
+            .lo_mid_r
+            .set_peaking_eq(eq_f2, lo_mid_gain, q_val(params.lo_mid_slope.value()), sr);
+        state
+            .mid_l
             .set_peaking_eq(eq_f3, mid_gain, q_val(params.mid_slope.value()), sr);
-        state.mid_r
+        state
+            .mid_r
             .set_peaking_eq(eq_f3, mid_gain, q_val(params.mid_slope.value()), sr);
-        state.high_l.set_peaking_eq(
-            eq_f4,
-            high_gain,
-            q_val(params.high_slope.value()),
-            sr,
-        );
-        state.high_r.set_peaking_eq(
-            eq_f4,
-            high_gain,
-            q_val(params.high_slope.value()),
-            sr,
-        );
+        state
+            .high_l
+            .set_peaking_eq(eq_f4, high_gain, q_val(params.high_slope.value()), sr);
+        state
+            .high_r
+            .set_peaking_eq(eq_f4, high_gain, q_val(params.high_slope.value()), sr);
         state.excite_l.set_high_shelf(
             eq_f5,
             excite_gain,
@@ -779,7 +837,8 @@ impl PluginLogic for Meridian {
 
         params
             .shared
-            .spectrum.sample_rate
+            .spectrum
+            .sample_rate
             .store(sr, std::sync::atomic::Ordering::Release);
     }
 

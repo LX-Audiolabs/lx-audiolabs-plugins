@@ -1,11 +1,11 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
+use aura::prelude::*;
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
 use std::sync::{Arc, RwLock};
-use aura::prelude::*;
 
 use aura_dsp::analysis::{SPECTRUM_BINS, ShmClaimShared};
-use aura_shm::{now_ms, relay_hub, resolve_from_consumers, resolve_relay_target, RelayHub};
+use lx_shm::{RelayHub, now_ms, relay_hub, resolve_from_consumers, resolve_relay_target};
 
 mod editor;
 mod process;
@@ -229,10 +229,9 @@ impl LucentRelayDspState {
             self.claimed_slot.map(|s| s as i32).unwrap_or(-1),
             Ordering::Release,
         );
-        self.shm_state.generation.store(
-            self.claimed_generation,
-            Ordering::Release,
-        );
+        self.shm_state
+            .generation
+            .store(self.claimed_generation, Ordering::Release);
     }
 
     fn spawn_liveness_thread(&mut self, params: &LucentRelayParams) {

@@ -14,8 +14,13 @@ export component LxKnob inherits VerticalLayout {
     in property <float> step: 0.0;          // 0 = continuous; 1, 2, ... = discrete
     in property <bool> small: false;        // uses Lx.knob-d-sm instead of Lx.knob-d
     in property <float> default-value: 0.5; // right-click resets to this value
-    // Greyed + no drag (e.g. disabled ceiling / soft-clip controls).
+    // Geometric taper: 50% rotation = sqrt(min*max). Requires minimum > 0.
+    // Matches `range = "log(min, max)"` on the host param (env times, cutoff).
+    in property <bool> logarithmic: false;
+    // Greyed + no drag (e.g. Mensor Ceil S / Soft S when clip M/S off).
     in property <bool> enabled: true;
+    // 0=none  1=mapped (hardware ctrl)  2=auto present  3=playing  4=recording
+    in property <int> indication: 0;
 
     callback changed(float);
 
@@ -24,7 +29,14 @@ export component LxKnob inherits VerticalLayout {
     opacity: root.enabled ? 1.0 : 0.35;
 
     property <length> diameter: root.small ? Lx.knob-d-sm : Lx.knob-d;
-    property <float> norm: clamp((root.value - root.minimum) / (root.maximum - root.minimum), 0, 1);
+    property <float> lin-span: max(root.maximum - root.minimum, 0.000000001);
+    property <float> log-lo: max(root.minimum, 0.000000001);
+    property <float> log-span: ln(max(root.maximum, root.log-lo)) - ln(root.log-lo);
+    property <float> lin-norm: clamp((root.value - root.minimum) / root.lin-span, 0, 1);
+    property <float> log-norm: root.log-span == 0
+        ? 0
+        : clamp((ln(max(root.value, root.log-lo)) - ln(root.log-lo)) / root.log-span, 0, 1);
+    property <float> norm: root.logarithmic ? root.log-norm : root.lin-norm;
 
     // Arc from 7:30 (135°) to 4:30 (135° + 270° * value), clockwise.
     function knob_arc_commands(cx: float, cy: float, r: float, value: float) -> string {
@@ -41,6 +53,11 @@ export component LxKnob inherits VerticalLayout {
         maximum: float,
         step: float,
     ) -> float {
+        if root.logarithmic && step <= 0 {
+            let n = clamp(start_norm + delta_y / 1px * 0.003, 0, 1);
+            let lo = max(minimum, 0.000000001);
+            return clamp(lo * pow(maximum / lo, n), minimum, maximum);
+        }
         return step > 0
             ? clamp(
                 round((minimum + clamp(start_norm + delta_y / 1px * 0.003, 0, 1) * (maximum - minimum)) / step) * step,
@@ -190,6 +207,19 @@ export component LxKnob inherits VerticalLayout {
             drop-shadow-offset-y: 1px;
             drop-shadow-blur: 2px;
             drop-shadow-color: Lx.shadow-hard;
+        }
+
+        // Param-indication dot — top-right corner of the disc.
+        if root.indication != 0: Rectangle {
+            x: root.diameter - 7px;
+            y: 1px;
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: root.indication == 1 ? #e8c040  // mapped = amber
+                : root.indication == 3 ? #40c060        // playing = green
+                : root.indication == 4 ? #e84040        // recording = red
+                : #4090e0;                               // present = blue
         }
 
         ta := TouchArea {
@@ -467,6 +497,9 @@ export component LxSegmentedButton inherits Rectangle {
     // Compact = Meridian EQ A/B/C pills (tiny); default fits "12 dB"/"24 dB".
     in property <bool> compact: false;
     in property <bool> vertical: false;
+    // 2×2 wrap (Ember WAVE: SAW/SQR over SIN/TRI). Not named `columns` —
+    // that identifier is reserved for GridLayout and the LSP drops it.
+    in property <bool> wrap: false;
 
     callback changed(float);
 
@@ -477,23 +510,27 @@ export component LxSegmentedButton inherits Rectangle {
     // Inset look for the tray (shadow under raised pills only).
     // Compact = fixed pill strip. Default horizontal used to min-width:0 +
     // stretch:1 and collapsed under header siblings (Lucent Own/Both/Relay).
-    horizontal-stretch: root.compact ? 0 : 1;
+    horizontal-stretch: (root.compact || root.wrap) ? 0 : 1;
     vertical-stretch: 0;
     // Compact ABC fixed width; vertical 12/24 needs a bit more;
-    // horizontal non-compact: room for ~3 short labels (caller may override).
-    min-width: root.compact ? 66px : (root.vertical ? 44px : 96px);
-    max-width: root.compact ? 66px : 9999px;
+    // 2×2 wrap is two short labels; horizontal non-compact stretches.
+    min-width: root.compact ? 66px : (root.wrap ? 80px : (root.vertical ? 44px : 96px));
+    max-width: root.compact ? 66px : (root.wrap ? 96px : 9999px);
 
     property <length> seg-h: root.compact ? 16px : Lx.button-h-sm;
     property <length> gap: root.compact ? 1px : 2px;
     property <length> tray-pad: root.compact ? 1px : 2px;
-    // Vertical stack height for 2–3 segments (Filter 12/24, etc.).
-    height: root.vertical
-        ? (root.choices.length >= 3 ? root.seg-h * 3 + root.gap * 2 + root.tray-pad * 2
-            : root.seg-h * 2 + root.gap + root.tray-pad * 2)
-        : root.seg-h + root.tray-pad * 2;
+    property <[int]> wrap-top: [0, 1];
+    property <[int]> wrap-bot: [2, 3];
+    // Vertical / 2×2 stack vs single row.
+    height: root.wrap
+        ? root.seg-h * 2 + root.gap + root.tray-pad * 2
+        : root.vertical
+            ? (root.choices.length >= 3 ? root.seg-h * 3 + root.gap * 2 + root.tray-pad * 2
+                : root.seg-h * 2 + root.gap + root.tray-pad * 2)
+            : root.seg-h + root.tray-pad * 2;
 
-    if !root.vertical: HorizontalLayout {
+    if !root.vertical && !root.wrap: HorizontalLayout {
         spacing: root.gap;
         padding: root.tray-pad;
         width: 100%;
@@ -546,7 +583,7 @@ export component LxSegmentedButton inherits Rectangle {
         }
     }
 
-    if root.vertical: VerticalLayout {
+    if root.vertical && !root.wrap: VerticalLayout {
         spacing: root.gap;
         padding: root.tray-pad;
         width: 100%;
@@ -595,6 +632,114 @@ export component LxSegmentedButton inherits Rectangle {
                     background: #00000030;
                 }
             ]
+        }
+    }
+
+    if root.wrap: VerticalLayout {
+        spacing: root.gap;
+        padding: root.tray-pad;
+        width: 100%;
+        height: 100%;
+        alignment: stretch;
+
+        HorizontalLayout {
+            spacing: root.gap;
+            vertical-stretch: 1;
+            for i in root.wrap-top: Rectangle {
+                property <bool> on: i < root.choices.length;
+                property <bool> active: on && Math.round(root.index) == i;
+                horizontal-stretch: 1;
+                min-width: 28px;
+                opacity: on ? 1 : 0;
+                border-radius: Lx.radius-sm;
+                border-width: active ? 1px : 0px;
+                border-color: #ffffff28;
+                background: active
+                    ? @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 50%, Lx.amber-lo 100%)
+                    : transparent;
+                drop-shadow-offset-x: 0px;
+                drop-shadow-offset-y: active ? 1px : 0px;
+                drop-shadow-blur: active ? 2px : 0px;
+                drop-shadow-color: Lx.shadow-soft;
+
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    text: on ? root.choices[i] : "";
+                    font-size: root.compact ? 8px : Lx.font-xs;
+                    font-weight: 600;
+                    color: active ? Lx.text : Lx.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                ta_gt := TouchArea {
+                    enabled: on;
+                    clicked => {
+                        root.index = i;
+                        root.changed(i);
+                    }
+                }
+
+                states [
+                    hover when ta_gt.has-hover && !active: {
+                        background: #ffffff10;
+                    }
+                    pressed when ta_gt.pressed && !active: {
+                        background: #00000030;
+                    }
+                ]
+            }
+        }
+
+        HorizontalLayout {
+            spacing: root.gap;
+            vertical-stretch: 1;
+            for i in root.wrap-bot: Rectangle {
+                property <bool> on: i < root.choices.length;
+                property <bool> active: on && Math.round(root.index) == i;
+                horizontal-stretch: 1;
+                min-width: 28px;
+                opacity: on ? 1 : 0;
+                border-radius: Lx.radius-sm;
+                border-width: active ? 1px : 0px;
+                border-color: #ffffff28;
+                background: active
+                    ? @linear-gradient(180deg, Lx.amber-hi 0%, Lx.amber 50%, Lx.amber-lo 100%)
+                    : transparent;
+                drop-shadow-offset-x: 0px;
+                drop-shadow-offset-y: active ? 1px : 0px;
+                drop-shadow-blur: active ? 2px : 0px;
+                drop-shadow-color: Lx.shadow-soft;
+
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    text: on ? root.choices[i] : "";
+                    font-size: root.compact ? 8px : Lx.font-xs;
+                    font-weight: 600;
+                    color: active ? Lx.text : Lx.text-secondary;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                ta_gb := TouchArea {
+                    enabled: on;
+                    clicked => {
+                        root.index = i;
+                        root.changed(i);
+                    }
+                }
+
+                states [
+                    hover when ta_gb.has-hover && !active: {
+                        background: #ffffff10;
+                    }
+                    pressed when ta_gb.pressed && !active: {
+                        background: #00000030;
+                    }
+                ]
+            }
         }
     }
 }

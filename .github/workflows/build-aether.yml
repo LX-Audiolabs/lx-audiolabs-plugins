@@ -3,7 +3,6 @@ name: Build Aether
 on:
   workflow_dispatch:
 
-# AURA is a path dep (../AURA). Clone sibling before cargo.
 
 jobs:
   build-linux:
@@ -13,8 +12,6 @@ jobs:
       CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: cc
     steps:
       - uses: actions/checkout@v6
-      - name: Checkout AURA (path dep ../AURA)
-        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
       - uses: dtolnay/rust-toolchain@1.97.1
       - uses: actions/cache@v6
         with:
@@ -67,8 +64,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Checkout AURA (path dep ../AURA)
-        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
       - uses: dtolnay/rust-toolchain@1.97.1
       - uses: actions/cache@v6
         with:
@@ -103,8 +98,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Checkout AURA (path dep ../AURA)
-        run: git clone --depth 1 https://github.com/LX-Audiolabs/AURA.git ../AURA
       - uses: dtolnay/rust-toolchain@1.97.1
       - uses: actions/cache@v6
         with:

@@ -15,22 +15,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use aura::prelude::*;
 use aura_dsp::analysis::*;
-use lx_vault::{load_config, set_vault_path};
 use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
-use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
-use aura_shm::*;
-use aura_shm::SPECTRUM_BINS;
+use aura_editor::ui_zoom::{UiZoom, apply_ui_zoom};
 use lx_editor_utils::{dirty::*, meter::*, snap::snap_filename, tick::*, viz::*};
+use lx_shm::SPECTRUM_BINS;
+use lx_shm::*;
+use lx_vault::{load_config, set_vault_path};
 use slint::{ModelRc, SharedString, VecModel};
-use aura::prelude::*;
 
 use crate::relay_state::RelayState;
 use crate::{
-    editor_ensure_consumer, editor_publish_consumer_name, read_masking, read_resonance,
-    AttributedPeak, LucentParams, LucentParamsParamId as P, RelaySlot, CONTRIB_NONE, CONTRIB_OWN,
-    MAX_RELAY_SLOTS,
+    AttributedPeak, CONTRIB_NONE, CONTRIB_OWN, LucentParams, LucentParamsParamId as P,
+    MAX_RELAY_SLOTS, RelaySlot, editor_ensure_consumer, editor_publish_consumer_name, read_masking,
+    read_resonance,
 };
 
 slint::include_modules!();
@@ -86,7 +86,10 @@ fn build_curve(out: &mut String, pts: &[(f32, f32)], fill: bool) {
     }
     let base = PATH_H + 2.0;
     if fill {
-        out.push_str(&format!("M -2.0 {base:.1} L {:.1} {:.1}", pts[0].0, pts[0].1));
+        out.push_str(&format!(
+            "M -2.0 {base:.1} L {:.1} {:.1}",
+            pts[0].0, pts[0].1
+        ));
     } else {
         out.push_str(&format!("M {:.1} {:.1}", pts[0].0, pts[0].1));
     }
@@ -241,7 +244,11 @@ fn format_resonance_text(
     own.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut relay: Vec<AttributedPeak> = acc_relay.values().copied().collect();
-    relay.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    relay.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let mut lines = Vec::new();
     for (bin, score) in own.iter().take(5) {
@@ -280,7 +287,11 @@ fn format_masking_text(
     }
     let fft_size = (SPECTRUM_BINS * 2) as f32;
     let mut peaks: Vec<AttributedPeak> = acc.values().copied().collect();
-    peaks.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    peaks.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     peaks.truncate(5);
     peaks
         .iter()
@@ -326,7 +337,9 @@ fn snap_markdown(
     } else {
         instance_name.trim()
     };
-    let name_yaml = if name.chars().any(|c| matches!(c, ':' | '#' | '"' | '\'' | '\n'))
+    let name_yaml = if name
+        .chars()
+        .any(|c| matches!(c, ':' | '#' | '"' | '\'' | '\n'))
         || name.contains(": ")
     {
         format!("\"{}\"", name.replace('"', "\\\""))
@@ -586,9 +599,18 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 let shared_reset = shared.clone();
                 ui.on_reset_peaks(move || {
                     shared_reset.peaks.reset_peak.store(true, Ordering::Release);
-                    shared_reset.peaks.peak_hold.store(-100.0, Ordering::Release);
-                    shared_reset.peaks.peak_hold_l.store(-100.0, Ordering::Release);
-                    shared_reset.peaks.peak_hold_r.store(-100.0, Ordering::Release);
+                    shared_reset
+                        .peaks
+                        .peak_hold
+                        .store(-100.0, Ordering::Release);
+                    shared_reset
+                        .peaks
+                        .peak_hold_l
+                        .store(-100.0, Ordering::Release);
+                    shared_reset
+                        .peaks
+                        .peak_hold_r
+                        .store(-100.0, Ordering::Release);
                 });
 
                 // Relay toggle bar — flips the slot-stable toggle and pushes
@@ -745,9 +767,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 } else {
                     cache.relay_state.clear();
                     // Standalone: no UI preference (process ignores relays anyway).
-                    shared_sync
-                        .relay_active_mask
-                        .store(0, Ordering::Release);
+                    shared_sync.relay_active_mask.store(0, Ordering::Release);
                 }
 
                 let names: Vec<String> = cache
@@ -765,22 +785,23 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                         .collect();
                     ui.set_relay_names(ModelRc::new(VecModel::from(v)));
                 }
-                let actives: Vec<bool> = cache
-                    .relay_state
-                    .relays
-                    .iter()
-                    .map(|r| r.active)
-                    .collect();
+                let actives: Vec<bool> =
+                    cache.relay_state.relays.iter().map(|r| r.active).collect();
                 if actives != cache.relay_actives {
                     cache.relay_actives = actives.clone();
                     ui.set_relay_actives(ModelRc::new(VecModel::from(actives)));
                 }
 
                 // --- spectrum + overlays ---
-                let sr = shared_sync.spectrum.sample_rate.load(Ordering::Relaxed).max(1.0);
+                let sr = shared_sync
+                    .spectrum
+                    .sample_rate
+                    .load(Ordering::Relaxed)
+                    .max(1.0);
                 {
                     let bins = shared_sync
-                        .spectrum.avg
+                        .spectrum
+                        .avg
                         .try_lock()
                         .ok()
                         .map(|g| g.clone())
@@ -879,12 +900,7 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                 if cache.display_window_start.elapsed().as_millis() >= DISPLAY_HOLD_MS {
                     let relays = &cache.relay_state.relays;
                     let rt = if res_active {
-                        format_resonance_text(
-                            &cache.display_own,
-                            &cache.display_relay,
-                            relays,
-                            sr,
-                        )
+                        format_resonance_text(&cache.display_own, &cache.display_relay, relays, sr)
                     } else {
                         "Off".to_string()
                     };
@@ -917,8 +933,9 @@ pub fn build_editor(params: Arc<LucentParams>) -> Box<dyn Editor> {
                             .iter()
                             .map(|(&bin, &score)| (bin, score))
                             .collect();
-                        res_own
-                            .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                        res_own.sort_by(|a, b| {
+                            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                        });
                         let mut res_relay: Vec<AttributedPeak> =
                             cache.snap_res_relay.values().copied().collect();
                         res_relay.sort_by(|a, b| {

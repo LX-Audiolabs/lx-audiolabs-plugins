@@ -5,11 +5,9 @@
 use aura::prelude::*;
 use aura_dsp::analysis::*;
 use aura_dsp::fx::FtzDazGuard;
-use aura_shm::*;
+use lx_shm::*;
 
-use crate::{
-    read_persisted, sync_live, FFT_SIZE, LucentRelayDspState, LucentRelayParams,
-};
+use crate::{FFT_SIZE, LucentRelayDspState, LucentRelayParams, read_persisted, sync_live};
 
 pub(crate) fn run(
     state: &mut LucentRelayDspState,

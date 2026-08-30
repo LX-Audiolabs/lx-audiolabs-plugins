@@ -2,8 +2,8 @@
 
 use std::path::Path;
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 /// Find the next free `SNAPSHOT-NNN.md` name in `vault_path`.

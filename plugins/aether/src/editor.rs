@@ -2,20 +2,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use aura::prelude::*;
-use lx_editor_utils::{dirty::*, slint_helpers::*, tick::*};
-use slint::SharedString;
 use aura_editor::typed::*;
-use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
+use aura_editor::ui_zoom::{UiZoom, apply_ui_zoom};
+use lx_editor_utils::{dirty::*, slint_helpers::*, tick::*};
 use lx_vault::*;
+use slint::SharedString;
 
-use crate::presets::{
-    apply_profile, build_profile_md, default_preset_names, find_profile, load_cached_last_profile,
-    merge_preset_names, preset_save_dir, profile_from_params, save_last_preset, spawn_vault_scan,
-    PendingPresets, PresetEntry,
-};
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;
-use crate::{set_band, Biquad, NUM_BANDS};
+use crate::presets::{
+    PendingPresets, PresetEntry, apply_profile, build_profile_md, default_preset_names,
+    find_profile, load_cached_last_profile, merge_preset_names, preset_save_dir,
+    profile_from_params, save_last_preset, spawn_vault_scan,
+};
+use crate::{Biquad, NUM_BANDS, set_band};
 
 slint::include_modules!();
 
@@ -168,9 +168,7 @@ pub fn build_editor(params: Arc<AetherParams>) -> Box<dyn Editor> {
             .cloned()
             .or_else(|| {
                 let local = get_plugin_dir("Aether").join("presets");
-                local
-                    .is_dir()
-                    .then(|| local.to_string_lossy().into_owned())
+                local.is_dir().then(|| local.to_string_lossy().into_owned())
             });
         if let Some(vp) = scan_path {
             let scan_gen = vault_pending.bump_generation();

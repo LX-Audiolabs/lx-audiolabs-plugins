@@ -4,17 +4,22 @@
 //! `aura_dsp::analysis`. This module only defines LX product aggregates
 //! (Aether / Meridian / …) — not framework API.
 
-use aura_dsp::analysis::{
-    AutoLoud, PeakMeters, SPECTRUM_BINS, ScopeRing, ShmClaimShared, SnapPipeline, SpectrumView,
-    band5, band5_tol,
-};
 use atomic_float::AtomicF32;
-use std::sync::atomic::{AtomicU32, AtomicUsize};
+use aura_dsp::analysis::{
+    AutoLoud, ClipWaveRing, PeakMeters, SPECTRUM_BINS, ScopeRing, ShmClaimShared, SnapPipeline,
+    SpectrumView, band5, band5_tol,
+};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
 use std::sync::{Arc, Mutex};
 
 #[inline]
 fn af(v: f32) -> Arc<AtomicF32> {
     Arc::new(AtomicF32::new(v))
+}
+
+#[inline]
+fn ab(v: bool) -> Arc<AtomicBool> {
+    Arc::new(AtomicBool::new(v))
 }
 
 #[inline]
@@ -138,6 +143,67 @@ impl Default for EquilibriumShared {
             listen_samples: af(0.0),
             selected_preset_index: Arc::new(AtomicUsize::new(0)),
             sample_rate: af(44100.0),
+        }
+    }
+}
+
+// ── Mensor ────────────────────────────────────────────────────────────────────
+
+/// Mensor mastering meters — clip/wave, multi-GR, delivery loudness, scope.
+#[derive(Clone)]
+pub struct MensorShared {
+    pub peaks: PeakMeters,
+    pub scope: ScopeRing,
+    pub input_peak: Arc<AtomicF32>,
+    pub clip_pre_peak_l: Arc<AtomicF32>,
+    pub clip_pre_peak_r: Arc<AtomicF32>,
+    pub clip_pre_peak_mid: Arc<AtomicF32>,
+    pub clip_pre_peak_side: Arc<AtomicF32>,
+    pub clip_wave: Arc<Mutex<ClipWaveRing>>,
+    pub clip_wave_write_pos: Arc<AtomicUsize>,
+    pub spectrum_mid_avg: Arc<Mutex<Vec<f32>>>,
+    pub spectrum_side_avg: Arc<Mutex<Vec<f32>>>,
+    pub comp_gr_lo: Arc<AtomicF32>,
+    pub comp_gr_hi: Arc<AtomicF32>,
+    pub spectrum_sweet_avg: Arc<Mutex<Vec<f32>>>,
+    pub mb_gr_mid_lo: Arc<AtomicF32>,
+    pub mb_gr_mid_hi: Arc<AtomicF32>,
+    pub mb_gr_side: Arc<AtomicF32>,
+    pub lufs_integrated: Arc<AtomicF32>,
+    pub true_peak_dbtp: Arc<AtomicF32>,
+    pub lra_lu: Arc<AtomicF32>,
+    pub gain_reduction: Arc<AtomicF32>,
+    pub sample_rate: Arc<AtomicF32>,
+    /// True while SNAP / analyze export runs — GUI shows analyzing state.
+    pub snap_active: Arc<AtomicBool>,
+}
+
+impl Default for MensorShared {
+    fn default() -> Self {
+        Self {
+            peaks: PeakMeters::default(),
+            scope: ScopeRing::default(),
+            input_peak: af(-90.0),
+            clip_pre_peak_l: af(-90.0),
+            clip_pre_peak_r: af(-90.0),
+            clip_pre_peak_mid: af(-90.0),
+            clip_pre_peak_side: af(-90.0),
+            clip_wave: Arc::new(Mutex::new(ClipWaveRing::new())),
+            clip_wave_write_pos: Arc::new(AtomicUsize::new(0)),
+            spectrum_mid_avg: spectrum_buf(),
+            spectrum_side_avg: spectrum_buf(),
+            comp_gr_lo: af(0.0),
+            comp_gr_hi: af(0.0),
+            spectrum_sweet_avg: spectrum_buf(),
+            mb_gr_mid_lo: af(0.0),
+            mb_gr_mid_hi: af(0.0),
+            mb_gr_side: af(0.0),
+            lufs_integrated: af(-70.0),
+            true_peak_dbtp: af(-100.0),
+            lra_lu: af(-1.0),
+            gain_reduction: af(0.0),
+            sample_rate: af(44100.0),
+            snap_active: ab(false),
         }
     }
 }

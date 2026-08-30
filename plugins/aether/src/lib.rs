@@ -11,14 +11,14 @@
 // The Harman EQ is a plain per-channel-identical linear EQ (no M/S, no L/R diff),
 // so it commutes with the crossfeed — order is conceptual, not sonic.
 
-use lx_analysis::product_shared::AetherShared;
-use aura_dsp::fx::Biquad;
-use std::sync::Arc;
 use aura::prelude::*;
+use aura_dsp::fx::Biquad;
+use lx_analysis::product_shared::AetherShared;
+use std::sync::Arc;
 
 mod editor;
-mod process;
 mod presets;
+mod process;
 
 pub(crate) const NUM_BANDS: usize = 5;
 pub(crate) const CF_DELAY_MAX: usize = 512; // ponytail: used in AetherDspState::Default via vec![0.0; CF_DELAY_MAX] — keep for readability
@@ -28,7 +28,8 @@ pub(crate) const CF_DELAY_MAX: usize = 512; // ponytail: used in AetherDspState:
 
 #[derive(Params)]
 pub struct AetherParams {
-    #[param(id = 1,
+    #[param(
+        id = 1,
         name = "EQ1 Freq",
         default = 105.0,
         range = "log(20.0, 20000.0)",
@@ -36,7 +37,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq1_freq: FloatParam,
-    #[param(id = 2,
+    #[param(
+        id = 2,
         name = "EQ1 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -44,7 +46,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq1_gain: FloatParam,
-    #[param(id = 3,
+    #[param(
+        id = 3,
         name = "EQ1 Q",
         default = 0.7,
         range = "log(0.3, 8.0)",
@@ -52,7 +55,8 @@ pub struct AetherParams {
     )]
     pub eq1_q: FloatParam,
 
-    #[param(id = 4,
+    #[param(
+        id = 4,
         name = "EQ2 Freq",
         default = 300.0,
         range = "log(20.0, 20000.0)",
@@ -60,7 +64,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq2_freq: FloatParam,
-    #[param(id = 5,
+    #[param(
+        id = 5,
         name = "EQ2 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -68,7 +73,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq2_gain: FloatParam,
-    #[param(id = 6,
+    #[param(
+        id = 6,
         name = "EQ2 Q",
         default = 1.0,
         range = "log(0.3, 8.0)",
@@ -76,7 +82,8 @@ pub struct AetherParams {
     )]
     pub eq2_q: FloatParam,
 
-    #[param(id = 7,
+    #[param(
+        id = 7,
         name = "EQ3 Freq",
         default = 1200.0,
         range = "log(20.0, 20000.0)",
@@ -84,7 +91,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq3_freq: FloatParam,
-    #[param(id = 8,
+    #[param(
+        id = 8,
         name = "EQ3 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -92,7 +100,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq3_gain: FloatParam,
-    #[param(id = 9,
+    #[param(
+        id = 9,
         name = "EQ3 Q",
         default = 1.0,
         range = "log(0.3, 8.0)",
@@ -100,7 +109,8 @@ pub struct AetherParams {
     )]
     pub eq3_q: FloatParam,
 
-    #[param(id = 10,
+    #[param(
+        id = 10,
         name = "EQ4 Freq",
         default = 4000.0,
         range = "log(20.0, 20000.0)",
@@ -108,7 +118,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq4_freq: FloatParam,
-    #[param(id = 11,
+    #[param(
+        id = 11,
         name = "EQ4 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -116,7 +127,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq4_gain: FloatParam,
-    #[param(id = 12,
+    #[param(
+        id = 12,
         name = "EQ4 Q",
         default = 1.0,
         range = "log(0.3, 8.0)",
@@ -124,7 +136,8 @@ pub struct AetherParams {
     )]
     pub eq4_q: FloatParam,
 
-    #[param(id = 13,
+    #[param(
+        id = 13,
         name = "EQ5 Freq",
         default = 10000.0,
         range = "log(20.0, 20000.0)",
@@ -132,7 +145,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq5_freq: FloatParam,
-    #[param(id = 14,
+    #[param(
+        id = 14,
         name = "EQ5 Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",
@@ -140,7 +154,8 @@ pub struct AetherParams {
         smooth = "linear(20)"
     )]
     pub eq5_gain: FloatParam,
-    #[param(id = 15,
+    #[param(
+        id = 15,
         name = "EQ5 Q",
         default = 0.7,
         range = "log(0.3, 8.0)",
@@ -159,7 +174,8 @@ pub struct AetherParams {
     #[param(id = 20, name = "EQ5 Type", default = 3, range = "discrete(0, 3)")]
     pub eq5_type: IntParam,
 
-    #[param(id = 21,
+    #[param(
+        id = 21,
         name = "Blend",
         default = 100.0,
         range = "linear(0.0, 100.0)",
@@ -170,7 +186,8 @@ pub struct AetherParams {
     )]
     pub blend: FloatParam,
 
-    #[param(id = 22,
+    #[param(
+        id = 22,
         name = "Crossfeed Angle",
         default = 60.0,
         range = "linear(30.0, 75.0)",
@@ -179,7 +196,8 @@ pub struct AetherParams {
         group = "Aether"
     )]
     pub cf_angle: FloatParam,
-    #[param(id = 23,
+    #[param(
+        id = 23,
         name = "Crossfeed Amount",
         default = 0.0,
         range = "linear(0.0, 100.0)",
@@ -189,7 +207,8 @@ pub struct AetherParams {
         group = "Aether"
     )]
     pub cf_amount: FloatParam,
-    #[param(id = 24,
+    #[param(
+        id = 24,
         name = "Crossfeed Realism",
         default = 0,
         range = "discrete(0, 2)",
@@ -197,7 +216,8 @@ pub struct AetherParams {
     )]
     pub cf_realism: IntParam,
 
-    #[param(id = 25,
+    #[param(
+        id = 25,
         name = "Gain",
         default = 0.0,
         range = "linear(-12.0, 12.0)",

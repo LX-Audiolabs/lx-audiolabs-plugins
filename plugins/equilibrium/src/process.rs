@@ -5,15 +5,15 @@
 //!
 //! ponytail: same-crate module split only — no behavior change.
 
+use aura::prelude::*;
 use std::f32::consts::FRAC_PI_4;
 use std::sync::atomic::Ordering;
-use aura::prelude::*;
 
 use aura_dsp::analysis::*;
-use aura_dsp::fx::{FtzDazGuard, DBTP_CEILING};
+use aura_dsp::fx::{DBTP_CEILING, FtzDazGuard};
 
 use crate::{
-    db_to_gain, gain_to_db, EquilibriumDspState, EquilibriumParams, BAND_COUNT, MINUS_INF_DB,
+    BAND_COUNT, EquilibriumDspState, EquilibriumParams, MINUS_INF_DB, db_to_gain, gain_to_db,
 };
 
 /// Per-block control flags (param snapshot + UI modes).
@@ -84,14 +84,24 @@ fn param_update(state: &mut EquilibriumDspState, params: &EquilibriumParams) -> 
     }
 
     // Reset peak
-    if params.shared.peaks.reset_peak.swap(false, Ordering::Release) {
+    if params
+        .shared
+        .peaks
+        .reset_peak
+        .swap(false, Ordering::Release)
+    {
         state.peak_hold_value = MINUS_INF_DB;
         state.peak_hold_l_value = MINUS_INF_DB;
         state.peak_hold_r_value = MINUS_INF_DB;
     }
 
     // Reset analysis
-    if params.shared.snap.reset_analysis.swap(false, Ordering::Release) {
+    if params
+        .shared
+        .snap
+        .reset_analysis
+        .swap(false, Ordering::Release)
+    {
         for b in 0..BAND_COUNT {
             state.listen_band_power_sum[b] = 0.0;
             state.listen_lo_ema[b] = f64::INFINITY;
@@ -454,7 +464,8 @@ fn process_block(
                     }
                     params
                         .shared
-                        .snap.phase
+                        .snap
+                        .phase
                         .store(next_phase, Ordering::Release);
                     snap_phase = next_phase;
                 }
@@ -557,7 +568,11 @@ fn publish(
     } else {
         0.0
     };
-    params.shared.peaks.balance.store(balance, Ordering::Release);
+    params
+        .shared
+        .peaks
+        .balance
+        .store(balance, Ordering::Release);
 
     // Band power → dB
     for b in 0..BAND_COUNT {
@@ -656,7 +671,8 @@ fn publish(
     };
     params
         .shared
-        .peaks.phase_correlation
+        .peaks
+        .phase_correlation
         .store(correlation.clamp(-1.0, 1.0), Ordering::Release);
 
     // Auto gain
@@ -677,11 +693,13 @@ fn publish(
     if params.shared.auto_loud.trigger.load(Ordering::Acquire) {
         params
             .shared
-            .auto_loud.trigger
+            .auto_loud
+            .trigger
             .store(false, Ordering::Release);
         params
             .shared
-            .auto_loud.measuring
+            .auto_loud
+            .measuring
             .store(true, Ordering::Release);
         state.auto_loud_in.reset();
         state.auto_loud_out.reset();
@@ -698,11 +716,13 @@ fn publish(
             let offset_clamped = lufs_offset.clamp(-24.0, peak_limit);
             params
                 .shared
-                .auto_loud.gain_offset
+                .auto_loud
+                .gain_offset
                 .store(offset_clamped, Ordering::Release);
             params
                 .shared
-                .auto_loud.measuring
+                .auto_loud
+                .measuring
                 .store(false, Ordering::Release);
         }
     }
@@ -787,25 +807,29 @@ fn publish(
         let block_peak_db = gain_to_db(peak);
         params
             .shared
-            .peaks.output_peak
+            .peaks
+            .output_peak
             .store(block_peak_db, Ordering::Release);
         if block_peak_db > state.peak_hold_value {
             state.peak_hold_value = block_peak_db;
         }
         params
             .shared
-            .peaks.peak_hold
+            .peaks
+            .peak_hold
             .store(state.peak_hold_value, Ordering::Release);
 
         let peak_l_db = gain_to_db(peak_l);
         let peak_r_db = gain_to_db(peak_r);
         params
             .shared
-            .peaks.output_peak_l
+            .peaks
+            .output_peak_l
             .store(peak_l_db, Ordering::Release);
         params
             .shared
-            .peaks.output_peak_r
+            .peaks
+            .output_peak_r
             .store(peak_r_db, Ordering::Release);
         if peak_l_db > state.peak_hold_l_value {
             state.peak_hold_l_value = peak_l_db;
@@ -815,11 +839,13 @@ fn publish(
         }
         params
             .shared
-            .peaks.peak_hold_l
+            .peaks
+            .peak_hold_l
             .store(state.peak_hold_l_value, Ordering::Release);
         params
             .shared
-            .peaks.peak_hold_r
+            .peaks
+            .peak_hold_r
             .store(state.peak_hold_r_value, Ordering::Release);
     }
 
@@ -843,7 +869,10 @@ fn publish(
             0.0
         };
         for i in 0..n {
-            params.shared.scope.push(out0[i] * vis_gain, out1[i] * vis_gain);
+            params
+                .shared
+                .scope
+                .push(out0[i] * vis_gain, out1[i] * vis_gain);
         }
     }
 

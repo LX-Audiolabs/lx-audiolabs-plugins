@@ -10,12 +10,12 @@
 //   → per-band: Gain → M/S Width → Pan → Solo
 //   → sum → Mono Floor (Side HPF) → Mono/Delta → Gain → Auto Gain → clamp
 
-use std::sync::Arc;
 use aura::prelude::*;
+use std::sync::Arc;
 
 use aura_dsp::analysis::*;
-use lx_analysis::product_shared::EquilibriumShared;
 use aura_dsp::fx::{AutoLoudMeter, Biquad, LR2Crossover};
+use lx_analysis::product_shared::EquilibriumShared;
 
 mod editor;
 mod presets;

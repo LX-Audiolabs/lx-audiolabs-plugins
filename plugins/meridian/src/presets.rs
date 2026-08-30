@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use aura::{FloatParam, IntParam};
-use lx_vault::{get_plugin_dir, preset_plugin_name};
 use aura_editor::typed::LxPluginContext;
 pub use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
+use lx_vault::{get_plugin_dir, preset_plugin_name};
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
@@ -322,7 +322,10 @@ pub fn export_meridian_markdown(p: &MeridianProfile) -> String {
         if p.cut_slope >= 1 { "B" } else { "A" }
     ));
     s.push_str(&format!("| Bass Gain | {:.1} | dB |\n", p.bass_gain));
-    s.push_str(&format!("| Bass Slope | {} | |\n", slope_char(p.bass_slope)));
+    s.push_str(&format!(
+        "| Bass Slope | {} | |\n",
+        slope_char(p.bass_slope)
+    ));
     s.push_str(&format!("| EQ Freq 1 | {:.0} | Hz |\n", p.eq_freq_1));
     s.push_str(&format!("| Lo-Mid Gain | {:.1} | dB |\n", p.lo_mid_gain));
     s.push_str(&format!(
@@ -334,7 +337,10 @@ pub fn export_meridian_markdown(p: &MeridianProfile) -> String {
     s.push_str(&format!("| Mid Slope | {} | |\n", slope_char(p.mid_slope)));
     s.push_str(&format!("| EQ Freq 3 | {:.0} | Hz |\n", p.eq_freq_3));
     s.push_str(&format!("| High Gain | {:.1} | dB |\n", p.high_gain));
-    s.push_str(&format!("| High Slope | {} | |\n", slope_char(p.high_slope)));
+    s.push_str(&format!(
+        "| High Slope | {} | |\n",
+        slope_char(p.high_slope)
+    ));
     s.push_str(&format!("| EQ Freq 4 | {:.0} | Hz |\n", p.eq_freq_4));
     s.push_str(&format!("| Excite Gain | {:.1} | dB |\n", p.excite_gain));
     s.push_str(&format!(
@@ -439,17 +445,29 @@ pub fn apply_profile(
     ctx.automate(P::HighGain, f(&params.high_gain, profile.high_gain));
     ctx.automate(P::HighSlope, i(&params.high_slope, profile.high_slope));
     ctx.automate(P::ExciteGain, f(&params.excite_gain, profile.excite_gain));
-    ctx.automate(P::ExciteSlope, i(&params.excite_slope, profile.excite_slope));
+    ctx.automate(
+        P::ExciteSlope,
+        i(&params.excite_slope, profile.excite_slope),
+    );
     ctx.automate(P::EqFreq1, f(&params.eq_freq_1, profile.eq_freq_1));
     ctx.automate(P::EqFreq2, f(&params.eq_freq_2, profile.eq_freq_2));
     ctx.automate(P::EqFreq3, f(&params.eq_freq_3, profile.eq_freq_3));
     ctx.automate(P::EqFreq4, f(&params.eq_freq_4, profile.eq_freq_4));
     ctx.automate(P::EqFreq5, f(&params.eq_freq_5, profile.eq_freq_5));
     ctx.automate(P::TiltGain, f(&params.tilt_gain, profile.tilt_gain));
-    ctx.automate(P::WarmthDrive, f(&params.warmth_drive, profile.warmth_drive));
+    ctx.automate(
+        P::WarmthDrive,
+        f(&params.warmth_drive, profile.warmth_drive),
+    );
     ctx.automate(P::WarmthMix, f(&params.warmth_mix, profile.warmth_mix));
-    ctx.automate(P::ExciteAmount, f(&params.excite_amount, profile.excite_amount));
-    ctx.automate(P::ExciteBlend, f(&params.excite_blend, profile.excite_blend));
+    ctx.automate(
+        P::ExciteAmount,
+        f(&params.excite_amount, profile.excite_amount),
+    );
+    ctx.automate(
+        P::ExciteBlend,
+        f(&params.excite_blend, profile.excite_blend),
+    );
     ctx.automate(P::ExciteFreq, f(&params.excite_freq, profile.excite_freq));
     ctx.automate(
         P::CompThreshold,
@@ -457,7 +475,10 @@ pub fn apply_profile(
     );
     ctx.automate(P::CompMix, f(&params.comp_mix, profile.comp_mix));
     ctx.automate(P::CompAttack, f(&params.comp_attack, profile.comp_attack));
-    ctx.automate(P::CompRelease, f(&params.comp_release, profile.comp_release));
+    ctx.automate(
+        P::CompRelease,
+        f(&params.comp_release, profile.comp_release),
+    );
     ctx.automate(
         P::CompCharacter,
         f(&params.comp_character, profile.comp_character),
@@ -467,13 +488,19 @@ pub fn apply_profile(
         P::InflateEffect,
         f(&params.inflate_effect, profile.inflate_effect),
     );
-    ctx.automate(P::InflateCurve, f(&params.inflate_curve, profile.inflate_curve));
+    ctx.automate(
+        P::InflateCurve,
+        f(&params.inflate_curve, profile.inflate_curve),
+    );
     ctx.automate(
         P::InflateBandSplit,
         if profile.inflate_band_split { 1.0 } else { 0.0 },
     );
     ctx.automate(P::InflateClip, if profile.inflate_clip { 1.0 } else { 0.0 });
-    ctx.automate(P::StereoWidth, f(&params.stereo_width, profile.stereo_width));
+    ctx.automate(
+        P::StereoWidth,
+        f(&params.stereo_width, profile.stereo_width),
+    );
     ctx.automate(P::Pan, f(&params.pan, profile.pan));
     ctx.automate(P::OutputGain, f(&params.output_gain, profile.output_gain));
 }
@@ -563,7 +590,11 @@ pub fn merge_preset_names(scanned: &[PresetEntry]) -> Vec<String> {
 
 pub fn spawn_vault_scan(vp: String, pending: Arc<PendingPresets<PresetEntry>>, generation: u32) {
     spawn_vault_scan_impl(pending, generation, move || {
-        list_meridian_presets(if vp.is_empty() { None } else { Some(vp.as_str()) })
+        list_meridian_presets(if vp.is_empty() {
+            None
+        } else {
+            Some(vp.as_str())
+        })
     });
 }
 
@@ -671,10 +702,7 @@ mod tests {
 
     #[test]
     fn snap_filename_increments() {
-        let dir = std::env::temp_dir().join(format!(
-            "meridian_snap_test_{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("meridian_snap_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("SNAPSHOT-001.md"), "x").unwrap();

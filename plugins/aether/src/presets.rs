@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use aura_editor::typed::*;
-use lx_vault::*;
 pub use lx_editor_utils::snap::{PendingPresets, spawn_vault_scan as spawn_vault_scan_impl};
+use lx_vault::*;
 
 use crate::AetherParams;
 use crate::AetherParamsParamId as P;
@@ -85,7 +85,11 @@ pub fn parse_aether_preset(content: &str) -> Option<AetherProfile> {
             if parts.len() >= 4 {
                 match parts[1].to_lowercase().as_str() {
                     s if s.starts_with("eq") && s.contains("type") => {
-                        if let Some(bi) = s.chars().find(|c| c.is_ascii_digit()).and_then(|c| c.to_digit(10)) {
+                        if let Some(bi) = s
+                            .chars()
+                            .find(|c| c.is_ascii_digit())
+                            .and_then(|c| c.to_digit(10))
+                        {
                             let idx = (bi as usize).saturating_sub(1).min(4);
                             bands[idx].0 = match parts[2] {
                                 "LSC" | "LS" => 1,
@@ -96,7 +100,11 @@ pub fn parse_aether_preset(content: &str) -> Option<AetherProfile> {
                         }
                     }
                     s if s.starts_with("eq") && s.contains("freq") => {
-                        if let Some(bi) = s.chars().find(|c| c.is_ascii_digit()).and_then(|c| c.to_digit(10)) {
+                        if let Some(bi) = s
+                            .chars()
+                            .find(|c| c.is_ascii_digit())
+                            .and_then(|c| c.to_digit(10))
+                        {
                             let idx = (bi as usize).saturating_sub(1).min(4);
                             if let Ok(v) = parts[2].parse() {
                                 bands[idx].1 = v;
@@ -105,7 +113,11 @@ pub fn parse_aether_preset(content: &str) -> Option<AetherProfile> {
                         }
                     }
                     s if s.starts_with("eq") && s.contains("gain") => {
-                        if let Some(bi) = s.chars().find(|c| c.is_ascii_digit()).and_then(|c| c.to_digit(10)) {
+                        if let Some(bi) = s
+                            .chars()
+                            .find(|c| c.is_ascii_digit())
+                            .and_then(|c| c.to_digit(10))
+                        {
                             let idx = (bi as usize).saturating_sub(1).min(4);
                             if let Ok(v) = parts[2].parse() {
                                 bands[idx].2 = v;
@@ -114,7 +126,11 @@ pub fn parse_aether_preset(content: &str) -> Option<AetherProfile> {
                         }
                     }
                     s if s.starts_with("eq") && s.contains('q') => {
-                        if let Some(bi) = s.chars().find(|c| c.is_ascii_digit()).and_then(|c| c.to_digit(10)) {
+                        if let Some(bi) = s
+                            .chars()
+                            .find(|c| c.is_ascii_digit())
+                            .and_then(|c| c.to_digit(10))
+                        {
                             let idx = (bi as usize).saturating_sub(1).min(4);
                             if let Ok(v) = parts[2].parse() {
                                 bands[idx].3 = v;
@@ -212,7 +228,10 @@ pub fn apply_profile(ctx: &LxPluginContext<AetherParams>, p: &AetherProfile) {
         ctx.automate(qp, q_to_norm(q));
     }
     ctx.automate(P::Blend, (p.blend as f64 / 100.0).clamp(0.0, 1.0));
-    ctx.automate(P::CfAngle, ((p.cf_angle as f64 - 30.0) / 45.0).clamp(0.0, 1.0));
+    ctx.automate(
+        P::CfAngle,
+        ((p.cf_angle as f64 - 30.0) / 45.0).clamp(0.0, 1.0),
+    );
     ctx.automate(P::CfAmount, (p.cf_amount as f64 / 100.0).clamp(0.0, 1.0));
     ctx.automate(P::CfRealism, discrete_norm(p.cf_realism.max(0) as usize, 3));
     ctx.automate(P::Gain, ((p.gain as f64 + 12.0) / 24.0).clamp(0.0, 1.0));
@@ -277,7 +296,11 @@ pub fn build_profile_md(params: &AetherParams) -> String {
     );
     for i in 0..5 {
         let (tc, fc, gn, q) = eq_vals(params, i);
-        s.push_str(&format!("| EQ{} Type | {} | |\n", i + 1, band_type_label(tc)));
+        s.push_str(&format!(
+            "| EQ{} Type | {} | |\n",
+            i + 1,
+            band_type_label(tc)
+        ));
         s.push_str(&format!("| EQ{} Freq | {:.0} | Hz |\n", i + 1, fc));
         s.push_str(&format!("| EQ{} Gain | {:.1} | dB |\n", i + 1, gn));
         s.push_str(&format!("| EQ{} Q | {:.2} | |\n", i + 1, q));

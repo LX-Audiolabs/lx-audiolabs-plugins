@@ -1,15 +1,15 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 
+use aura::prelude::*;
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
-use aura::prelude::*;
 
 use aura_dsp::analysis::*;
 use lx_analysis::product_shared::LucentShared;
-use aura_shm::*;
-use aura_shm::SPECTRUM_BINS;
+use lx_shm::SPECTRUM_BINS;
+use lx_shm::*;
 
 /// Live SHM relay feed on the audio path: fixed bins, reused name String.
 pub(crate) type RelayFeed = (u8, String, [f32; SPECTRUM_BINS]);
@@ -355,11 +355,7 @@ pub fn remove_relays(key: usize) {
 /// Per-bin power-sum (linear domain) of named dB spectra, into `out` (no alloc).
 /// Models how tracks combine on a bus — e.g. two -6dB at same bin → ~-3dB.
 /// `mask` filters relay slots via [`relay_slot_active`].
-pub(crate) fn power_sum_named_into(
-    relay_named: &[RelayFeed],
-    mask: u32,
-    out: &mut [f32],
-) {
+pub(crate) fn power_sum_named_into(relay_named: &[RelayFeed], mask: u32, out: &mut [f32]) {
     let n = out.len().min(SPECTRUM_BINS);
     out[..n].fill(-90.0);
     for (j, o) in out.iter_mut().enumerate().take(n) {
@@ -387,11 +383,7 @@ pub(crate) fn power_sum_named_into(
 /// real resonance than natural overtone rolloff.
 ///
 /// In-place on a fixed peak buffer: marks harmonics, then compacts (no heap).
-fn suppress_harmonics_in_place(
-    spectrum: &[f32],
-    peaks: &mut [(usize, f32)],
-    n: &mut usize,
-) {
+fn suppress_harmonics_in_place(spectrum: &[f32], peaks: &mut [(usize, f32)], n: &mut usize) {
     const MAX_HARMONIC: usize = 8;
     const BIN_TOLERANCE: usize = 2;
     const LOUDER_MARGIN_DB: f32 = 3.0;
@@ -549,9 +541,8 @@ impl MaskingAnalyzer {
         // Live flags only — contributor identity is SHM slot / CONTRIB_OWN.
         self.relay_live.clear();
         for (slot, _, s) in relay_named.iter() {
-            self.relay_live.push(
-                relay_slot_active(mask, *slot) && track_has_masking_signal(s, sample_rate),
-            );
+            self.relay_live
+                .push(relay_slot_active(mask, *slot) && track_has_masking_signal(s, sample_rate));
         }
 
         for j in 0..n {
@@ -679,8 +670,11 @@ impl MaskingAnalyzer {
             }
         }
         self.peaks_n = count.min(MAX_MASK_PEAKS);
-        self.peaks_scratch[..self.peaks_n]
-            .sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        self.peaks_scratch[..self.peaks_n].sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     fn peaks_above_floor(&self) -> &[AttributedPeak] {
@@ -744,12 +738,7 @@ impl PeakTracker {
     /// - Q (bandwidth): rejects broad humps (formants, EQ buckets, room-mode
     ///   clusters) — contrast+flatness alone can't tell a wide bump from a
     ///   sharp resonance, only the -3dB bandwidth can.
-    fn find_peaks_into(
-        &mut self,
-        spectrum: &[f32],
-        t: &SensitivityThresholds,
-        sample_rate: f32,
-    ) {
+    fn find_peaks_into(&mut self, spectrum: &[f32], t: &SensitivityThresholds, sample_rate: f32) {
         const BASELINE_WINDOW: usize = 8;
         const FLATNESS_WINDOW: usize = 4;
         const MAX_BW_SEARCH: usize = 24;
@@ -887,8 +876,7 @@ impl PeakTracker {
         self.peaks_scratch[..self.peaks_n]
             .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         self.res_n = self.peaks_n.min(MAX_RES_PEAKS);
-        self.res_scratch[..self.res_n]
-            .copy_from_slice(&self.peaks_scratch[..self.res_n]);
+        self.res_scratch[..self.res_n].copy_from_slice(&self.peaks_scratch[..self.res_n]);
     }
 }
 
@@ -1160,7 +1148,8 @@ impl PluginLogic for Lucent {
         let now_ms = now_ms();
         params
             .shared
-            .spectrum.sample_rate
+            .spectrum
+            .sample_rate
             .store(sr as f32, Ordering::Release);
 
         state.ensure_consumer_slot(params, now_ms);
@@ -1220,7 +1209,7 @@ aura::export_lv2!(Lucent);
 #[cfg(test)]
 mod masking_tests {
     use super::MaskingAnalyzer;
-    use aura_dsp::analysis::{spectrum_physical_db, spectrum_tilt_db, SPECTRUM_BINS};
+    use aura_dsp::analysis::{SPECTRUM_BINS, spectrum_physical_db, spectrum_tilt_db};
 
     fn tilted_silent_spectrum(sample_rate: f32) -> Vec<f32> {
         let fft_size = (SPECTRUM_BINS * 2) as f32;

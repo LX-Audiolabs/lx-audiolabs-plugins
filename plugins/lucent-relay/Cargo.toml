@@ -1,6 +1,6 @@
 [package]
 name = "lucent-relay"
-version = "1.1.2"
+version = "1.1.3"
 edition = "2024"
 description = "LX Audiolabs — Lucent Relay (FFT sender, pass-through)"
 license = "GPL-3.0-or-later"
@@ -12,23 +12,23 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["clap"]
-clap = ["aura/clap"]
-vst3 = ["aura/vst3"]
-lv2 = ["aura/lv2"]
+clap = ["lx-aura/clap"]
+vst3 = ["lx-aura/vst3"]
+lv2 = ["lx-aura/lv2"]
 
 [dependencies]
-aura = { workspace = true }
-aura-editor = { workspace = true, features = ["backend-femtovg"] }
-aura-dsp = { workspace = true }
+lx-aura = { workspace = true }
+lx-aura-editor = { workspace = true, features = ["backend-femtovg"] }
+lx-aura-dsp = { workspace = true }
 lx-analysis = { workspace = true }
-aura-shm = { workspace = true }
+lx-shm = { workspace = true }
 slint = { workspace = true }
 
 realfft     = "3"
 tracing     = "0.1"
 
 [build-dependencies]
-aura-build = { workspace = true }
+lx-aura-build = { workspace = true }
 
 [dev-dependencies]
-aura-test = { workspace = true }
+lx-aura-test = { workspace = true }

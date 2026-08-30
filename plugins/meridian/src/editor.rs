@@ -2,24 +2,24 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use aura::prelude::*;
-use slint::SharedString;
 use aura_editor::platform::clipboard_get_retry;
 use aura_editor::typed::*;
-use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
+use aura_editor::ui_zoom::{UiZoom, apply_ui_zoom};
 use lx_analysis::product_shared::MeridianShared;
-use lx_vault::{load_config, set_last_preset, set_vault_path};
 use lx_editor_utils::{
-    bind_bools, bind_floats, bind_ints, dirty::*, meter::*, reset_floats,
-    set_float_defaults, slint_helpers::*, sync_bools_dirty,
-    sync_floats_dirty_with_text, sync_ints_dirty, tick::*, viz::*,
+    bind_bools, bind_floats, bind_ints, dirty::*, meter::*, reset_floats, set_float_defaults,
+    slint_helpers::*, sync_bools_dirty, sync_floats_dirty_with_text, sync_ints_dirty, tick::*,
+    viz::*,
 };
+use lx_vault::{load_config, set_last_preset, set_vault_path};
+use slint::SharedString;
 
 use crate::MeridianParams;
 use crate::MeridianParamsParamId as P;
 use crate::presets::{
-    apply_profile, export_meridian_markdown, find_profile, merge_preset_names, preset_save_dir,
-    profile_from_params, snap_filename, snap_markdown, spawn_vault_scan, PendingPresets,
-    PresetEntry,
+    PendingPresets, PresetEntry, apply_profile, export_meridian_markdown, find_profile,
+    merge_preset_names, preset_save_dir, profile_from_params, snap_filename, snap_markdown,
+    spawn_vault_scan,
 };
 use aura_dsp::fx::{Biquad, TiltEq};
 
@@ -28,6 +28,7 @@ slint::include_modules!();
 // Frozen vault size (ui-layout-spec / Lx.window-*): 990 × 670
 const WINDOW_W: u32 = 990;
 const WINDOW_H: u32 = 670;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Cache key for EQ curve (vizia `EqCurveKey` parity).
 #[derive(Clone, Copy, PartialEq)]
@@ -204,6 +205,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     *c = SyncCache::new();
                 }
                 let ui = MeridianUi::new().unwrap();
+                ui.set_version(SharedString::from(VERSION));
 
                 ui.set_ui_zoom_percent(zoom_build.percent() as i32);
                 {
@@ -319,10 +321,10 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 if !live_names.is_empty() {
                     ui.set_preset_names(names_model(&live_names));
                 }
-                if let Some(ref name) = live_last {
-                    if !name.is_empty() {
-                        ui.set_preset_name(SharedString::from(name.as_str()));
-                    }
+                if let Some(ref name) = live_last
+                    && !name.is_empty()
+                {
+                    ui.set_preset_name(SharedString::from(name.as_str()));
                 }
 
                 let snap_shared = shared.clone();
@@ -352,17 +354,13 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 // Display-only 1/3-oct spectrum smoothing toggle (Lucent parity).
                 let smooth_shared = shared.clone();
                 ui.on_spectrum_smooth_changed(move |on: bool| {
-                    smooth_shared
-                        .spectrum.smooth
-                        .store(on, Ordering::Release);
+                    smooth_shared.spectrum.smooth.store(on, Ordering::Release);
                 });
 
                 // Peak-hold reset (click on readouts / double-click on meter).
                 let reset_shared = shared.clone();
                 ui.on_reset_peaks(move || {
-                    reset_shared
-                        .peaks.reset_peak
-                        .store(true, Ordering::Release);
+                    reset_shared.peaks.reset_peak.store(true, Ordering::Release);
                 });
 
                 let save_params = params.clone();
@@ -538,9 +536,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     if shared_loud.auto_loud.measuring.load(Ordering::Acquire) {
                         return; // already measuring
                     }
-                    shared_loud
-                        .auto_loud.trigger
-                        .store(true, Ordering::Release);
+                    shared_loud.auto_loud.trigger.store(true, Ordering::Release);
                 });
 
                 ui
@@ -677,9 +673,7 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                 }
                 if changed_f32(&mut cache.corr, corr) {
                     ui.set_correlation(corr);
-                    ui.set_corr_text(slint::SharedString::from(format!(
-                        "correlation: {corr:.2}"
-                    )));
+                    ui.set_corr_text(slint::SharedString::from(format!("correlation: {corr:.2}")));
                 }
                 if changed_f32(&mut cache.balance, balance) {
                     ui.set_balance(balance);
@@ -754,19 +748,22 @@ pub fn build_editor(params: Arc<MeridianParams>) -> Box<dyn Editor> {
                     // Falling edge: write snapshot file (vizia tick parity).
                     if let Some(vp) = vault_path.as_ref().filter(|v| !v.is_empty()) {
                         let stereo = shared
-                            .snap.stereo
+                            .snap
+                            .stereo
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
                             .unwrap_or_else(|| vec![-90.0; 1024]);
                         let mono = shared
-                            .snap.mono
+                            .snap
+                            .mono
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
                             .unwrap_or_else(|| vec![-90.0; 1024]);
                         let delta = shared
-                            .snap.delta
+                            .snap
+                            .delta
                             .try_lock()
                             .ok()
                             .map(|v| v.clone())
@@ -843,7 +840,8 @@ fn spectrum_path(shared: &MeridianShared, w: f32, h: f32) -> (String, f32) {
     const MAX_DB: f32 = -18.0;
 
     let bins = shared
-        .spectrum.avg
+        .spectrum
+        .avg
         .try_lock()
         .map(|b| b.clone())
         .or_else(|_| shared.spectrum.bins.try_lock().map(|b| b.clone()))
@@ -903,12 +901,21 @@ fn spectrum_path(shared: &MeridianShared, w: f32, h: f32) -> (String, f32) {
     // edges (bottom + sides) are clipped — only the curve gets stroked.
     let mut s = String::with_capacity(pts.len() * 22 + 48);
     let base = h + 2.0;
-    s.push_str(&format!("M -2.0 {:.1} L {:.1} {:.1}", base, pts[0].0, pts[0].1));
+    s.push_str(&format!(
+        "M -2.0 {:.1} L {:.1} {:.1}",
+        base, pts[0].0, pts[0].1
+    ));
     for &(x, y) in pts.iter().skip(1) {
         s.push_str(&format!(" L {x:.1} {y:.1}"));
     }
     let last_x = pts.last().unwrap().0;
-    s.push_str(&format!(" L {:.1} {:.1} L {:.1} {:.1} Z", last_x, base, w + 2.0, base));
+    s.push_str(&format!(
+        " L {:.1} {:.1} L {:.1} {:.1} Z",
+        last_x,
+        base,
+        w + 2.0,
+        base
+    ));
     (s, fill_top)
 }
 
@@ -951,9 +958,8 @@ fn gr_envelope_path(history: &[f32], current: f32, w: f32, h: f32) -> String {
         return String::new();
     }
     let x_step = (w - MARGIN * 2.0) / (n - 1) as f32;
-    let val_to_y = |val: f32| -> f32 {
-        h - MARGIN - (val / MAX_GR).clamp(0.0, 1.0) * (h - MARGIN * 2.0)
-    };
+    let val_to_y =
+        |val: f32| -> f32 { h - MARGIN - (val / MAX_GR).clamp(0.0, 1.0) * (h - MARGIN * 2.0) };
 
     let mut s = String::with_capacity(n * 20);
     // Fill under curve (top-left → points → bottom-right → close)

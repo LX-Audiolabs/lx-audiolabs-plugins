@@ -5,7 +5,11 @@
 /// `spectrum` is a half-spectrum magnitude array in dB. `fft_size` is the full
 /// FFT size (= `spectrum.len() * 2` for the standard LX spectrum layout).
 /// Returns 241 log-spaced dB points from 20 Hz to 20 kHz.
-pub fn smooth_spectrum_third_octave(spectrum: &[f32], sample_rate: f32, fft_size: usize) -> Vec<f32> {
+pub fn smooth_spectrum_third_octave(
+    spectrum: &[f32],
+    sample_rate: f32,
+    fft_size: usize,
+) -> Vec<f32> {
     if spectrum.is_empty() || fft_size == 0 {
         return Vec::new();
     }
@@ -100,6 +104,85 @@ where
         let side = (l - r) * inv_sqrt2;
         let x = cx - side * scale;
         let y = cy - m * scale;
+        if i == 0 {
+            out.push_str(&format!("M {x:.1} {y:.1}"));
+        } else {
+            out.push_str(&format!(" L {x:.1} {y:.1}"));
+        }
+    }
+}
+
+/// Waveform-scope window size (stereo samples kept for display).
+pub const SCOPE_WINDOW: usize = 1024;
+
+/// Build L/R oscilloscope polylines from a `ScopeRing` sample stream.
+///
+/// `samples` yields fresh `[L, R]` pairs (e.g. `shared.scope.drain()`). They
+/// are appended to `window` (capped to [`SCOPE_WINDOW`]) and rendered into
+/// `out_l` / `out_r` as two viewBox 0..w / 0..h polylines. Peak-normalised so
+/// the display auto-gains without any audio-thread envelope state.
+pub fn scope_paths<I>(
+    samples: I,
+    window: &mut Vec<[f32; 2]>,
+    w: f32,
+    h: f32,
+    out_l: &mut String,
+    out_r: &mut String,
+) where
+    I: Iterator<Item = [f32; 2]>,
+{
+    out_l.clear();
+    out_r.clear();
+    window.extend(samples);
+    let excess = window.len().saturating_sub(SCOPE_WINDOW);
+    if excess > 0 {
+        window.drain(..excess);
+    }
+    if window.len() < 2 {
+        return;
+    }
+
+    let peak = window
+        .iter()
+        .fold(1e-4f32, |m, [l, r]| m.max(l.abs()).max(r.abs()));
+    let gain = (0.9 / peak).clamp(0.1, 20.0);
+    let mid = h * 0.5;
+    let n = window.len();
+    let x_step = w / (n - 1) as f32;
+
+    for (i, [l, r]) in window.iter().enumerate() {
+        let x = i as f32 * x_step;
+        let yl = mid - (l * gain).clamp(-1.0, 1.0) * mid;
+        let yr = mid - (r * gain).clamp(-1.0, 1.0) * mid;
+        if i == 0 {
+            out_l.push_str(&format!("M {x:.1} {yl:.1}"));
+            out_r.push_str(&format!("M {x:.1} {yr:.1}"));
+        } else {
+            out_l.push_str(&format!(" L {x:.1} {yl:.1}"));
+            out_r.push_str(&format!(" L {x:.1} {yr:.1}"));
+        }
+    }
+}
+
+/// Phase-distortion drift shape preview — one cycle from the real
+/// `aura::dsp::oscillator::phase_distortion::PhaseDistortionOscillator`,
+/// so the preview never drifts from the audio engine.
+pub fn drift_shape_path(shape_x: f32, shape_y: f32, w: f32, h: f32, out: &mut String) {
+    use aura::dsp::oscillator::phase_distortion::PhaseDistortionOscillator;
+
+    out.clear();
+    const N: usize = 128;
+    let mut osc = PhaseDistortionOscillator::new(N as f32);
+    osc.set_shape_x(shape_x);
+    osc.set_shape_y(shape_y);
+
+    let mid = h * 0.5;
+    let x_step = w / N as f32;
+    for i in 0..=N {
+        // freq 1.0 @ sample-rate N sweeps exactly one full cycle over N samples.
+        let sample = osc.next_sample(1.0);
+        let x = i as f32 * x_step;
+        let y = mid - sample.clamp(-1.0, 1.0) * mid * 0.9;
         if i == 0 {
             out.push_str(&format!("M {x:.1} {y:.1}"));
         } else {

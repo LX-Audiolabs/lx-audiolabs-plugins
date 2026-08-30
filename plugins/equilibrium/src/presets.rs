@@ -88,18 +88,26 @@ pub fn export_preset_to_markdown(profile: &Profile) -> String {
          | Air | {p4} | {w4:.0}% |\n\n\
          ## Mono Floor\n\n\
          {mf:.0} Hz\n",
-        b0 = profile.bands[0], t0 = profile.tolerances[0],
-        b1 = profile.bands[1], t1 = profile.tolerances[1],
-        b2 = profile.bands[2], t2 = profile.tolerances[2],
-        b3 = profile.bands[3], t3 = profile.tolerances[3],
-        b4 = profile.bands[4], t4 = profile.tolerances[4],
+        b0 = profile.bands[0],
+        t0 = profile.tolerances[0],
+        b1 = profile.bands[1],
+        t1 = profile.tolerances[1],
+        b2 = profile.bands[2],
+        t2 = profile.tolerances[2],
+        b3 = profile.bands[3],
+        t3 = profile.tolerances[3],
+        b4 = profile.bands[4],
+        t4 = profile.tolerances[4],
         p0 = format_pan_str(profile.pans[0]),
         p1 = format_pan_str(profile.pans[1]),
         p2 = format_pan_str(profile.pans[2]),
         p3 = format_pan_str(profile.pans[3]),
         p4 = format_pan_str(profile.pans[4]),
-        w0 = profile.widths[0], w1 = profile.widths[1], w2 = profile.widths[2],
-        w3 = profile.widths[3], w4 = profile.widths[4],
+        w0 = profile.widths[0],
+        w1 = profile.widths[1],
+        w2 = profile.widths[2],
+        w3 = profile.widths[3],
+        w4 = profile.widths[4],
         mf = profile.mono_floor_hz,
     )
 }
@@ -353,11 +361,7 @@ pub fn pink_noise_preset() -> EqPreset {
 }
 
 pub fn load_presets(vault_path: Option<&str>) -> Vec<PresetEntry> {
-    let mut presets = vec![(
-        "Pink Noise".to_string(),
-        None,
-        pink_noise_preset(),
-    )];
+    let mut presets = vec![("Pink Noise".to_string(), None, pink_noise_preset())];
     for (name, path, profile) in list_custom_presets("Equilibrium", vault_path) {
         presets.push((
             name.clone(),

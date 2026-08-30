@@ -5,16 +5,19 @@ use std::sync::{Arc, Mutex};
 
 use aura::prelude::*;
 use aura_editor::typed::*;
-use aura_editor::ui_zoom::{apply_ui_zoom, UiZoom};
-use lx_editor_utils::{bind_bools, bind_floats, dirty::*, meter::*, slint_helpers::*, sync_bools_dirty, sync_floats_dirty, tick::*, viz::*};
+use aura_editor::ui_zoom::{UiZoom, apply_ui_zoom};
+use lx_editor_utils::{
+    bind_bools, bind_floats, dirty::*, meter::*, slint_helpers::*, sync_bools_dirty,
+    sync_floats_dirty, tick::*, viz::*,
+};
 use slint::SharedString;
 
-use crate::presets::{
-    apply_stereo_from_preset, load_presets, param_norm, pink_noise_preset, preset_names,
-    preset_save_dir, profile_for_save, snap_filename, snap_markdown, PresetEntry,
-};
 use crate::EquilibriumParams;
 use crate::EquilibriumParamsParamId as P;
+use crate::presets::{
+    PresetEntry, apply_stereo_from_preset, load_presets, param_norm, pink_noise_preset,
+    preset_names, preset_save_dir, profile_for_save, snap_filename, snap_markdown,
+};
 
 slint::include_modules!();
 
@@ -211,10 +214,10 @@ pub fn build_editor(params: Arc<EquilibriumParams>) -> Box<dyn Editor> {
                     ui.set_snap_label(SharedString::from("SET VAULT"));
                 }
                 ui.set_preset_names(names_model(&names));
-                if let Some(ref name) = live_last {
-                    if !name.is_empty() {
-                        ui.set_preset_name(SharedString::from(name.as_str()));
-                    }
+                if let Some(ref name) = live_last
+                    && !name.is_empty()
+                {
+                    ui.set_preset_name(SharedString::from(name.as_str()));
                 }
 
                 bind_floats!(ui, state,

@@ -10,7 +10,7 @@ Official public product catalog for **LX Audiolabs**, built on **[AURA](https://
 | | |
 |--|--|
 | **License** | [GPL-3.0-or-later](./LICENSE) |
-| **Framework** | [AURA](https://github.com/LX-Audiolabs/aura) (path sibling or git) |
+| **Framework** | [AURA](https://github.com/LX-Audiolabs/aura) via crates.io (`lx-aura-*` 0.12) |
 | **Ship format** | **CLAP** (scripts + release zips) |
 | **Other formats** | VST3 / LV2 via AURA features — **self-build**, not packaged here |
 
@@ -51,23 +51,16 @@ Runtime GUI: **aura-editor** + **aura-baseview** (default FemtoVG / OpenGL).
 
 ### Framework (AURA)
 
-This catalog depends on AURA crates. Local layout used by LX:
+Ship deps come from **crates.io** (`lx-aura`, `lx-aura-editor`, `lx-aura-dsp`,
+`lx-aura-build`, `lx-aura-test`, … — workspace pins **0.12.0**). Lib names stay
+`aura::` / `aura_test::` / …
 
-```text
-parent/
-  aura/                      # https://github.com/LX-Audiolabs/aura
-  lx-audiolabs-plugins/      # this repo
-```
-
-Root `Cargo.toml` uses path deps: `../AURA/...` (folder name may be `aura` or `AURA` — match the path or adjust).
-
-Also install the CLI from the AURA tree:
+`cargo-aura` / preview / host are **not** on crates.io yet — install from the
+AURA git tree when you need the CLI locally:
 
 ```bash
-cargo install --path ../AURA/tools/cargo-aura --locked
-# or clone AURA first, then:
-# cargo install --path path/to/aura/tools/cargo-aura --locked
-export AURA_PATH="/path/to/aura"   # PowerShell: $env:AURA_PATH = "…"
+cargo install --git https://github.com/LX-Audiolabs/aura --locked cargo-aura
+# or path: cargo install --path ../AURA/tools/cargo-aura --locked
 ```
 
 Docs, ship matrix, and format wrappers: **[AURA README](https://github.com/LX-Audiolabs/aura)**.

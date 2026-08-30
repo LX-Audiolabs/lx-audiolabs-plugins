@@ -1,6 +1,6 @@
 [package]
 name = "meridian"
-version = "1.11.1"
+version = "1.11.2"
 edition = "2024"
 description = "LX Audiolabs — Meridian"
 license = "GPL-3.0-or-later"
@@ -12,16 +12,16 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["clap"]
-clap = ["aura/clap"]
-vst3 = ["aura/vst3"]
-lv2 = ["aura/lv2"]
+clap = ["lx-aura/clap"]
+vst3 = ["lx-aura/vst3"]
+lv2 = ["lx-aura/lv2"]
 
 [dependencies]
-aura = { workspace = true }
-aura-editor = { workspace = true, features = ["backend-femtovg"] }
+lx-aura = { workspace = true }
+lx-aura-editor = { workspace = true, features = ["backend-femtovg"] }
 slint = { workspace = true }
 
-aura-dsp = { workspace = true }
+lx-aura-dsp = { workspace = true }
 lx-vault = { workspace = true }
 lx-analysis = { workspace = true }
 lx-editor-utils = { path = "../../crates/lx-editor-utils" }
@@ -30,7 +30,7 @@ realfft = "3"
 tracing = "0.1"
 
 [build-dependencies]
-aura-build = { workspace = true }
+lx-aura-build = { workspace = true }
 
 [dev-dependencies]
-aura-test = { workspace = true }
+lx-aura-test = { workspace = true }

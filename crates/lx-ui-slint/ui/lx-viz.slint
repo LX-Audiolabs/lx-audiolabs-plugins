@@ -387,3 +387,143 @@ export component LxCompDisplay inherits Rectangle {
         }
     }
 }
+
+// Oscilloscope: dual L/R waveform overlay with amplitude + time grid.
+// Paths come from Rust (`ScopeRing` drained into viewBox 0..path-w / 0..path-h).
+export component LxScope inherits LxPanel {
+    in property <string> left-cmds: "";
+    in property <string> right-cmds: "";
+    in property <color> left-color: Lx.gonio;
+    in property <color> right-color: Lx.amber;
+    in property <length> stroke-width: 1.2px;
+    in property <float> path-w: 100;
+    in property <float> path-h: 100;
+    in property <bool> show-grid: true;
+
+    surface: Lx.stage;
+    clip: true;
+
+    // Zero crossing (horizontal centre)
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.5;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid-strong;
+    }
+    // Quarter amplitude guides
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.25;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid;
+    }
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.75;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid;
+    }
+    // Time divisions
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.25;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid;
+    }
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.5;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid;
+    }
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.75;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid;
+    }
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.path-w;
+        viewbox-height: root.path-h;
+        commands: root.left-cmds;
+        stroke: root.left-color;
+        stroke-width: root.stroke-width;
+        fill: transparent;
+    }
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.path-w;
+        viewbox-height: root.path-h;
+        commands: root.right-cmds;
+        stroke: root.right-color;
+        stroke-width: root.stroke-width;
+        fill: transparent;
+    }
+}
+
+// Phase-distortion shape preview — one cycle of the Drift engine's corner
+// morph. Path from Rust; X/Y readouts echo the two shape axes.
+export component LxDriftShape inherits LxPanel {
+    in property <string> commands: "";
+    in property <color> stroke-color: Lx.spectrum;
+    in property <length> stroke-width: 1.5px;
+    in property <float> path-w: 100;
+    in property <float> path-h: 100;
+    in property <bool> show-grid: true;
+    in property <string> x-label: "";
+    in property <string> y-label: "";
+
+    surface: Lx.stage;
+    clip: true;
+
+    // Zero crossing crosshair
+    if root.show-grid: Rectangle {
+        y: parent.height * 0.5;
+        height: 1px;
+        width: 100%;
+        background: Lx.grid-strong;
+    }
+    if root.show-grid: Rectangle {
+        x: parent.width * 0.5;
+        width: 1px;
+        height: 100%;
+        background: Lx.grid-strong;
+    }
+
+    Path {
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.path-w;
+        viewbox-height: root.path-h;
+        commands: root.commands;
+        stroke: root.stroke-color;
+        stroke-width: root.stroke-width;
+        fill: transparent;
+    }
+
+    if root.x-label != "": Text {
+        x: 6px; y: 4px;
+        text: root.x-label;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+    if root.y-label != "": Text {
+        x: 6px; y: parent.height - 14px;
+        text: root.y-label;
+        font-size: Lx.font-xs;
+        color: Lx.text-dim;
+    }
+}

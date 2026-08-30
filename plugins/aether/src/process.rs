@@ -66,8 +66,7 @@ pub(crate) fn run(
         2 => (0.45, 0.70, 1.15),
         _ => (0.22, 1.00, 1.00),
     };
-    let cf_mix =
-        ((params.cf_amount.raw_target() as f32 / 100.0) * 0.5 * feed_mul).min(0.75);
+    let cf_mix = ((params.cf_amount.raw_target() as f32 / 100.0) * 0.5 * feed_mul).min(0.75);
     let cf_norm = ((params.cf_angle.raw_target() as f32 - 30.0) / 45.0).clamp(0.0, 1.0);
     let cf_fc = (700.0 + cf_norm * 1300.0) * cut_mul;
     let cf_a = 1.0 - (-2.0 * std::f32::consts::PI * cf_fc / sr).exp();
